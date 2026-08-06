@@ -2,19 +2,16 @@
 package server
 
 import (
-	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/cloudlog"
 
 	"github.com/shouni/ap-story/assets"
 	"github.com/shouni/ap-story/internal/builder"
-	"github.com/shouni/ap-story/internal/server/handlers"
 )
 
 // NewRouter は、ミドルウェアとルーティングを統合した http.Handler を構築します。
@@ -70,7 +67,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		}
 
 		// ブラウザセッション認証(Cookie+CSRF)、またはM2M呼び出し元はOIDC Bearerトークンで認証
-		r.Use(protectedAccessMiddleware(h.Auth, h.M2M))
+		r.Use(h.Auth.ProtectedMiddleware(h.M2M))
 
 		if h.Web != nil {
 			// 未認証アクセスは auth.Handler.Middleware が /auth/login へリダイレクトする。
@@ -127,28 +124,6 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	})
 }
 
-// protectedAccessMiddleware は、有効なM2M(OIDC Bearer)トークンを持つリクエストは
-// セッション認証・CSRF検証をバイパスし、それ以外はブラウザセッション認証+CSRF検証にフォールバックします。
-// /web/* と /api/* の両方をこのミドルウェア一枚で保護します（ap-comp と同一方式）。
-func protectedAccessMiddleware(authHandler *auth.Handler, m2m *auth.M2MVerifier) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		sessionChain := authHandler.Middleware(csrfAutoGenMiddleware(authHandler)(next))
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			payload, err := m2m.Verify(r)
-			if err == nil {
-				slog.Debug("M2M認証成功", "email", payload.Claims["email"], "path", r.URL.Path)
-				next.ServeHTTP(w, r)
-				return
-			}
-			// ブラウザセッションなどM2Mを試みていないリクエストはノイズになるためログしない。
-			if !errors.Is(err, auth.ErrM2MNotAttempted) {
-				slog.Info("M2M認証失敗、セッション認証にフォールバック", "error", err, "path", r.URL.Path)
-			}
-			sessionChain.ServeHTTP(w, r)
-		})
-	}
-}
-
 // setupStaticRoutes は、埋め込み済みの静的ファイル（CSS/JS）を /static/* で配信します。
 func setupStaticRoutes(r chi.Router) {
 	staticFS, err := fs.Sub(assets.StaticFiles, "static")
@@ -162,24 +137,4 @@ func setupStaticRoutes(r chi.Router) {
 		w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
 		fileServer.ServeHTTP(w, r)
 	}))
-}
-
-// csrfAutoGenMiddleware は、CSRFトークンがなければ自動生成してセッションに保存します。
-func csrfAutoGenMiddleware(authHandler *auth.Handler) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			csrfToken := authHandler.GetCSRFTokenFromSession(r)
-			if csrfToken == "" && r.Method == http.MethodGet {
-				token, err := authHandler.GenerateAndSaveCSRFToken(w, r)
-				if err != nil {
-					slog.Error("Failed to auto-generate CSRF token", "error", err)
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-					return
-				}
-				csrfToken = token
-			}
-			r = r.WithContext(handlers.WithCSRFToken(r.Context(), csrfToken))
-			next.ServeHTTP(w, r)
-		})
-	}
 }
