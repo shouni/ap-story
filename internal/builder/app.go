@@ -13,6 +13,7 @@ import (
 	"github.com/shouni/ap-story/internal/adapters"
 	"github.com/shouni/ap-story/internal/app"
 	"github.com/shouni/ap-story/internal/config"
+	"github.com/shouni/ap-story/internal/domain"
 	"github.com/shouni/ap-story/internal/repository"
 )
 
@@ -70,11 +71,24 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 
 	// 6. Task Enqueuer
-	enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg.Server, cfg.GCP)
-	if taskErr != nil {
-		return nil, fmt.Errorf("failed to initialize task enqueuer: %w", taskErr)
+	// タスクを投入するのは Web 面だけです。Worker 面は受け取る側なので、
+	// 組み立てないことで未使用の Cloud Tasks クライアントと CLOUD_TASKS_QUEUE_ID への
+	// 依存を持たずに済みます。
+	//
+	// nil のポインタを domain.TaskQueue に代入すると「非 nil のインターフェースが nil を保持する」
+	// 状態になり、Closers の nil チェックをすり抜けて nil レシーバーで Close が呼ばれます。
+	// それを避けるため、組み立てたときにだけインターフェースと Closers へ入れます。
+	closers := []io.Closer{rio}
+	var taskQueue domain.TaskQueue
+	if cfg.Server.Role.ServesWeb() {
+		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg.Server, cfg.GCP)
+		if taskErr != nil {
+			return nil, fmt.Errorf("failed to initialize task enqueuer: %w", taskErr)
+		}
+		resources = append(resources, enqueuer)
+		closers = append(closers, enqueuer)
+		taskQueue = enqueuer
 	}
-	resources = append(resources, enqueuer)
 
 	// 7. History Repository
 	historyCache := repository.NewHistoryCache()
@@ -85,13 +99,13 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		RemoteIO:     rio,
 		Ops:          ops,
 		Pipeline:     pipelineRunner,
-		TaskQueue:    enqueuer,
+		TaskQueue:    taskQueue,
 		Repository:   repo,
 		JobStatus:    jobStatus,
 		HistoryCache: historyCache,
 		Characters:   characters,
 		HTTPClient:   httpClient,
-		Closers:      []io.Closer{rio, enqueuer},
+		Closers:      closers,
 	}
 
 	return appCtx, nil
