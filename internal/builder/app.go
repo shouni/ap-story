@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/shouni/ap-story/internal/app"
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
+	"github.com/shouni/ap-story/internal/pipeline"
 	"github.com/shouni/ap-story/internal/repository"
 )
 
@@ -50,27 +52,42 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		return nil, fmt.Errorf("failed to load characters: %w", charErr)
 	}
 
-	// 3. go-comic-kit Operations
-	ops, opsErr := buildOperations(ctx, cfg, rio, httpClient, characters)
-	if opsErr != nil {
-		return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
-	}
-
-	// 4. Notifier (Slack)
-	notifier, notifierErr := buildNotifier(httpClient.WithoutRetry(), cfg)
-	if notifierErr != nil {
-		return nil, fmt.Errorf("failed to initialize notifier: %w", notifierErr)
-	}
-
-	// 5. Worker Pipeline
-	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
+	// 3. Job Status
+	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込むため、
+	// 役割によらず必要です。
 	jobStatus := repository.NewJobStatusRepository(cfg.Storage, rio.Reader, rio.Writer)
-	pipelineRunner, pipeErr := buildPipeline(cfg, rio, ops, notifier, jobStatus)
-	if pipeErr != nil {
-		return nil, fmt.Errorf("failed to initialize pipeline: %w", pipeErr)
+
+	// 4. go-comic-kit Operations、Notifier、Worker Pipeline
+	// 生成を実行するのは Worker 面だけです。Web 面で組み立てないことで、
+	// Vertex AI クライアントと Slack Webhook への依存を持たずに済みます
+	// （ap-story-web-runner には aiplatform.user も SLACK_WEBHOOK_URL への
+	// アクセス権も無く、持たせる理由がありません）。
+	//
+	// どちらもポインタなので、Web 面では nil のまま Container に入ります。
+	// Container.Close は Ops の nil を見ており、Pipeline を参照するのは
+	// BuildHandlers の ServesWorker 分岐だけです。
+	var ops *ports.Operations
+	var pipelineRunner *pipeline.Runner
+	if cfg.Server.Role.ServesWorker() {
+		builtOps, opsErr := buildOperations(ctx, cfg, rio, httpClient, characters)
+		if opsErr != nil {
+			return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
+		}
+		ops = builtOps
+
+		notifier, notifierErr := buildNotifier(httpClient.WithoutRetry(), cfg)
+		if notifierErr != nil {
+			return nil, fmt.Errorf("failed to initialize notifier: %w", notifierErr)
+		}
+
+		runner, pipeErr := buildPipeline(cfg, rio, ops, notifier, jobStatus)
+		if pipeErr != nil {
+			return nil, fmt.Errorf("failed to initialize pipeline: %w", pipeErr)
+		}
+		pipelineRunner = runner
 	}
 
-	// 6. Task Enqueuer
+	// 5. Task Enqueuer
 	// タスクを投入するのは Web 面だけです。Worker 面は受け取る側なので、
 	// 組み立てないことで未使用の Cloud Tasks クライアントと CLOUD_TASKS_QUEUE_ID への
 	// 依存を持たずに済みます。
@@ -90,7 +107,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		taskQueue = enqueuer
 	}
 
-	// 7. History Repository
+	// 6. History Repository
 	historyCache := repository.NewHistoryCache()
 	repo := repository.NewComicRepository(cfg.Storage, rio.Reader, rio.Writer, historyCache)
 
