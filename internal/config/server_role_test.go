@@ -16,13 +16,13 @@ func newRoleTestConfig(role ServerRole) *Config {
 	cfg.GCP.ProjectID = "test-project"
 	cfg.GCP.LocationID = "asia-northeast1"
 	cfg.GCP.ServiceAccountEmail = "tasks@test-project.iam.gserviceaccount.com"
-	cfg.GCP.TaskAudienceURL = "https://ap-story-worker.example.run.app"
+	cfg.Tasks.TaskAudienceURL = "https://ap-story-worker.example.run.app"
 	cfg.Storage.GCSBucket = "ap-story"
 	return cfg
 }
 
 func withWebConfig(cfg *Config) *Config {
-	cfg.GCP.QueueID = "story-queue"
+	cfg.Tasks.QueueID = "story-queue"
 	cfg.Auth.GoogleClientID = "client-id"
 	cfg.Auth.GoogleClientSecret = "client-secret"
 	cfg.Auth.SessionSecret = "0123456789abcdef"
@@ -77,14 +77,14 @@ func TestValidateEssentialConfigRequiresWebSettings(t *testing.T) {
 func TestValidateEssentialConfigQueueIsWebOnly(t *testing.T) {
 	t.Run("worker はキュー名なしで起動できる", func(t *testing.T) {
 		cfg := newRoleTestConfig(ServerRoleWorker)
-		cfg.GCP.QueueID = ""
+		cfg.Tasks.QueueID = ""
 
 		require.NoError(t, cfg.ValidateEssentialConfig())
 	})
 
 	t.Run("web はキュー名が必須", func(t *testing.T) {
 		cfg := withWebConfig(newRoleTestConfig(ServerRoleWeb))
-		cfg.GCP.QueueID = ""
+		cfg.Tasks.QueueID = ""
 
 		err := cfg.ValidateEssentialConfig()
 		require.Error(t, err)
@@ -97,25 +97,90 @@ func TestValidateEssentialConfigQueueIsWebOnly(t *testing.T) {
 // fail-closed になり、全タスクが 500 で失敗し続けます。
 func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 	cfg := newRoleTestConfig(ServerRoleWorker)
-	cfg.GCP.TaskAudienceURL = ""
+	cfg.Tasks.TaskAudienceURL = ""
 
 	err := cfg.ValidateEssentialConfig()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "TASK_AUDIENCE_URL")
 }
 
-// TestValidateEssentialConfigRequiresServiceAccountForBothRoles は、
-// SERVICE_ACCOUNT_EMAIL が投入側では署名者、受信側では許可リストとして
-// 両方の役割で必須であることを確認します。
-func TestValidateEssentialConfigRequiresServiceAccountForBothRoles(t *testing.T) {
-	for _, role := range []ServerRole{ServerRoleWeb, ServerRoleWorker} {
-		t.Run(string(role), func(t *testing.T) {
-			cfg := withWebConfig(newRoleTestConfig(role))
-			cfg.GCP.ServiceAccountEmail = ""
+// TestValidateEssentialConfigServiceAccountIsWebOnly は、SERVICE_ACCOUNT_EMAIL が
+// 「投入するタスクに署名する SA」＝ Web 面の要件であることを確認します。
+// Worker が受け付ける発行元は ALLOWED_TASK_SERVICE_ACCOUNTS で別に指定できるため、
+// Worker 専用プロセスは署名者を持たずに済みます。
+func TestValidateEssentialConfigServiceAccountIsWebOnly(t *testing.T) {
+	t.Run("web は署名者が必須", func(t *testing.T) {
+		cfg := withWebConfig(newRoleTestConfig(ServerRoleWeb))
+		cfg.GCP.ServiceAccountEmail = ""
 
-			err := cfg.ValidateEssentialConfig()
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "SERVICE_ACCOUNT_EMAIL")
+		err := cfg.ValidateEssentialConfig()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "SERVICE_ACCOUNT_EMAIL")
+	})
+
+	t.Run("worker は発行元を明示すれば署名者不要", func(t *testing.T) {
+		cfg := newRoleTestConfig(ServerRoleWorker)
+		cfg.GCP.ServiceAccountEmail = ""
+		cfg.Tasks.AllowedServiceAccounts = []string{"ap-story-web-runner@test-project.iam.gserviceaccount.com"}
+
+		require.NoError(t, cfg.ValidateEssentialConfig())
+	})
+}
+
+// TestValidateEssentialConfigRequiresTaskIssuerForWorker は、受け付ける発行元が
+// 1 件も無いまま Worker が起動しないことを確認します。許可リストが空だと
+// OIDC 検証器は fail-closed になり、全タスクが失敗し続けます。
+func TestValidateEssentialConfigRequiresTaskIssuerForWorker(t *testing.T) {
+	cfg := newRoleTestConfig(ServerRoleWorker)
+	cfg.GCP.ServiceAccountEmail = ""
+	cfg.Tasks.AllowedServiceAccounts = nil
+
+	err := cfg.ValidateEssentialConfig()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ALLOWED_TASK_SERVICE_ACCOUNTS")
+}
+
+// TestTaskIssuers は、受信側が受け付ける発行元の解決順を確認します。
+//
+// web と worker で実行 SA を分けると、worker が受け付けるべき発行元は自分自身では
+// なく web 側の SA になります。単一値の SERVICE_ACCOUNT_EMAIL しか無いと、同じ変数が
+// 役割ごとに別の意味を持つことになるため、明示できる口を用意しています。
+func TestTaskIssuers(t *testing.T) {
+	tests := []struct {
+		name    string
+		signer  string
+		allowed []string
+		want    []string
+	}{
+		{
+			name:   "許可リストが無ければ署名者にフォールバックする",
+			signer: "web-runner@test-project.iam.gserviceaccount.com",
+			want:   []string{"web-runner@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:    "許可リストがあれば署名者より優先する",
+			signer:  "worker-runner@test-project.iam.gserviceaccount.com",
+			allowed: []string{"web-runner@test-project.iam.gserviceaccount.com"},
+			want:    []string{"web-runner@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:    "複数の発行元を並べられる",
+			allowed: []string{"web-runner@test-project.iam.gserviceaccount.com", "worker-runner@test-project.iam.gserviceaccount.com"},
+			want:    []string{"web-runner@test-project.iam.gserviceaccount.com", "worker-runner@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name: "どちらも無ければ空（検証器は fail-closed になる）",
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{}
+			cfg.GCP.ServiceAccountEmail = tt.signer
+			cfg.Tasks.AllowedServiceAccounts = tt.allowed
+
+			require.Equal(t, tt.want, cfg.TaskIssuers())
 		})
 	}
 }

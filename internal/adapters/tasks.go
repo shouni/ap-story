@@ -23,14 +23,16 @@ var _ domain.TaskQueue = (*TaskEnqueuer)(nil)
 // NewTaskEnqueuer は Cloud Tasks エンキューアを初期化します。
 // 生成されたインスタンスは内部で gRPC コネクションを保持するため、シングルトンとして
 // 再利用し、アプリケーション終了時に Close してください。
-func NewTaskEnqueuer(ctx context.Context, server config.ServerConfig, gcp config.GCPConfig) (*TaskEnqueuer, error) {
+func NewTaskEnqueuer(ctx context.Context, tasksCfg config.TasksConfig, gcp config.GCPConfig) (*TaskEnqueuer, error) {
 	taskCfg := tasks.Config{
-		ProjectID:           gcp.ProjectID,
-		LocationID:          gcp.LocationID,
-		QueueID:             gcp.QueueID,
-		WorkerURL:           server.WorkerURL,
+		ProjectID:  gcp.ProjectID,
+		LocationID: gcp.LocationID,
+		QueueID:    tasksCfg.QueueID,
+		WorkerURL:  tasksCfg.WorkerURL,
+		// 投入するタスクの OIDC トークンに署名するのはこのプロセスの実行 SA です。
+		// 受信側が受け付ける発行元（Config.TaskIssuers）とは別物なので取り違えないこと。
 		ServiceAccountEmail: gcp.ServiceAccountEmail,
-		Audience:            gcp.TaskAudienceURL,
+		Audience:            tasksCfg.TaskAudienceURL,
 	}
 	enqueuer, err := tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
 	if err != nil {

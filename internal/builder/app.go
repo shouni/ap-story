@@ -98,7 +98,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	closers := []io.Closer{rio}
 	var taskQueue domain.TaskQueue
 	if cfg.Server.Role.ServesWeb() {
-		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg.Server, cfg.GCP)
+		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg.Tasks, cfg.GCP)
 		if taskErr != nil {
 			return nil, fmt.Errorf("failed to initialize task enqueuer: %w", taskErr)
 		}

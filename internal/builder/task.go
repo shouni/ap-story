@@ -8,6 +8,6 @@ import (
 )
 
 // buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
-func buildTaskEnqueuer(ctx context.Context, server config.ServerConfig, gcp config.GCPConfig) (*adapters.TaskEnqueuer, error) {
-	return adapters.NewTaskEnqueuer(ctx, server, gcp)
+func buildTaskEnqueuer(ctx context.Context, tasksCfg config.TasksConfig, gcp config.GCPConfig) (*adapters.TaskEnqueuer, error) {
+	return adapters.NewTaskEnqueuer(ctx, tasksCfg, gcp)
 }
