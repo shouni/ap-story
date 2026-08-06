@@ -183,6 +183,8 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
 | `SESSION_SECRET` / `SESSION_ENCRYPT_KEY` | セッションクッキーの署名鍵・暗号化鍵 |
 | `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可するメール/ドメイン（カンマ区切り、いずれか必須） |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り） |
+| `SLACK_WEBHOOK_URL` | 完了通知（任意）。worker 面のみ使用 |
 
 ## 🔀 web / worker の分離
 
@@ -205,11 +207,14 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 2. **ログとメトリクスが役割ごとに読める** — Cloud Run の組み込みメトリクスはサービス単位です
 3. **タスク受付口を非公開にできる** — 同居していると `/tasks/generate` が公開サービス上に存在し、防御はアプリ内の OIDC 検証だけになります。分離後は Cloud Run の IAM がコンテナに届く前に弾きます
 
-役割ごとに構築される依存も変わります。`SERVER_ROLE=web` では Cloud Tasks の投入クライアントだけを、`worker` では OAuth ハンドラを構築しません。worker の Cloud Tasks 検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります。
+役割ごとに構築される依存も変わります。
+
+- `SERVER_ROLE=web` — Cloud Tasks の投入クライアントを構築します。go-comic-kit の Operations（Vertex AI クライアント）・Slack Notifier・Worker パイプラインは構築しません。生成を実行するのは worker 面だけなので、`ap-story-web-runner` は `aiplatform.user` も `SLACK_WEBHOOK_URL` へのアクセス権も持ちません
+- `SERVER_ROLE=worker` — OAuth ハンドラと投入クライアントを構築しません。Cloud Tasks の検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります
+
+キャラクター定義（`characters.json`）は一覧・デザインシート画面が使うため、役割によらず読み込みます。
 
 権限定義は `ap-infra` リポジトリの `app_ap_story.tf` にあります。
-| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り） |
-| `SLACK_WEBHOOK_URL` | 完了通知（任意） |
 
 ---
 
