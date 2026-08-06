@@ -164,7 +164,9 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | 変数 | 内容 |
 |---|---|
 | `PORT` | HTTP ポート（Cloud Run 既定 8080） |
-| `SERVICE_URL` / `WORKER_URL` | 自サービスの URL / Worker エンドポイント（省略時は SERVICE_URL 由来） |
+| `SERVER_ROLE` | プロセスが担う役割。`web` / `worker` / 未指定（両方）。詳細は「web / worker の分離」を参照 |
+| `SERVICE_URL` | 自サービスの**公開** URL。OAuth のリダイレクト先、M2M 認証の audience、Slack 通知リンクの生成元を兼ねるため、worker にも**非公開の worker 自身ではなく web の URL** を設定する |
+| `WORKER_URL` | Cloud Tasks が呼び出す Worker エンドポイント（省略時は SERVICE_URL 由来）。web 面のみ使用 |
 | `STORY_BUCKET` | 成果物・state の GCS バケット |
 | `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
 | `GEMINI_MODEL` / `IMAGE_STANDARD_MODEL` / `IMAGE_QUALITY_MODEL` | go-comic-kit Config のモデル指定（Vertex AI 経由、ADC 認証のため API キーは不要） |
@@ -174,10 +176,38 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
 | `REQUEST_TIMEOUT` | 外部 AI 呼び出し1回あたりの上限（既定 5m）。画像生成1枚に数十秒かかるため短くしすぎないこと |
 | `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限（既定 45m、0 以下で無制限）。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます |
-| `GCP_PROJECT_ID` / `GCP_LOCATION_ID` / `CLOUD_TASKS_QUEUE_ID` / `SERVICE_ACCOUNT_EMAIL` / `TASK_AUDIENCE_URL` | Cloud Tasks / GCP 設定 |
+| `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトとリージョン |
+| `CLOUD_TASKS_QUEUE_ID` | Cloud Tasks キュー名。タスクを投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
+| `SERVICE_ACCOUNT_EMAIL` | Cloud Tasks の OIDC トークンに**署名する**サービスアカウント。受信側は許可リストとして同じ値を照合するため、**web と worker で必ず同じ値**にする（実行 SA とは別物） |
+| `TASK_AUDIENCE_URL` | OIDC トークンの audience。web/worker を分けた場合は**呼び先である worker の URL**（Cloud Run の IAM が不一致を 403 で弾く） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
 | `SESSION_SECRET` / `SESSION_ENCRYPT_KEY` | セッションクッキーの署名鍵・暗号化鍵 |
 | `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可するメール/ドメイン（カンマ区切り、いずれか必須） |
+
+## 🔀 web / worker の分離
+
+本番では 1 つのイメージを 2 つの Cloud Run サービスとしてデプロイし、`SERVER_ROLE` で役割を切り替えます（`cloudbuild.yaml`）。
+
+| | `ap-story`（web） | `ap-story-worker` |
+|---|---|---|
+| `SERVER_ROLE` | `web` | `worker` |
+| 提供するルート | `/api/*`, `/auth/*` | `/tasks/generate` |
+| 公開 | あり | **なし**（Cloud Run の IAM で遮断） |
+| memory / cpu | 512Mi / 1 | 1Gi / 2 |
+| 実行 SA | `ap-story-web-runner` | `ap-story-worker-runner` |
+| シークレット | OAuth 4 点 | `SLACK_WEBHOOK_URL` のみ |
+
+`SERVER_ROLE` を未指定にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動きます。
+
+分離する理由は 3 つあります。
+
+1. **デプロイ設定を役割ごとに最適化できる** — 漫画生成は数分〜数十分かかるため worker は長い timeout が要りますが、その上限を Web 面にまで課す必要はありません
+2. **ログとメトリクスが役割ごとに読める** — Cloud Run の組み込みメトリクスはサービス単位です
+3. **タスク受付口を非公開にできる** — 同居していると `/tasks/generate` が公開サービス上に存在し、防御はアプリ内の OIDC 検証だけになります。分離後は Cloud Run の IAM がコンテナに届く前に弾きます
+
+役割ごとに構築される依存も変わります。`SERVER_ROLE=web` では Cloud Tasks の投入クライアントだけを、`worker` では OAuth ハンドラを構築しません。worker の Cloud Tasks 検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります。
+
+権限定義は `ap-infra` リポジトリの `app_ap_story.tf` にあります。
 | `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り） |
 | `SLACK_WEBHOOK_URL` | 完了通知（任意） |
 
