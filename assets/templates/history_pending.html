@@ -1,0 +1,29 @@
+{{define "content"}}
+<div class="row justify-content-center py-5">
+    <div class="col-md-8 text-center">
+        <div class="card shadow border-0">
+            <div class="card-body py-5 px-4">
+                <div class="display-1 text-muted mb-3">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+                <h2 class="fw-bold mb-3">この作品はまだ表示できません</h2>
+                <p class="fs-5 text-muted mb-4">
+                    生成処理がまだ完了していないか、存在しない・削除されたジョブです。<br>
+                    生成中の場合、完了までしばらくかかります（数分〜十数分）。
+                </p>
+                <div class="bg-light p-3 rounded-4 mb-4 border">
+                    <code class="text-break">{{.Data.JobID}}</code>
+                </div>
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+                    <a href="/history/{{.Data.JobID}}" class="btn btn-primary btn-lg px-5 rounded-pill fw-bold">
+                        <i class="bi bi-arrow-clockwise me-2"></i>再読み込み
+                    </a>
+                    <a href="/history" class="btn btn-outline-secondary btn-lg px-5 rounded-pill fw-bold">
+                        <i class="bi bi-collection me-2"></i>作品一覧へ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

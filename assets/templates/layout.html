@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#76bc21">
+    <title>{{.Title}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM"
+          crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg mb-4 shadow-sm navbar-dark">
+    <div class="container">
+        <a class="navbar-brand text-white fw-bold" href="/">
+            <i class="bi bi-book-half me-2"></i>AP Comic
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .ActiveNav "works"}} active{{end}}" href="/history">
+                        <i class="bi bi-collection me-1"></i>Works
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .ActiveNav "characters"}} active{{end}}" href="/characters">
+                        <i class="bi bi-people me-1"></i>Characters
+                    </a>
+                </li>
+            </ul>
+            <div class="dropdown">
+                <button class="btn btn-light btn-sm fw-bold dropdown-toggle{{if eq .ActiveNav "create"}} active{{end}}"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-plus-lg me-1"></i>Create
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item" href="/compose">
+                            <i class="bi bi-book me-2"></i>Comic
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="/design-sheets">
+                            <i class="bi bi-palette me-2"></i>Design Sheet
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="container main-content">
+    {{template "content" .}}
+</div>
+
+<footer class="container text-center mt-5 mb-4 text-muted small">
+    <hr class="mb-4 opacity-25">
+    <div class="mb-2">
+        <i class="bi bi-github me-2"></i>
+        &copy; 2026 <strong>AP Comic Project</strong>
+    </div>
+    <div class="fst-italic">
+        <i class="bi bi-quote"></i> Drawing manga space between 0 and 1.
+    </div>
+</footer>
+
+<input type="hidden" id="csrf_token" value="{{.CSRFToken}}">
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
+        crossorigin="anonymous"></script>
+<script src="/static/js/app.js" defer></script>
+</body>
+</html>

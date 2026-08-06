@@ -1,0 +1,163 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-1">{{if .Data.Title}}{{.Data.Title}}{{else}}(無題){{end}}</h1>
+        <div class="text-muted small"><code>{{.Data.JobID}}</code>{{if .Data.UpdatedAt}} · 更新 {{.Data.UpdatedAt}}{{end}}</div>
+        {{if .Data.Description}}
+        <p class="text-muted mt-2 mb-0">{{.Data.Description}}</p>
+        {{end}}
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/history" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>一覧へ戻る
+        </a>
+        {{if .Data.HasPendingImages}}
+        <button class="btn btn-primary btn-sm js-render-comic"
+                data-job-id="{{.Data.JobID}}"
+                type="button"
+                title="未生成のコマ・ページだけを生成します">
+            <i class="bi bi-images me-1"></i>{{if .Data.HasAnyImage}}続きを生成{{else}}画像生成へ進む{{end}}
+        </button>
+        {{end}}
+        <button class="btn btn-outline-danger btn-sm js-delete-history"
+                data-job-id="{{.Data.JobID}}"
+                type="button">
+            <i class="bi bi-trash me-1"></i>削除
+        </button>
+    </div>
+</div>
+
+{{if .Data.Pages}}
+<section class="mb-5">
+    <h2 class="h4 mb-3"><i class="bi bi-file-earmark-image me-2"></i>ページ</h2>
+    <div class="row g-3">
+        {{range .Data.Pages}}
+        <div class="col-12 col-md-6 col-xl-4">
+            <article class="card h-100 shadow-sm comic-image-card">
+                {{if .ImageURL}}
+                <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                    <img src="{{.ImageURL}}" class="card-img-top" alt="ページ {{.Number}}" loading="lazy">
+                </a>
+                {{end}}
+                <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">Page {{.Number}}</span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary js-regenerate"
+                                data-job-id="{{$.Data.JobID}}" data-command="regenerate_page"
+                                data-target="{{.Number}}" data-mode="reroll"
+                                type="button" title="シードを変えて作り直す">
+                            <i class="bi bi-shuffle"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary js-regenerate"
+                                data-job-id="{{$.Data.JobID}}" data-command="regenerate_page"
+                                data-target="{{.Number}}" data-mode="edit"
+                                type="button" title="指示して直す">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+            </article>
+        </div>
+        {{end}}
+    </div>
+</section>
+{{end}}
+
+<section class="mb-5">
+    <h2 class="h4 mb-3"><i class="bi bi-collection me-2"></i>章とパネル</h2>
+    {{range .Data.Chapters}}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-start gap-2">
+            <div>
+                <span class="fw-bold">{{.ID}}: {{.Title}}</span>
+                {{if .Summary}}<div class="text-muted small mt-1">{{.Summary}}</div>{{end}}
+            </div>
+            <button class="btn btn-outline-secondary btn-sm flex-shrink-0 js-regenerate"
+                    data-job-id="{{$.Data.JobID}}" data-command="regenerate_chapter_script"
+                    data-target="{{.ID}}"
+                    type="button" title="この章のネームを作り直す（コマは作り直しになります）">
+                <i class="bi bi-arrow-clockwise me-1"></i>台本を再生成
+            </button>
+        </div>
+        <div class="card-body">
+            {{if .Panels}}
+            <div class="row g-3">
+                {{range .Panels}}
+                <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+                    <article class="card h-100 comic-image-card">
+                        {{if .ImageURL}}
+                        <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                            <img src="{{.ImageURL}}" class="card-img-top" alt="{{.ID}}" loading="lazy">
+                        </a>
+                        {{else}}
+                        <div class="card-img-top d-flex align-items-center justify-content-center text-muted py-5">
+                            <i class="bi bi-hourglass-split me-1"></i>未生成
+                        </div>
+                        {{end}}
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <code class="small">{{.ID}}</code>
+                                {{if .Shot}}<span class="badge text-bg-light border text-secondary">{{.Shot}}</span>{{end}}
+                            </div>
+                            <div class="btn-group btn-group-sm w-100 mb-2">
+                                <button class="btn btn-outline-secondary js-regenerate"
+                                        data-job-id="{{$.Data.JobID}}" data-command="regenerate_panel"
+                                        data-target="{{.ID}}" data-mode="reroll"
+                                        type="button" title="シードを変えて作り直す">
+                                    <i class="bi bi-shuffle"></i>
+                                </button>
+                                {{if .ImageURL}}
+                                <button class="btn btn-outline-secondary js-regenerate"
+                                        data-job-id="{{$.Data.JobID}}" data-command="regenerate_panel"
+                                        data-target="{{.ID}}" data-mode="edit"
+                                        type="button" title="指示して直す（構図は保つ）">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                {{end}}
+                            </div>
+                            {{if .Dialogues}}
+                            <ul class="list-unstyled panel-dialogues text-muted mb-0">
+                                {{range .Dialogues}}
+                                <li>{{.}}</li>
+                                {{end}}
+                            </ul>
+                            {{end}}
+                        </div>
+                    </article>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <p class="text-muted mb-0"><i class="bi bi-hourglass-split me-1"></i>この章のパネルはまだ生成されていません。</p>
+            {{end}}
+        </div>
+    </div>
+    {{else}}
+    <div class="alert alert-light border text-center py-4">
+        <p class="mb-0">章立てがまだありません。</p>
+    </div>
+    {{end}}
+</section>
+
+{{if .Data.DesignSheets}}
+<section class="mb-5">
+    <h2 class="h4 mb-3"><i class="bi bi-person-badge me-2"></i>デザインシート</h2>
+    <div class="row g-3">
+        {{range .Data.DesignSheets}}
+        <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+            <article class="card h-100 shadow-sm comic-image-card">
+                {{if .ImageURL}}
+                <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                    <img src="{{.ImageURL}}" class="card-img-top" alt="{{.CharacterID}}" loading="lazy">
+                </a>
+                {{end}}
+                <div class="card-body py-2">
+                    <code class="small">{{.CharacterID}}</code>
+                </div>
+            </article>
+        </div>
+        {{end}}
+    </div>
+</section>
+{{end}}
+{{end}}

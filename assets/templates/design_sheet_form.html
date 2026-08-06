@@ -1,0 +1,96 @@
+{{define "content"}}
+<div class="mb-4">
+    <h1 class="h3 mb-1"><i class="bi bi-person-badge me-2"></i>デザインシートを生成</h1>
+    <div class="text-muted small">既存の作品に紐づかない、キャラクター単体のデザインシートを生成します。</div>
+</div>
+
+{{if .Data.ErrorMessage}}
+<div class="alert alert-danger" role="alert">
+    <i class="bi bi-exclamation-triangle me-1"></i>{{.Data.ErrorMessage}}
+</div>
+{{end}}
+
+<form method="post" action="/design-sheets" class="card shadow-sm">
+    <div class="card-body">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">キャラクター</label>
+            {{if .Data.Characters}}
+            <div class="row g-2">
+                {{range .Data.Characters}}
+                <div class="col-12 col-sm-6 col-lg-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="character_ids"
+                               id="char-{{.ID}}" value="{{.ID}}"
+                               {{if .Checked}}checked{{end}}>
+                        <label class="form-check-label" for="char-{{.ID}}">
+                            {{.Name}} <code class="text-muted small">{{.ID}}</code>
+                        </label>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <p class="text-muted mb-0">利用可能なキャラクターがありません。</p>
+            {{end}}
+            <div class="form-text">2人以上選択すると1枚の合成デザインシートになります。</div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6">
+                <label for="aspect_ratio" class="form-label fw-bold">アスペクト比</label>
+                <select class="form-select" id="aspect_ratio" name="aspect_ratio">
+                    <option value="" {{if not .Data.AspectRatio}}selected{{end}}>既定（16:9）</option>
+                    <option value="16:9" {{if eq .Data.AspectRatio "16:9"}}selected{{end}}>16:9</option>
+                    <option value="1:1" {{if eq .Data.AspectRatio "1:1"}}selected{{end}}>1:1</option>
+                    <option value="9:16" {{if eq .Data.AspectRatio "9:16"}}selected{{end}}>9:16</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="layout" class="form-label fw-bold">レイアウト</label>
+                <select class="form-select" id="layout" name="layout">
+                    <option value="" {{if not .Data.Layout}}selected{{end}}>3面図ターンアラウンド（既定）</option>
+                    <option value="single" {{if eq .Data.Layout "single"}}selected{{end}}>単一ポーズ（参照アンカー向け）</option>
+                </select>
+            </div>
+        </div>
+
+        {{if .Data.Models}}
+        <div class="mb-3">
+            <label for="model_override" class="form-label fw-bold">画像モデル</label>
+            <select class="form-select" id="model_override" name="model_override">
+                <option value="" {{if not .Data.ModelOverride}}selected{{end}}>既定モデルを使用</option>
+                {{range .Data.Models}}
+                <option value="{{.Value}}" {{if eq $.Data.ModelOverride .Value}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
+        </div>
+        {{end}}
+
+        <div class="mb-3">
+            <label for="reference_url_override" class="form-label fw-bold">参照画像URL（上書き・任意）</label>
+            <input type="text" class="form-control" id="reference_url_override" name="reference_url_override"
+                   placeholder="https://example.com/reference.png または gs://bucket/reference.png"
+                   value="{{.Data.ReferenceURLOverride}}">
+            <div class="form-text">
+                指定すると、そのキャラクターの登録済み参照画像の代わりにこの画像を一時的に使います。
+                <strong>キャラクターを1人だけ選択した場合のみ有効です</strong>（2人以上選択時は無視されます）。
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="visual_cues_override" class="form-label fw-bold">見た目の特徴（上書き・任意）</label>
+            <textarea class="form-control" id="visual_cues_override" name="visual_cues_override" rows="3"
+                      placeholder="カンマまたは改行区切り（例: 赤いマフラー, 片方だけ髪留め）">{{.Data.VisualCuesOverride}}</textarea>
+            <div class="form-text">1人だけ選択した場合のみ有効です。参照画像URLと同様、登録済みの特徴を一時的に置き換えます。</div>
+        </div>
+
+        <div class="d-grid d-sm-flex justify-content-sm-end gap-2">
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-send me-1"></i>生成を開始
+            </button>
+        </div>
+    </div>
+</form>
+{{end}}
