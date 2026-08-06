@@ -16,19 +16,36 @@ const (
 	DefaultShutdownGrace = 15 * time.Second
 	// DefaultHTTPTimeout は外部 HTTP 通信のタイムアウトのデフォルト値です。
 	DefaultHTTPTimeout = 60 * time.Second
-	// SignedURLExpiration は署名付き URL の有効期限です。
-	SignedURLExpiration = 30 * time.Minute
-	// DefaultHistoryPageSize は履歴一覧のページサイズのデフォルト値です。
-	DefaultHistoryPageSize = 20
 )
 
 // ServerConfig は HTTP サーバーの設定です。
 type ServerConfig struct {
-	ServiceURL      string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
-	WorkerURL       string `env:"WORKER_URL"`
-	Port            string `env:"PORT" envDefault:"8080"`
+	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
+	WorkerURL  string `env:"WORKER_URL"`
+	Port       string `env:"PORT" envDefault:"8080"`
+	// Role はこのプロセスが担う役割です。空なら Web と Worker の両方を提供します。
+	Role            ServerRole `env:"SERVER_ROLE"`
 	ShutdownTimeout time.Duration
 }
+
+// ServerRole はプロセスが担う役割です。Cloud Run のサービスを web と worker に
+// 分けたときに、各プロセスが必要とする依存だけを構築するために使います。
+type ServerRole string
+
+const (
+	// ServerRoleBoth は Web と Worker の両方を提供します（既定値・ローカル開発用）。
+	ServerRoleBoth ServerRole = ""
+	// ServerRoleWeb は Web UI と M2M API だけを提供し、/tasks/generate を公開しません。
+	ServerRoleWeb ServerRole = "web"
+	// ServerRoleWorker は /tasks/generate だけを提供し、Web UI と OAuth を持ちません。
+	ServerRoleWorker ServerRole = "worker"
+)
+
+// ServesWeb は、この役割が Web 面（/api/* と OAuth）を提供するかを返します。
+func (r ServerRole) ServesWeb() bool { return r == ServerRoleBoth || r == ServerRoleWeb }
+
+// ServesWorker は、この役割が Worker 面（/tasks/generate）を提供するかを返します。
+func (r ServerRole) ServesWorker() bool { return r == ServerRoleBoth || r == ServerRoleWorker }
 
 // GCPConfig は Google Cloud Platform の設定です。
 type GCPConfig struct {
@@ -149,6 +166,15 @@ func LoadConfig() (*Config, error) {
 }
 
 func (c *Config) normalize() error {
+	role := ServerRole(strings.ToLower(strings.TrimSpace(string(c.Server.Role))))
+	switch role {
+	case ServerRoleBoth, ServerRoleWeb, ServerRoleWorker:
+		c.Server.Role = role
+	default:
+		return fmt.Errorf("SERVER_ROLE (%q) は %q, %q, または未設定である必要があります",
+			c.Server.Role, ServerRoleWeb, ServerRoleWorker)
+	}
+
 	c.Server.ServiceURL = strings.TrimSpace(c.Server.ServiceURL)
 	workerURL, err := normalizeWorkerURL(c.Server.WorkerURL, c.Server.ServiceURL)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/shouni/gcp-kit/auth"
 
+	"github.com/shouni/ap-story/internal/builder"
 	"github.com/shouni/ap-story/internal/server/handlers"
 )
 
@@ -124,5 +125,66 @@ func TestCSRFAutoGenMiddlewareGeneratesTokenOnGet(t *testing.T) {
 	}
 	if rec.Result().Cookies() == nil {
 		t.Error("no session cookie was set to persist the generated CSRF token")
+	}
+}
+
+// TestNewRouterOmitsWorkerRoutesWithoutTaskAuth は、SERVER_ROLE=web のプロセスで
+// /tasks/generate が登録されないことを確認します。
+//
+// 見るのは「401 で拒否される」ではなく「404 でルートが無い」ことです。分離の目的は
+// 公開サービス上からタスク受付口を消すことなので、アプリのコードが応答する余地を
+// 残していない状態を確かめる必要があります。
+func TestNewRouterOmitsWorkerRoutesWithoutTaskAuth(t *testing.T) {
+	t.Parallel()
+
+	// Web 面だけを担う構成: TaskAuth も Worker も nil。
+	router := NewRouter(&builder.AppHandlers{Auth: testAuthHandler(t)}, "")
+	req := httptest.NewRequest(http.MethodPost, "/tasks/generate", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d (worker route must not be registered for the web role)", rec.Code, http.StatusNotFound)
+	}
+}
+
+// TestNewRouterOmitsWebRoutesWithoutWebHandler は、SERVER_ROLE=worker のプロセスで
+// Web 面のルートが登録されないことを確認します。
+func TestNewRouterOmitsWebRoutesWithoutWebHandler(t *testing.T) {
+	t.Parallel()
+
+	// Worker 面だけを担う構成: Auth も Web も nil。
+	router := NewRouter(&builder.AppHandlers{
+		TaskAuth: auth.NewTaskVerifier("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
+	}, "")
+
+	for _, path := range []string{"/", "/api/comics"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status = %d, want %d (web routes must not be registered for the worker role)", path, rec.Code, http.StatusNotFound)
+		}
+	}
+}
+
+// TestNewRouterKeepsHealthzForWorkerRole は、Worker 面だけの構成でも
+// ヘルスチェックが残ることを確認します。Cloud Run の起動判定に使われます。
+func TestNewRouterKeepsHealthzForWorkerRole(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(&builder.AppHandlers{
+		TaskAuth: auth.NewTaskVerifier("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
+	}, "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }

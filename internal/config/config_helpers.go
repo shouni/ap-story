@@ -67,6 +67,43 @@ func (c *Config) ValidateEssentialConfig() error {
 		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.Server.ServiceURL)
 	}
 
+	if c.GCP.ProjectID == "" {
+		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
+	}
+	if c.GCP.LocationID == "" {
+		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
+	}
+	if c.GCP.ServiceAccountEmail == "" {
+		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
+	}
+	if c.Storage.GCSBucket == "" {
+		return fmt.Errorf("STORY_BUCKET が設定されていません")
+	}
+	// CHARACTERS_JSON_PATH は任意。未設定時は go-character-kit の埋め込みデフォルト
+	// キャラクター定義にフォールバックする（internal/adapters.LoadCharacters）。
+
+	if c.Server.Role.ServesWeb() {
+		if err := c.validateWebConfig(); err != nil {
+			return err
+		}
+	}
+
+	if c.Server.Role.ServesWorker() && c.GCP.TaskAudienceURL == "" {
+		return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+	}
+
+	return nil
+}
+
+// validateWebConfig は Web 面（OAuth ログインとセッション、タスク投入）に必要な設定を検証します。
+// Worker 面だけを提供するプロセスに OAuth 関連の設定を要求すると、
+// 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
+func (c *Config) validateWebConfig() error {
+	// タスクを投入するのは Web 面だけなので、キュー名も Web 面の要件です。
+	if c.GCP.QueueID == "" {
+		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+	}
+
 	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {
 		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
 	}
@@ -88,24 +125,6 @@ func (c *Config) ValidateEssentialConfig() error {
 	if len(c.Auth.AllowedM2MServiceAccounts) == 0 {
 		return fmt.Errorf("ALLOWED_M2M_SERVICE_ACCOUNTS が設定されていません（M2M 呼び出しを許可する SA が1つも登録されていません）")
 	}
-
-	if c.GCP.ProjectID == "" {
-		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
-	}
-	if c.GCP.LocationID == "" {
-		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
-	}
-	if c.GCP.QueueID == "" {
-		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
-	}
-	if c.GCP.ServiceAccountEmail == "" {
-		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
-	}
-	if c.Storage.GCSBucket == "" {
-		return fmt.Errorf("STORY_BUCKET が設定されていません")
-	}
-	// CHARACTERS_JSON_PATH は任意。未設定時は go-character-kit の埋め込みデフォルト
-	// キャラクター定義にフォールバックする（internal/adapters.LoadCharacters）。
 
 	return nil
 }
