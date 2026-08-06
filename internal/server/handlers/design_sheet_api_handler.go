@@ -1,0 +1,53 @@
+package handlers
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+)
+
+// designSheetAPIRequest は POST /api/design-sheets のリクエストボディです。
+// Web フォーム（POST /design-sheets）も同じ入力項目をコアロジック（newDesignSheetTask）で共有します。
+type designSheetAPIRequest struct {
+	CharacterIDs         []string `json:"character_ids"`
+	AspectRatio          string   `json:"aspect_ratio,omitempty"`
+	Layout               string   `json:"layout,omitempty"`
+	ModelOverride        string   `json:"model_override,omitempty"`
+	ReferenceURLOverride string   `json:"reference_url_override,omitempty"`
+	VisualCuesOverride   []string `json:"visual_cues_override,omitempty"`
+	// Seed は省略可。未指定かつキャラクターを1人だけ指定した場合、characters.json の
+	// そのキャラクターの登録 seed へ自動フォールバックします（EnqueueDesignSheet 参照）。
+	Seed *int64 `json:"seed,omitempty"`
+}
+
+// EnqueueDesignSheet は POST /api/design-sheets を処理し、generate_design_sheet ジョブを
+// 投入します。job_id はサーバー側で新規採番し、レスポンスとして返します。
+func (h *Handler) EnqueueDesignSheet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	var req designSheetAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	params := designSheetTaskParams(req)
+	params.Seed = h.resolveDesignSheetSeed(params.CharacterIDs, params.Seed)
+
+	task, err := newDesignSheetTask(params)
+	if err != nil {
+		slog.Error("failed to generate job id", "error", err)
+		writeErrorJSON(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	if err := task.ValidateSubmission(); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	h.enqueueAndRespond(w, r, task)
+}

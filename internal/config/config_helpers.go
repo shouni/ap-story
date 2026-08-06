@@ -1,0 +1,111 @@
+package config
+
+import (
+	"fmt"
+	"log/slog"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/shouni/netarmor/securenet"
+)
+
+const taskGeneratePath = "/tasks/generate"
+
+func normalizeWorkerURL(workerURL string, serviceURL string) (string, error) {
+	workerURL = strings.TrimSpace(workerURL)
+	if workerURL != "" {
+		return workerURL, nil
+	}
+	return joinWorkerPath(serviceURL)
+}
+
+func joinWorkerPath(serviceURL string) (string, error) {
+	serviceURL = strings.TrimSpace(serviceURL)
+	if serviceURL == "" {
+		return taskGeneratePath, nil
+	}
+
+	workerURL, err := url.JoinPath(serviceURL, taskGeneratePath)
+	if err != nil {
+		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
+	}
+	return workerURL, nil
+}
+
+// IsSecureServiceURL は、設定された ServiceURL が安全なスキーム（HTTPS など）を使用しているかどうかを確認します。
+func (c *Config) IsSecureServiceURL() bool {
+	return securenet.IsSecureServiceURL(c.Server.ServiceURL)
+}
+
+// WarnOnContradictoryGenerationSettings は、生成制御の設定同士が噛み合っていない場合に
+// 警告を出します。起動を止めるほどではないが、黙って期待外れの挙動になる組み合わせを
+// 運用者に気づかせるためのものです。
+func (c *Config) WarnOnContradictoryGenerationSettings() {
+	// 一括生成のスループット上限は 1/RATE_INTERVAL で決まるため、間隔を空けたまま
+	// 並列数だけ上げても速くならない。設定した本人が一番気づきにくい組み合わせ。
+	if c.AI.MaxConcurrency > 1 && c.AI.RateInterval > 0 {
+		slog.Warn("MAX_CONCURRENCY を上げても RATE_INTERVAL が発射間隔を律速するため並列化の効果が出ません",
+			"max_concurrency", c.AI.MaxConcurrency,
+			"rate_interval", c.AI.RateInterval,
+			"effective_calls_per_minute", time.Minute/c.AI.RateInterval)
+	}
+	// 画像生成1枚に数十秒かかるため、極端に短い上限は生成そのものを打ち切る。
+	if c.AI.RequestTimeout > 0 && c.AI.RequestTimeout < minSafeRequestTimeout {
+		slog.Warn("REQUEST_TIMEOUT が短く、画像生成が完了前に打ち切られる可能性があります",
+			"request_timeout", c.AI.RequestTimeout,
+			"recommended_minimum", minSafeRequestTimeout)
+	}
+}
+
+// minSafeRequestTimeout は、画像生成1回が収まる目安の下限です。
+const minSafeRequestTimeout = 2 * time.Minute
+
+// ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
+func (c *Config) ValidateEssentialConfig() error {
+	if !c.IsSecureServiceURL() {
+		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.Server.ServiceURL)
+	}
+
+	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {
+		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
+	}
+
+	if len(c.Auth.AllowedEmails) == 0 && len(c.Auth.AllowedDomains) == 0 {
+		return fmt.Errorf("許可されたメールアドレスまたはドメインが一つも設定されていません（認可リストが空です）")
+	}
+
+	if c.Auth.SessionEncryptKey == "" {
+		return fmt.Errorf("SESSION_ENCRYPT_KEY が設定されていません。セキュアな運用のために必須です")
+	}
+
+	// SessionEncryptKey の長さチェック (AES要件: 16, 24, 32 bytes)
+	if keyLen := len(c.Auth.SessionEncryptKey); keyLen != 16 && keyLen != 24 && keyLen != 32 {
+		return fmt.Errorf("SESSION_ENCRYPT_KEY の長さが不正です (%d バイト)。16, 24, 32 バイトのいずれかにしてください", keyLen)
+	}
+
+	// M2M（ap-mcp 等からの呼び出し）も継続して受け付けるため、SA 許可リストも必須とする。
+	if len(c.Auth.AllowedM2MServiceAccounts) == 0 {
+		return fmt.Errorf("ALLOWED_M2M_SERVICE_ACCOUNTS が設定されていません（M2M 呼び出しを許可する SA が1つも登録されていません）")
+	}
+
+	if c.GCP.ProjectID == "" {
+		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
+	}
+	if c.GCP.LocationID == "" {
+		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
+	}
+	if c.GCP.QueueID == "" {
+		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+	}
+	if c.GCP.ServiceAccountEmail == "" {
+		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
+	}
+	if c.Storage.GCSBucket == "" {
+		return fmt.Errorf("STORY_BUCKET が設定されていません")
+	}
+	// CHARACTERS_JSON_PATH は任意。未設定時は go-character-kit の埋め込みデフォルト
+	// キャラクター定義にフォールバックする（internal/adapters.LoadCharacters）。
+
+	return nil
+}

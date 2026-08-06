@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-1">{{.Data.Name}} の生成履歴</h1>
+        <code class="text-muted small">{{.Data.CharacterID}}</code>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/characters/{{.Data.CharacterID}}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>キャラクター詳細へ戻る
+        </a>
+        <a href="/design-sheets?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新規生成
+        </a>
+    </div>
+</div>
+
+{{if .Data.History}}
+<div class="row g-3">
+    {{$characterID := .Data.CharacterID}}
+    {{range .Data.History}}
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3" id="design-item-{{.JobID}}">
+        <article class="card h-100 shadow-sm comic-image-card">
+            <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                <img src="{{.ImageURL}}" class="card-img-top" alt="{{.JobID}}" loading="lazy">
+            </a>
+            <div class="card-body py-2 d-flex justify-content-between align-items-center gap-2">
+                <code class="small text-truncate">{{.JobID}}</code>
+                <button class="btn btn-outline-danger btn-sm px-2 js-delete-design"
+                        data-character-id="{{$characterID}}"
+                        data-job-id="{{.JobID}}"
+                        type="button"
+                        title="削除">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </article>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="alert alert-light border text-center py-5">
+    <i class="bi bi-inbox display-4 text-muted mb-3 d-block"></i>
+    <p class="mb-2">まだ生成履歴がありません。</p>
+    <a href="/design-sheets?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>最初のデザインシートを生成
+    </a>
+</div>
+{{end}}
+{{end}}

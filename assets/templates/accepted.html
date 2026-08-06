@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="row justify-content-center py-5">
+    <div class="col-md-8 text-center">
+        <div class="card shadow border-0 overflow-hidden">
+            <div class="progress rounded-0" style="height: 6px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated w-100"
+                     role="progressbar"></div>
+            </div>
+
+            <div class="card-body py-5 px-4">
+                <div class="mb-4">
+                    <div class="display-1 text-success mb-3">
+                        <i class="bi {{.Data.Icon}}"></i>
+                    </div>
+                </div>
+
+                <h2 class="fw-bold mb-3">{{.Data.Heading}}</h2>
+
+                <p class="fs-5 text-muted mb-4">{{.Data.Message}}</p>
+
+                <div class="bg-light p-4 rounded-4 mb-5 text-start border">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-collection me-2 text-primary fs-4"></i>
+                        <span class="fw-bold text-secondary small">Job:</span>
+                    </div>
+                    <code class="text-break p-2 d-block bg-white rounded border font-monospace">
+                        {{.Data.JobID}} / {{.Data.Command}}
+                    </code>
+                </div>
+
+                <hr class="my-4 opacity-25">
+
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+                    <a href="/" class="btn btn-primary btn-lg px-5 rounded-pill fw-bold shadow">
+                        <i class="bi bi-house-door me-2"></i>ホームへ戻る
+                    </a>
+                    <a href="{{.Data.ProgressURL}}" class="btn btn-outline-primary btn-lg px-5 rounded-pill fw-bold">
+                        <i class="bi bi-eye me-2"></i>{{.Data.ProgressLabel}}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <p class="mt-4 text-secondary small">
+            <i class="bi bi-cpu me-1"></i> System Status: Processing via Cloud Tasks.
+        </p>
+    </div>
+</div>
+{{end}}

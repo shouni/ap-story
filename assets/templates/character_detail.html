@@ -1,0 +1,83 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-1">{{.Data.Name}}</h1>
+        <code class="text-muted small">{{.Data.CharacterID}}</code>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/characters" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>一覧へ戻る
+        </a>
+        <a href="/design-sheets?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新規生成
+        </a>
+    </div>
+</div>
+
+<section class="mb-5">
+    <h2 class="h5 mb-3"><i class="bi bi-image me-2"></i>マスター参照画像</h2>
+    {{if .Data.References}}
+    <div class="row g-3">
+        {{range .Data.References}}
+        <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+            <article class="card h-100 shadow-sm comic-image-card">
+                <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                    <img src="{{.ImageURL}}" class="card-img-top" alt="{{.Label}}" loading="lazy">
+                </a>
+                <div class="card-body py-2">
+                    <span class="badge text-bg-light border text-secondary">{{.Label}}</span>
+                </div>
+            </article>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="alert alert-light border text-center py-4 mb-0">
+        <p class="mb-0">マスター参照画像が登録されていません。</p>
+    </div>
+    {{end}}
+</section>
+
+<section>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="h5 mb-0"><i class="bi bi-clock-history me-2"></i>生成履歴</h2>
+        {{if gt .Data.HistoryTotal (len .Data.History)}}
+        <a href="/characters/{{.Data.CharacterID}}/history" class="btn btn-outline-secondary btn-sm">
+            すべて表示（{{.Data.HistoryTotal}}件）
+        </a>
+        {{end}}
+    </div>
+    {{if .Data.History}}
+    <div class="row g-3">
+        {{$characterID := .Data.CharacterID}}
+        {{range .Data.History}}
+        <div class="col-12 col-sm-6 col-lg-4 col-xl-3" id="design-item-{{.JobID}}">
+            <article class="card h-100 shadow-sm comic-image-card">
+                <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                    <img src="{{.ImageURL}}" class="card-img-top" alt="{{.JobID}}" loading="lazy">
+                </a>
+                <div class="card-body py-2 d-flex justify-content-between align-items-center gap-2">
+                    <code class="small text-truncate">{{.JobID}}</code>
+                    <button class="btn btn-outline-danger btn-sm px-2 js-delete-design"
+                            data-character-id="{{$characterID}}"
+                            data-job-id="{{.JobID}}"
+                            type="button"
+                            title="削除">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </article>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="alert alert-light border text-center py-5">
+        <i class="bi bi-inbox display-4 text-muted mb-3 d-block"></i>
+        <p class="mb-2">まだ生成履歴がありません。</p>
+        <a href="/design-sheets?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>最初のデザインシートを生成
+        </a>
+    </div>
+    {{end}}
+</section>
+{{end}}

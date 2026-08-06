@@ -1,0 +1,56 @@
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-1"><i class="bi bi-house-door me-2"></i>Home</h1>
+        <div class="text-muted small">最新の生成結果をすぐ確認できます。</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="/compose" class="btn btn-primary btn-sm">
+            <i class="bi bi-book me-1"></i>漫画を生成
+        </a>
+        <a href="/design-sheets" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-palette me-1"></i>デザインシートを生成
+        </a>
+    </div>
+</div>
+
+<section>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="h4 mb-0"><i class="bi bi-collection me-2"></i>最新の作品</h2>
+        <a href="/history" class="btn btn-outline-secondary btn-sm">
+            すべて表示
+        </a>
+    </div>
+
+    <div class="list-group shadow-sm">
+        {{range .Data.History}}
+        <div class="list-group-item list-group-item-action p-3 position-relative" id="history-item-{{.JobID}}">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div class="flex-grow-1">
+                    <a href="/history/{{.JobID}}" class="text-decoration-none text-dark d-block stretched-link">
+                        <h3 class="h6 mb-1 fw-bold">{{if .Title}}{{.Title}}{{else}}(無題){{end}}</h3>
+                    </a>
+                    <div class="text-muted small">
+                        <code>{{.JobID}}</code>
+                        {{if .CreatedAt}} · {{.CreatedAt}}{{end}}
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge text-bg-light border text-secondary">{{.ChapterCount}} 章</span>
+                    <span class="badge text-bg-light border text-secondary">{{.PanelCount}} パネル</span>
+                    <span class="badge text-bg-light border text-secondary">{{.PageCount}} ページ</span>
+                </div>
+            </div>
+        </div>
+        {{else}}
+        <div class="alert alert-light border text-center py-5 mb-0">
+            <i class="bi bi-inbox display-4 text-muted mb-3 d-block"></i>
+            <p class="mb-2">作品がまだありません。</p>
+            <a href="/compose" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i>最初の作品を作る
+            </a>
+        </div>
+        {{end}}
+    </div>
+</section>
+{{end}}
