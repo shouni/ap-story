@@ -90,8 +90,8 @@ func (c *Config) ValidateEssentialConfig() error {
 			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
 		}
 		// 空だと検証器が fail-closed になり、全タスクが 500 で失敗し続けます。
-		if len(c.TaskIssuers()) == 0 {
-			return fmt.Errorf("タスクの発行元が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS または SERVICE_ACCOUNT_EMAIL を設定してください")
+		if len(c.Tasks.AllowedServiceAccounts) == 0 {
+			return fmt.Errorf("許可する caller SA が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS を設定してください")
 		}
 	}
 
@@ -99,37 +99,9 @@ func (c *Config) ValidateEssentialConfig() error {
 }
 
 // TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
-//
-// TASK_CALLER_SERVICE_ACCOUNT_EMAIL があればそれを使い、無ければ旧 SERVICE_ACCOUNT_EMAIL に
-// フォールバックします。後者は Terraform を新変数へ切り替えるまでの移行用であり、
-// 適用後に削除します（残すと「この変数は誰のこと？」という曖昧さが戻るため）。
-//
-// TaskIssuers と同じく、フォールバックを normalize ではなくここに置くのは
-// 呼び出し順への依存を作らないためです。
+// 値は env から読んだままなので、前後の空白だけ落とします。
 func (c *Config) TaskCallerServiceAccount() string {
-	if email := strings.TrimSpace(c.Tasks.CallerServiceAccountEmail); email != "" {
-		return email
-	}
-	return strings.TrimSpace(c.GCP.ServiceAccountEmail)
-}
-
-// TaskIssuers は、受信側が受け付ける Cloud Tasks トークンの発行元を返します。
-//
-// ALLOWED_TASK_SERVICE_ACCOUNTS があればそれを使い、無ければ SERVICE_ACCOUNT_EMAIL の
-// 1 件にフォールバックします。web と worker で実行サービスアカウントを分けている構成では、
-// worker が受け付けるべき発行元は自分自身ではなく web 側の SA です。単一値の
-// SERVICE_ACCOUNT_EMAIL しか無いと、その値が役割ごとに別の意味（web では署名者、
-// worker では許可する発行元）になってしまうため、明示できる口を用意しています。
-//
-// フォールバックを normalize ではなくここに置くのは、呼び出し順への依存を作らないためです。
-func (c *Config) TaskIssuers() []string {
-	if len(c.Tasks.AllowedServiceAccounts) > 0 {
-		return c.Tasks.AllowedServiceAccounts
-	}
-	if email := strings.TrimSpace(c.GCP.ServiceAccountEmail); email != "" {
-		return []string{email}
-	}
-	return nil
+	return strings.TrimSpace(c.Tasks.CallerServiceAccountEmail)
 }
 
 // validateWebConfig は Web 面（OAuth ログインとセッション、タスク投入）に必要な設定を検証します。

@@ -179,7 +179,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトとリージョン |
 | `CLOUD_TASKS_QUEUE_ID` | Cloud Tasks キュー名。タスクを投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
 | `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。投入するのは web 面だけなので `SERVER_ROLE=worker` では不要。未設定時は旧 `SERVICE_ACCOUNT_EMAIL` にフォールバックします（移行用・Terraform 適用後に削除） |
-| `ALLOWED_TASK_SERVICE_ACCOUNTS` | 受信側が**受け付ける**トークン発行元の許可リスト（カンマ区切り、任意）。未設定時は `SERVICE_ACCOUNT_EMAIL` 1 件にフォールバック。web と worker で実行 SA を分けている場合、worker が受け付けるべき発行元は自分自身ではなく **web 側の SA**（`ap-story-web-runner`） |
+| `ALLOWED_TASK_SERVICE_ACCOUNTS` | worker が**受け付ける** caller SA の許可リスト（カンマ区切り、worker では必須）。web と worker で実行 SA を分けている場合、worker が受け付けるべき発行元は自分自身ではなく **web 側の SA**（`ap-story-web-runner`） |
 | `TASK_AUDIENCE_URL` | OIDC トークンの audience。web/worker を分けた場合は**呼び先である worker の URL**（Cloud Run の IAM が不一致を 403 で弾く） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
 | `SESSION_SECRET` / `SESSION_ENCRYPT_KEY` | セッションクッキーの署名鍵・暗号化鍵 |
@@ -218,7 +218,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 
 キャラクター定義（`characters.json`）は一覧・デザインシート画面が使うため、役割によらず読み込みます。
 
-worker が受け付けるトークンの発行元は `ALLOWED_TASK_SERVICE_ACCOUNTS` で指定します。タスクに署名するのは web の実行 SA（`ap-story-web-runner`）なので、worker 側に必要なのは「その SA からを受け付ける」という設定です。この変数が無かった頃は `SERVICE_ACCOUNT_EMAIL` が兼ねており、worker サービスに自分ではない SA のアドレスを入れる必要がありました（未設定なら今もその挙動にフォールバックします）。
+worker が受け付ける caller SA は `ALLOWED_TASK_SERVICE_ACCOUNTS` で指定します。タスクに指定される caller SA は web 側（`ap-story-web-runner`）なので、worker 側に必要なのは「その SA からを受け付ける」という設定です。トークンを生成して付与するのは Cloud Tasks であって、web ではありません。この変数が無かった頃は `SERVICE_ACCOUNT_EMAIL` が兼ねており、worker サービスに自分ではない SA のアドレスを入れる必要がありました（未設定なら今もその挙動にフォールバックします）。
 
 権限定義は `ap-infra` リポジトリの `app_ap_story.tf` にあります。
 

@@ -145,7 +145,8 @@ func essentialConfigEnv(t *testing.T) {
 	t.Setenv("GCP_PROJECT_ID", "proj")
 	t.Setenv("GCP_LOCATION_ID", "asia-northeast1")
 	t.Setenv("CLOUD_TASKS_QUEUE_ID", "queue")
-	t.Setenv("SERVICE_ACCOUNT_EMAIL", "runner@project.iam.gserviceaccount.com")
+	t.Setenv("TASK_CALLER_SERVICE_ACCOUNT_EMAIL", "caller@project.iam.gserviceaccount.com")
+	t.Setenv("ALLOWED_TASK_SERVICE_ACCOUNTS", "caller@project.iam.gserviceaccount.com")
 	t.Setenv("STORY_BUCKET", "bucket")
 	t.Setenv("CHARACTERS_JSON_PATH", "gs://bucket/characters.json")
 }

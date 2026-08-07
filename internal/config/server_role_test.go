@@ -15,7 +15,8 @@ func newRoleTestConfig(role ServerRole) *Config {
 	cfg.Server.Role = role
 	cfg.GCP.ProjectID = "test-project"
 	cfg.GCP.LocationID = "asia-northeast1"
-	cfg.GCP.ServiceAccountEmail = "tasks@test-project.iam.gserviceaccount.com"
+	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
+	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://ap-story-worker.example.run.app"
 	cfg.Storage.GCSBucket = "ap-story"
 	return cfg
@@ -136,85 +137,39 @@ func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 	require.Contains(t, err.Error(), "TASK_AUDIENCE_URL")
 }
 
-// TestValidateEssentialConfigServiceAccountIsWebOnly は、SERVICE_ACCOUNT_EMAIL が
-// 「投入するタスクに署名する SA」＝ Web 面の要件であることを確認します。
-// Worker が受け付ける発行元は ALLOWED_TASK_SERVICE_ACCOUNTS で別に指定できるため、
-// Worker 専用プロセスは署名者を持たずに済みます。
+// TestValidateEssentialConfigServiceAccountIsWebOnly は、caller SA が
+// 「タスクを投入する側」＝ web 面の要件であることを確認します。
+// worker が受け付ける許可リストは ALLOWED_TASK_SERVICE_ACCOUNTS で別に指定するため、
+// worker 専用プロセスは caller SA を持たずに済みます。
 func TestValidateEssentialConfigServiceAccountIsWebOnly(t *testing.T) {
-	t.Run("web は署名者が必須", func(t *testing.T) {
+	t.Run("web は caller SA が必須", func(t *testing.T) {
 		cfg := withWebConfig(newRoleTestConfig(ServerRoleWeb))
-		cfg.GCP.ServiceAccountEmail = ""
+		cfg.Tasks.CallerServiceAccountEmail = ""
 
 		err := cfg.ValidateEssentialConfig()
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "SERVICE_ACCOUNT_EMAIL")
+		require.Contains(t, err.Error(), "TASK_CALLER_SERVICE_ACCOUNT_EMAIL")
 	})
 
-	t.Run("worker は発行元を明示すれば署名者不要", func(t *testing.T) {
+	t.Run("worker は許可リストを明示すれば caller SA 不要", func(t *testing.T) {
 		cfg := newRoleTestConfig(ServerRoleWorker)
-		cfg.GCP.ServiceAccountEmail = ""
+		cfg.Tasks.CallerServiceAccountEmail = ""
 		cfg.Tasks.AllowedServiceAccounts = []string{"ap-story-web-runner@test-project.iam.gserviceaccount.com"}
 
 		require.NoError(t, cfg.ValidateEssentialConfig())
 	})
 }
 
-// TestValidateEssentialConfigRequiresTaskIssuerForWorker は、受け付ける発行元が
+// TestValidateEssentialConfigRequiresAllowlistForWorker は、受け付ける発行元が
 // 1 件も無いまま Worker が起動しないことを確認します。許可リストが空だと
 // OIDC 検証器は fail-closed になり、全タスクが失敗し続けます。
-func TestValidateEssentialConfigRequiresTaskIssuerForWorker(t *testing.T) {
+func TestValidateEssentialConfigRequiresAllowlistForWorker(t *testing.T) {
 	cfg := newRoleTestConfig(ServerRoleWorker)
-	cfg.GCP.ServiceAccountEmail = ""
 	cfg.Tasks.AllowedServiceAccounts = nil
 
 	err := cfg.ValidateEssentialConfig()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ALLOWED_TASK_SERVICE_ACCOUNTS")
-}
-
-// TestTaskIssuers は、受信側が受け付ける発行元の解決順を確認します。
-//
-// web と worker で実行 SA を分けると、worker が受け付けるべき発行元は自分自身では
-// なく web 側の SA になります。単一値の SERVICE_ACCOUNT_EMAIL しか無いと、同じ変数が
-// 役割ごとに別の意味を持つことになるため、明示できる口を用意しています。
-func TestTaskIssuers(t *testing.T) {
-	tests := []struct {
-		name    string
-		signer  string
-		allowed []string
-		want    []string
-	}{
-		{
-			name:   "許可リストが無ければ署名者にフォールバックする",
-			signer: "web-runner@test-project.iam.gserviceaccount.com",
-			want:   []string{"web-runner@test-project.iam.gserviceaccount.com"},
-		},
-		{
-			name:    "許可リストがあれば署名者より優先する",
-			signer:  "worker-runner@test-project.iam.gserviceaccount.com",
-			allowed: []string{"web-runner@test-project.iam.gserviceaccount.com"},
-			want:    []string{"web-runner@test-project.iam.gserviceaccount.com"},
-		},
-		{
-			name:    "複数の発行元を並べられる",
-			allowed: []string{"web-runner@test-project.iam.gserviceaccount.com", "worker-runner@test-project.iam.gserviceaccount.com"},
-			want:    []string{"web-runner@test-project.iam.gserviceaccount.com", "worker-runner@test-project.iam.gserviceaccount.com"},
-		},
-		{
-			name: "どちらも無ければ空（検証器は fail-closed になる）",
-			want: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{}
-			cfg.GCP.ServiceAccountEmail = tt.signer
-			cfg.Tasks.AllowedServiceAccounts = tt.allowed
-
-			require.Equal(t, tt.want, cfg.TaskIssuers())
-		})
-	}
 }
 
 func TestLoadConfigNormalizesServerRole(t *testing.T) {
@@ -259,33 +214,25 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 	tests := []struct {
 		name   string
 		caller string
-		legacy string
 		want   string
 	}{
 		{
 			name:   "新しい変数があればそれを使う",
 			caller: "caller@test-project.iam.gserviceaccount.com",
-			legacy: "legacy@test-project.iam.gserviceaccount.com",
 			want:   "caller@test-project.iam.gserviceaccount.com",
-		},
-		{
-			name:   "無ければ旧変数へフォールバックする",
-			legacy: "legacy@test-project.iam.gserviceaccount.com",
-			want:   "legacy@test-project.iam.gserviceaccount.com",
 		},
 		{
 			name:   "前後の空白は落とす",
 			caller: "  caller@test-project.iam.gserviceaccount.com  ",
 			want:   "caller@test-project.iam.gserviceaccount.com",
 		},
-		{name: "どちらも無ければ空"},
+		{name: "未設定なら空"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{}
 			cfg.Tasks.CallerServiceAccountEmail = tt.caller
-			cfg.GCP.ServiceAccountEmail = tt.legacy
 
 			require.Equal(t, tt.want, cfg.TaskCallerServiceAccount())
 		})
