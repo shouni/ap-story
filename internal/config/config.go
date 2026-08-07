@@ -78,6 +78,10 @@ type TasksConfig struct {
 	QueueID         string `env:"CLOUD_TASKS_QUEUE_ID"`
 	WorkerURL       string `env:"WORKER_URL"`
 	TaskAudienceURL string `env:"TASK_AUDIENCE_URL"`
+	// CallerServiceAccountEmail は、投入するタスクの oidcToken.serviceAccountEmail に
+	// 指定する caller SA です。トークンを生成して付与するのは Cloud Tasks であり、
+	// このプロセスが署名するわけではありません。投入側＝ web 面だけの設定です。
+	CallerServiceAccountEmail string `env:"TASK_CALLER_SERVICE_ACCOUNT_EMAIL"`
 	// AllowedServiceAccountsRaw は、受信側が受け付けるトークン発行元の許可リスト（カンマ区切り）です。
 	// web と worker で実行サービスアカウントを分けると、単一値の SERVICE_ACCOUNT_EMAIL では
 	// 「署名するのは誰か」と「誰からを受け付けるか」を同じ値で兼ねられなくなるため、別に持ちます。
