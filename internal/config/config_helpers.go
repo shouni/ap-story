@@ -73,9 +73,6 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.GCP.LocationID == "" {
 		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
 	}
-	if c.GCP.ServiceAccountEmail == "" {
-		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
-	}
 	if c.Storage.GCSBucket == "" {
 		return fmt.Errorf("STORY_BUCKET が設定されていません")
 	}
@@ -88,10 +85,35 @@ func (c *Config) ValidateEssentialConfig() error {
 		}
 	}
 
-	if c.Server.Role.ServesWorker() && c.GCP.TaskAudienceURL == "" {
-		return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+	if c.Server.Role.ServesWorker() {
+		if c.Tasks.TaskAudienceURL == "" {
+			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+		}
+		// 空だと検証器が fail-closed になり、全タスクが 500 で失敗し続けます。
+		if len(c.TaskIssuers()) == 0 {
+			return fmt.Errorf("タスクの発行元が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS または SERVICE_ACCOUNT_EMAIL を設定してください")
+		}
 	}
 
+	return nil
+}
+
+// TaskIssuers は、受信側が受け付ける Cloud Tasks トークンの発行元を返します。
+//
+// ALLOWED_TASK_SERVICE_ACCOUNTS があればそれを使い、無ければ SERVICE_ACCOUNT_EMAIL の
+// 1 件にフォールバックします。web と worker で実行サービスアカウントを分けている構成では、
+// worker が受け付けるべき発行元は自分自身ではなく web 側の SA です。単一値の
+// SERVICE_ACCOUNT_EMAIL しか無いと、その値が役割ごとに別の意味（web では署名者、
+// worker では許可する発行元）になってしまうため、明示できる口を用意しています。
+//
+// フォールバックを normalize ではなくここに置くのは、呼び出し順への依存を作らないためです。
+func (c *Config) TaskIssuers() []string {
+	if len(c.Tasks.AllowedServiceAccounts) > 0 {
+		return c.Tasks.AllowedServiceAccounts
+	}
+	if email := strings.TrimSpace(c.GCP.ServiceAccountEmail); email != "" {
+		return []string{email}
+	}
 	return nil
 }
 
@@ -100,8 +122,15 @@ func (c *Config) ValidateEssentialConfig() error {
 // 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
 func (c *Config) validateWebConfig() error {
 	// タスクを投入するのは Web 面だけなので、キュー名も Web 面の要件です。
-	if c.GCP.QueueID == "" {
+	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+	}
+
+	// SERVICE_ACCOUNT_EMAIL は投入するタスクの OIDC トークンに署名する SA であり、
+	// 投入側＝Web 面の要件です。Worker が受け付ける発行元は ALLOWED_TASK_SERVICE_ACCOUNTS
+	// で別に指定できるため、Worker 専用プロセスはこの値を持たずに済みます。
+	if c.GCP.ServiceAccountEmail == "" {
+		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
 	}
 
 	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {

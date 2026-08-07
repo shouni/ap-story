@@ -66,7 +66,7 @@ func TestProtectedAccessMiddlewareFallsBackToSessionWithoutM2MToken(t *testing.T
 
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
-	mw := protectedAccessMiddleware(authHandler, m2m)(next)
+	mw := authHandler.ProtectedMiddleware(m2m)(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
 	rec := httptest.NewRecorder()
@@ -90,7 +90,7 @@ func TestProtectedAccessMiddlewareRejectsInvalidM2MToken(t *testing.T) {
 
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
-	mw := protectedAccessMiddleware(authHandler, m2m)(next)
+	mw := authHandler.ProtectedMiddleware(m2m)(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
 	req.Header.Set("Authorization", "Bearer not-a-real-token")
@@ -114,7 +114,7 @@ func TestCSRFAutoGenMiddlewareGeneratesTokenOnGet(t *testing.T) {
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		gotToken = handlers.CSRFTokenFromContext(r.Context())
 	})
-	mw := csrfAutoGenMiddleware(authHandler)(next)
+	mw := authHandler.CSRFContextMiddleware(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
 	rec := httptest.NewRecorder()

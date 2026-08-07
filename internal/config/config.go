@@ -21,7 +21,6 @@ const (
 // ServerConfig は HTTP サーバーの設定です。
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
-	WorkerURL  string `env:"WORKER_URL"`
 	Port       string `env:"PORT" envDefault:"8080"`
 	// Role はこのプロセスが担う役割です。空なら Web と Worker の両方を提供します。
 	Role            ServerRole `env:"SERVER_ROLE"`
@@ -49,11 +48,26 @@ func (r ServerRole) ServesWorker() bool { return r == ServerRoleBoth || r == Ser
 
 // GCPConfig は Google Cloud Platform の設定です。
 type GCPConfig struct {
-	ProjectID           string `env:"GCP_PROJECT_ID"`
-	LocationID          string `env:"GCP_LOCATION_ID"`
-	QueueID             string `env:"CLOUD_TASKS_QUEUE_ID"`
-	TaskAudienceURL     string `env:"TASK_AUDIENCE_URL"`
+	ProjectID  string `env:"GCP_PROJECT_ID"`
+	LocationID string `env:"GCP_LOCATION_ID"`
+	// ServiceAccountEmail は、投入するタスクの OIDC トークンに**署名する**サービスアカウントです。
+	// 受信側が受け付ける発行元は Tasks.AllowedServiceAccounts で別に指定します。
 	ServiceAccountEmail string `env:"SERVICE_ACCOUNT_EMAIL"`
+}
+
+// TasksConfig は Cloud Tasks キューへのエンキューと、受信時の OIDC 検証の設定です。
+// Cloud Tasks に閉じた設定であり、GCP 一般の設定でも HTTP サーバーの設定でもないため、
+// ap-mv・ap-comp と同じくここに集約します。
+type TasksConfig struct {
+	QueueID         string `env:"CLOUD_TASKS_QUEUE_ID"`
+	WorkerURL       string `env:"WORKER_URL"`
+	TaskAudienceURL string `env:"TASK_AUDIENCE_URL"`
+	// AllowedServiceAccountsRaw は、受信側が受け付けるトークン発行元の許可リスト（カンマ区切り）です。
+	// web と worker で実行サービスアカウントを分けると、単一値の SERVICE_ACCOUNT_EMAIL では
+	// 「署名するのは誰か」と「誰からを受け付けるか」を同じ値で兼ねられなくなるため、別に持ちます。
+	// 未設定なら SERVICE_ACCOUNT_EMAIL 1 件にフォールバックします（Config.TaskIssuers を使うこと）。
+	AllowedServiceAccountsRaw string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
+	AllowedServiceAccounts    []string
 }
 
 // StorageConfig はストレージの設定です。
@@ -137,6 +151,7 @@ type AuthConfig struct {
 type Config struct {
 	Server       ServerConfig
 	GCP          GCPConfig
+	Tasks        TasksConfig
 	Storage      StorageConfig
 	Notification NotificationConfig
 	AI           AIConfig
@@ -153,13 +168,14 @@ func LoadConfig() (*Config, error) {
 	if err := cfg.normalize(); err != nil {
 		return nil, fmt.Errorf("failed to normalize config: %w", err)
 	}
-	if cfg.GCP.TaskAudienceURL == "" {
-		cfg.GCP.TaskAudienceURL = cfg.Server.ServiceURL
+	if cfg.Tasks.TaskAudienceURL == "" {
+		cfg.Tasks.TaskAudienceURL = cfg.Server.ServiceURL
 	}
 
 	cfg.Auth.AllowedEmails = text.ParseCommaSeparatedList(cfg.Auth.AllowedEmailsRaw)
 	cfg.Auth.AllowedDomains = text.ParseCommaSeparatedList(cfg.Auth.AllowedDomainsRaw)
 	cfg.Auth.AllowedM2MServiceAccounts = text.ParseCommaSeparatedList(cfg.Auth.AllowedM2MServiceAccountsRaw)
+	cfg.Tasks.AllowedServiceAccounts = text.ParseCommaSeparatedList(cfg.Tasks.AllowedServiceAccountsRaw)
 	cfg.Server.ShutdownTimeout = DefaultShutdownGrace
 
 	return &cfg, nil
@@ -176,11 +192,11 @@ func (c *Config) normalize() error {
 	}
 
 	c.Server.ServiceURL = strings.TrimSpace(c.Server.ServiceURL)
-	workerURL, err := normalizeWorkerURL(c.Server.WorkerURL, c.Server.ServiceURL)
+	workerURL, err := normalizeWorkerURL(c.Tasks.WorkerURL, c.Server.ServiceURL)
 	if err != nil {
 		return err
 	}
-	c.Server.WorkerURL = workerURL
-	c.GCP.TaskAudienceURL = strings.TrimSpace(c.GCP.TaskAudienceURL)
+	c.Tasks.WorkerURL = workerURL
+	c.Tasks.TaskAudienceURL = strings.TrimSpace(c.Tasks.TaskAudienceURL)
 	return nil
 }

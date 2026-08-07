@@ -51,7 +51,10 @@ steps:
       - '--concurrency=10'
       - '--max-instances=5'
       - '--update-env-vars'
-      - 'GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=${_GEMINI_MODEL},IMAGE_STANDARD_MODEL=${_IMAGE_STANDARD_MODEL},IMAGE_QUALITY_MODEL=${_IMAGE_QUALITY_MODEL},SERVER_ROLE=worker,SERVICE_URL=https://${_WEB_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app,TASK_AUDIENCE_URL=https://${_WORKER_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app'
+      # ALLOWED_TASK_SERVICE_ACCOUNTS は「受け付ける発行元」であり、worker 自身ではなく
+      # タスクに署名する web 側の SA を入れる。これを指定した worker は署名者
+      # （SERVICE_ACCOUNT_EMAIL）を持つ必要がない。
+      - 'GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=${_GEMINI_MODEL},IMAGE_STANDARD_MODEL=${_IMAGE_STANDARD_MODEL},IMAGE_QUALITY_MODEL=${_IMAGE_QUALITY_MODEL},SERVER_ROLE=worker,SERVICE_URL=https://${_WEB_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app,TASK_AUDIENCE_URL=https://${_WORKER_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app,ALLOWED_TASK_SERVICE_ACCOUNTS=ap-story-web-runner@${PROJECT_ID}.iam.gserviceaccount.com'
 
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Web to Cloud Run'

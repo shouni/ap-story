@@ -1,20 +1,17 @@
 // Package handlers は、Web UI（フォーム表示・生成・履歴閲覧等）のHTTPハンドラーを提供します。
 package handlers
 
-import "context"
+import (
+	"context"
 
-type csrfTokenContextKey struct{}
+	"github.com/shouni/gcp-kit/auth"
+)
 
-// WithCSRFToken は、テンプレートに公開すべきCSRFトークンをコンテキストに保存します。
-func WithCSRFToken(ctx context.Context, token string) context.Context {
-	return context.WithValue(ctx, csrfTokenContextKey{}, token)
-}
-
-// CSRFTokenFromContext は、コンテキストに保存されたCSRFトークンを取得します。
+// CSRFTokenFromContext は、コンテキストに保存された CSRF トークンを取得します。
+//
+// 格納するのは gcp-kit/auth の CSRFContextMiddleware なので、取得も同じキーを
+// 見る必要があります。ここで委譲しているのは、テンプレート描画側から見た呼び名を
+// handlers パッケージに残すためだけです。
 func CSRFTokenFromContext(ctx context.Context) string {
-	token, ok := ctx.Value(csrfTokenContextKey{}).(string)
-	if !ok {
-		return ""
-	}
-	return token
+	return auth.CSRFTokenFromContext(ctx)
 }

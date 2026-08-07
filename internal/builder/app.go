@@ -9,6 +9,7 @@ import (
 
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-story/internal/adapters"
@@ -39,7 +40,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 	resources = append(resources, storage)
 
-	rio, ioErr := buildRemoteIO(storage)
+	rio, ioErr := remoteio.NewBundle(storage)
 	if ioErr != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", ioErr)
 	}
@@ -98,7 +99,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	closers := []io.Closer{rio}
 	var taskQueue domain.TaskQueue
 	if cfg.Server.Role.ServesWeb() {
-		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg.Server, cfg.GCP)
+		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg.Tasks, cfg.GCP)
 		if taskErr != nil {
 			return nil, fmt.Errorf("failed to initialize task enqueuer: %w", taskErr)
 		}

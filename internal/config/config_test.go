@@ -54,7 +54,7 @@ func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
 
 			cfg, err := LoadConfig()
 			require.NoError(t, err)
-			require.Equal(t, tt.want, cfg.Server.WorkerURL)
+			require.Equal(t, tt.want, cfg.Tasks.WorkerURL)
 		})
 	}
 }
@@ -78,7 +78,7 @@ func TestLoadConfigUsesNormalizedServiceURLForDefaultTaskAudience(t *testing.T) 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 
-	require.Equal(t, "https://service.example.com/", cfg.GCP.TaskAudienceURL)
+	require.Equal(t, "https://service.example.com/", cfg.Tasks.TaskAudienceURL)
 }
 
 func TestLoadConfigParsesAllowedM2MServiceAccounts(t *testing.T) {
@@ -88,6 +88,21 @@ func TestLoadConfigParsesAllowedM2MServiceAccounts(t *testing.T) {
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 	require.Equal(t, []string{"sa-a@project.iam.gserviceaccount.com", "sa-b@project.iam.gserviceaccount.com"}, cfg.Auth.AllowedM2MServiceAccounts)
+}
+
+// TestLoadConfigParsesAllowedTaskServiceAccounts は、カンマ区切りの許可リストが
+// 前後の空白を落として読み込まれることを確認します。
+func TestLoadConfigParsesAllowedTaskServiceAccounts(t *testing.T) {
+	setDefaultURLConfigEnv(t)
+	t.Setenv("ALLOWED_TASK_SERVICE_ACCOUNTS", " web@test.iam.gserviceaccount.com , worker@test.iam.gserviceaccount.com ")
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	require.Equal(t, []string{
+		"web@test.iam.gserviceaccount.com",
+		"worker@test.iam.gserviceaccount.com",
+	}, cfg.Tasks.AllowedServiceAccounts)
 }
 
 func TestAIConfigKitConfigMapsFields(t *testing.T) {
