@@ -7,9 +7,6 @@ substitutions:
   _WORKER_SERVICE_NAME: 'ap-story-worker'
   _TAG: '${_ENV_PREFIX}-${SHORT_SHA}'
   _CACHE_TAG: '${_ENV_PREFIX}-latest'
-  _GEMINI_MODEL: 'gemini-3.6-flash'
-  _IMAGE_STANDARD_MODEL: 'gemini-3.1-flash-image'
-  _IMAGE_QUALITY_MODEL: 'gemini-3-pro-image'
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
@@ -42,19 +39,7 @@ steps:
       - '--image=${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_TAG}'
       - '--region=${_REGION}'
       - '--platform=managed'
-      - '--service-account=ap-story-worker-runner@${PROJECT_ID}.iam.gserviceaccount.com'
-      - '--no-allow-unauthenticated'
-      - '--memory=1Gi'
-      - '--cpu=2'
-      - '--execution-environment=gen2'
-      - '--timeout=1800'
-      - '--concurrency=10'
-      - '--max-instances=5'
-      - '--update-env-vars'
-      # ALLOWED_TASK_SERVICE_ACCOUNTS は「受け付ける発行元」であり、worker 自身ではなく
-      # タスクに署名する web 側の SA を入れる。これを指定した worker は署名者
-      # （SERVICE_ACCOUNT_EMAIL）を持つ必要がない。
-      - 'GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=${_GEMINI_MODEL},IMAGE_STANDARD_MODEL=${_IMAGE_STANDARD_MODEL},IMAGE_QUALITY_MODEL=${_IMAGE_QUALITY_MODEL},SERVER_ROLE=worker,SERVICE_URL=https://${_WEB_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app,TASK_AUDIENCE_URL=https://${_WORKER_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app,ALLOWED_TASK_SERVICE_ACCOUNTS=ap-story-web-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+      - '--quiet'
 
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Web to Cloud Run'
@@ -66,16 +51,7 @@ steps:
       - '--image=${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_TAG}'
       - '--region=${_REGION}'
       - '--platform=managed'
-      - '--service-account=ap-story-web-runner@${PROJECT_ID}.iam.gserviceaccount.com'
-      - '--allow-unauthenticated'
-      - '--memory=512Mi'
-      - '--cpu=1'
-      - '--execution-environment=gen2'
-      - '--timeout=300'
-      - '--concurrency=20'
-      - '--max-instances=5'
-      - '--update-env-vars'
-      - 'GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=${_GEMINI_MODEL},IMAGE_STANDARD_MODEL=${_IMAGE_STANDARD_MODEL},IMAGE_QUALITY_MODEL=${_IMAGE_QUALITY_MODEL},SERVER_ROLE=web,WORKER_URL=https://${_WORKER_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app/tasks/generate,TASK_AUDIENCE_URL=https://${_WORKER_SERVICE_NAME}-${PROJECT_NUMBER}.${_REGION}.run.app'
+      - '--quiet'
 
 options:
   machineType: 'E2_HIGHCPU_8'
