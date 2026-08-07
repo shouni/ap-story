@@ -98,6 +98,21 @@ func (c *Config) ValidateEssentialConfig() error {
 	return nil
 }
 
+// TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
+//
+// TASK_CALLER_SERVICE_ACCOUNT_EMAIL があればそれを使い、無ければ旧 SERVICE_ACCOUNT_EMAIL に
+// フォールバックします。後者は Terraform を新変数へ切り替えるまでの移行用であり、
+// 適用後に削除します（残すと「この変数は誰のこと？」という曖昧さが戻るため）。
+//
+// TaskIssuers と同じく、フォールバックを normalize ではなくここに置くのは
+// 呼び出し順への依存を作らないためです。
+func (c *Config) TaskCallerServiceAccount() string {
+	if email := strings.TrimSpace(c.Tasks.CallerServiceAccountEmail); email != "" {
+		return email
+	}
+	return strings.TrimSpace(c.GCP.ServiceAccountEmail)
+}
+
 // TaskIssuers は、受信側が受け付ける Cloud Tasks トークンの発行元を返します。
 //
 // ALLOWED_TASK_SERVICE_ACCOUNTS があればそれを使い、無ければ SERVICE_ACCOUNT_EMAIL の
@@ -126,11 +141,10 @@ func (c *Config) validateWebConfig() error {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
 	}
 
-	// SERVICE_ACCOUNT_EMAIL は投入するタスクの OIDC トークンに署名する SA であり、
-	// 投入側＝Web 面の要件です。Worker が受け付ける発行元は ALLOWED_TASK_SERVICE_ACCOUNTS
-	// で別に指定できるため、Worker 専用プロセスはこの値を持たずに済みます。
-	if c.GCP.ServiceAccountEmail == "" {
-		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
+	// caller SA はタスクを投入する側＝ web 面の要件です。worker が受け付ける許可リストは
+	// ALLOWED_TASK_SERVICE_ACCOUNTS で別に指定するため、worker 専用プロセスは持たずに済みます。
+	if c.TaskCallerServiceAccount() == "" {
+		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL が設定されていません")
 	}
 
 	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {

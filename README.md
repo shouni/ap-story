@@ -178,7 +178,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限（既定 45m、0 以下で無制限）。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます |
 | `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトとリージョン |
 | `CLOUD_TASKS_QUEUE_ID` | Cloud Tasks キュー名。タスクを投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
-| `SERVICE_ACCOUNT_EMAIL` | Cloud Tasks の OIDC トークンに**署名する**サービスアカウント。署名するのは投入側だけなので、`ALLOWED_TASK_SERVICE_ACCOUNTS` を設定した `SERVER_ROLE=worker` では不要 |
+| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。投入するのは web 面だけなので `SERVER_ROLE=worker` では不要。未設定時は旧 `SERVICE_ACCOUNT_EMAIL` にフォールバックします（移行用・Terraform 適用後に削除） |
 | `ALLOWED_TASK_SERVICE_ACCOUNTS` | 受信側が**受け付ける**トークン発行元の許可リスト（カンマ区切り、任意）。未設定時は `SERVICE_ACCOUNT_EMAIL` 1 件にフォールバック。web と worker で実行 SA を分けている場合、worker が受け付けるべき発行元は自分自身ではなく **web 側の SA**（`ap-story-web-runner`） |
 | `TASK_AUDIENCE_URL` | OIDC トークンの audience。web/worker を分けた場合は**呼び先である worker の URL**（Cloud Run の IAM が不一致を 403 で弾く） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
