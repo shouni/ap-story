@@ -32,6 +32,38 @@ func withWebConfig(cfg *Config) *Config {
 	return cfg
 }
 
+// TestParseServerRole は、SERVER_ROLE の明示を必須にしていることを確認します。
+//
+// 未設定が both に落ちると、本番の環境変数が 1 つ欠けただけで公開 web に
+// /tasks/generate が復活します。ここが退行すると、その設定漏れが黙って通ります。
+func TestParseServerRole(t *testing.T) {
+	t.Run("有効な値", func(t *testing.T) {
+		tests := []struct {
+			raw  string
+			want ServerRole
+		}{
+			{raw: "web", want: ServerRoleWeb},
+			{raw: "worker", want: ServerRoleWorker},
+			{raw: "both", want: ServerRoleBoth},
+			// 大文字と前後の空白は正規化して受け付ける。
+			{raw: " WEB ", want: ServerRoleWeb},
+		}
+
+		for _, tt := range tests {
+			got, err := ParseServerRole(tt.raw)
+			require.NoError(t, err, "raw=%q", tt.raw)
+			require.Equal(t, tt.want, got, "raw=%q", tt.raw)
+		}
+	})
+
+	t.Run("空文字と未知の値はエラー", func(t *testing.T) {
+		for _, raw := range []string{"", "   ", "wrker", "all", "true"} {
+			_, err := ParseServerRole(raw)
+			require.Error(t, err, "raw=%q が受理されている", raw)
+		}
+	})
+}
+
 func TestServerRolePredicates(t *testing.T) {
 	tests := []struct {
 		role       ServerRole
@@ -192,7 +224,10 @@ func TestLoadConfigNormalizesServerRole(t *testing.T) {
 		want    ServerRole
 		wantErr bool
 	}{
-		{name: "未設定は両方", raw: "", want: ServerRoleBoth},
+		{name: "both", raw: "both", want: ServerRoleBoth},
+		// 未設定を both に落とすと、本番の環境変数が 1 つ欠けただけで
+		// 公開 web に /tasks/generate が復活します。
+		{name: "未設定は拒否", raw: "", wantErr: true},
 		{name: "web", raw: "web", want: ServerRoleWeb},
 		{name: "worker", raw: "worker", want: ServerRoleWorker},
 		{name: "大文字と空白を許容", raw: " Worker ", want: ServerRoleWorker},

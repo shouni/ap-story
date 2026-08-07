@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -25,6 +26,19 @@ type AppHandlers struct {
 	// TaskAuth は Cloud Tasks からの OIDC を検証します。Auth と違い OAuth 設定を
 	// 必要としないため、Web 面を持たない Worker プロセスでも構築できます。
 	TaskAuth *auth.TaskVerifier
+}
+
+// Validate は、組み立て結果が役割として筋の通った形になっていることを確かめます。
+//
+// TaskAuth と Worker は「Cloud Tasks の検証」と「その先の処理」で対になっており、
+// 片方だけが nil なのは DI の不整合です。router.go は nil を見てルート登録を省くため、
+// 放置すると /tasks/generate が黙って 404 になるだけで、原因が設定なのか実装なのか
+// リクエストからは区別できません。ルーターが 404 を返す前に起動を失敗させます。
+func (h *AppHandlers) Validate() error {
+	if (h.TaskAuth == nil) != (h.Worker == nil) {
+		return errors.New("TaskAuth と Worker は同時に構成する必要があります")
+	}
+	return nil
 }
 
 // BuildHandlers は各ハンドラーの依存関係を SERVER_ROLE に応じて組み立て、
@@ -56,6 +70,10 @@ func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 		}
 		h.TaskAuth = taskAuth
 		h.Worker = worker.NewHandler[domain.Task](appCtx.Pipeline)
+	}
+
+	if err := h.Validate(); err != nil {
+		return nil, err
 	}
 
 	return h, nil

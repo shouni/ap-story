@@ -107,20 +107,16 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	// --- 4. Cloud Tasks 専用ルート (Worker 用) ---
 	// SERVER_ROLE=web のプロセスでは TaskAuth も Worker も nil になるため、
 	// このグループごと登録されず /tasks/generate は公開されません。
+	// 片方だけが nil になる形は builder.AppHandlers.Validate が起動時に弾くので、
+	// ここでは TaskAuth の有無だけを見れば足ります。
 	r.Group(func(r chi.Router) {
 		if h.TaskAuth == nil {
-			if h.Worker != nil {
-				slog.Error("Task verifier is nil, skipping worker routes")
-			}
 			return
 		}
 
 		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)
 		r.Use(h.TaskAuth.Middleware)
-
-		if h.Worker != nil {
-			r.Post("/tasks/generate", h.Worker.ProcessTask)
-		}
+		r.Post("/tasks/generate", h.Worker.ProcessTask)
 	})
 }
 
