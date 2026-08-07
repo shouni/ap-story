@@ -164,7 +164,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | 変数 | 内容 |
 |---|---|
 | `PORT` | HTTP ポート（Cloud Run 既定 8080） |
-| `SERVER_ROLE` | プロセスが担う役割。`web` / `worker` / 未指定（両方）。詳細は「web / worker の分離」を参照 |
+| `SERVER_ROLE` | **必須**。プロセスが担う役割。`web` / `worker` / `both`。未設定と未知の値は起動時エラーです。詳細は「web / worker の分離」を参照 |
 | `SERVICE_URL` | 自サービスの**公開** URL。OAuth のリダイレクト先、M2M 認証の audience、Slack 通知リンクの生成元を兼ねるため、worker にも**非公開の worker 自身ではなく web の URL** を設定する |
 | `WORKER_URL` | Cloud Tasks が呼び出す Worker エンドポイント（省略時は SERVICE_URL 由来）。web 面のみ使用 |
 | `STORY_BUCKET` | 成果物・state の GCS バケット |
@@ -200,7 +200,10 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | 実行 SA | `ap-story-web-runner` | `ap-story-worker-runner` |
 | シークレット | OAuth 4 点 | `SLACK_WEBHOOK_URL` のみ |
 
-`SERVER_ROLE` を未指定にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動きます。
+`SERVER_ROLE=both` にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動かします。
+
+`SERVER_ROLE` に既定値は無く、未設定なら起動時に落ちます。未設定を `both` とみなすと、本番の
+環境変数が 1 つ欠けただけで公開 web に `/tasks/generate` が復活するためです。
 
 分離する理由は 3 つあります。
 

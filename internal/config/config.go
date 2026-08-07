@@ -22,7 +22,7 @@ const (
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
 	Port       string `env:"PORT" envDefault:"8080"`
-	// Role はこのプロセスが担う役割です。空なら Web と Worker の両方を提供します。
+	// Role はこのプロセスが担う役割です。明示が必須で、未設定は起動時エラーになります。
 	Role            ServerRole `env:"SERVER_ROLE"`
 	ShutdownTimeout time.Duration
 }
@@ -32,13 +32,29 @@ type ServerConfig struct {
 type ServerRole string
 
 const (
-	// ServerRoleBoth は Web と Worker の両方を提供します（既定値・ローカル開発用）。
-	ServerRoleBoth ServerRole = ""
+	// ServerRoleBoth は Web と Worker の両方を提供します（ローカル開発用）。
+	ServerRoleBoth ServerRole = "both"
 	// ServerRoleWeb は Web UI と M2M API だけを提供し、/tasks/generate を公開しません。
 	ServerRoleWeb ServerRole = "web"
 	// ServerRoleWorker は /tasks/generate だけを提供し、Web UI と OAuth を持ちません。
 	ServerRoleWorker ServerRole = "worker"
 )
+
+// ParseServerRole は SERVER_ROLE の値を役割に変換します。空文字も未知の値もエラーです。
+//
+// 未設定を both とみなすと、本番の環境変数が 1 つ欠けただけで公開 web に
+// ワーカールートが復活します。未知の値を黙って受け入れると、今度は何のルートも
+// 提供しないサービスがデプロイされます。どちらも起動時に落とすほうが安全です。
+func ParseServerRole(raw string) (ServerRole, error) {
+	role := ServerRole(strings.ToLower(strings.TrimSpace(raw)))
+	switch role {
+	case ServerRoleBoth, ServerRoleWeb, ServerRoleWorker:
+		return role, nil
+	default:
+		return "", fmt.Errorf("SERVER_ROLE (%q) は %q, %q, %q のいずれかである必要があります",
+			raw, ServerRoleWeb, ServerRoleWorker, ServerRoleBoth)
+	}
+}
 
 // ServesWeb は、この役割が Web 面（/api/* と OAuth）を提供するかを返します。
 func (r ServerRole) ServesWeb() bool { return r == ServerRoleBoth || r == ServerRoleWeb }
@@ -182,14 +198,11 @@ func LoadConfig() (*Config, error) {
 }
 
 func (c *Config) normalize() error {
-	role := ServerRole(strings.ToLower(strings.TrimSpace(string(c.Server.Role))))
-	switch role {
-	case ServerRoleBoth, ServerRoleWeb, ServerRoleWorker:
-		c.Server.Role = role
-	default:
-		return fmt.Errorf("SERVER_ROLE (%q) は %q, %q, または未設定である必要があります",
-			c.Server.Role, ServerRoleWeb, ServerRoleWorker)
+	role, err := ParseServerRole(string(c.Server.Role))
+	if err != nil {
+		return err
 	}
+	c.Server.Role = role
 
 	c.Server.ServiceURL = strings.TrimSpace(c.Server.ServiceURL)
 	workerURL, err := normalizeWorkerURL(c.Tasks.WorkerURL, c.Server.ServiceURL)

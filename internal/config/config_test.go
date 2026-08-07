@@ -12,6 +12,8 @@ func setDefaultURLConfigEnv(t *testing.T) {
 	t.Setenv("SERVICE_URL", "http://localhost:8080")
 	t.Setenv("WORKER_URL", "")
 	t.Setenv("TASK_AUDIENCE_URL", "")
+	// SERVER_ROLE は明示が必須。役割に関心のないテストはローカル開発と同じ both で読む。
+	t.Setenv("SERVER_ROLE", string(ServerRoleBoth))
 }
 
 func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
