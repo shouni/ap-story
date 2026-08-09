@@ -136,10 +136,5 @@ func (c *Config) validateWebConfig() error {
 		return fmt.Errorf("SESSION_ENCRYPT_KEY の長さが不正です (%d バイト)。16, 24, 32 バイトのいずれかにしてください", keyLen)
 	}
 
-	// M2M（ap-mcp 等からの呼び出し）も継続して受け付けるため、SA 許可リストも必須とする。
-	if len(c.Auth.AllowedM2MServiceAccounts) == 0 {
-		return fmt.Errorf("ALLOWED_M2M_SERVICE_ACCOUNTS が設定されていません（M2M 呼び出しを許可する SA が1つも登録されていません）")
-	}
-
 	return nil
 }

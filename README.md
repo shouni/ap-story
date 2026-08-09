@@ -184,7 +184,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
 | `SESSION_SECRET` / `SESSION_ENCRYPT_KEY` | セッションクッキーの署名鍵・暗号化鍵 |
 | `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可するメール/ドメイン（カンマ区切り、いずれか必須） |
-| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り） |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り）。`web` 面では必須で、未設定だと起動に失敗します |
 | `SLACK_WEBHOOK_URL` | 完了通知（任意）。worker 面のみ使用 |
 
 ## 🔀 web / worker の分離

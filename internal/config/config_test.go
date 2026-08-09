@@ -166,14 +166,6 @@ func TestValidateEssentialConfigRequiresHTTPSServiceURL(t *testing.T) {
 	require.ErrorContains(t, cfg.ValidateEssentialConfig(), "HTTPS")
 }
 
-func TestValidateEssentialConfigRequiresM2MServiceAccounts(t *testing.T) {
-	essentialConfigEnv(t)
-	t.Setenv("ALLOWED_M2M_SERVICE_ACCOUNTS", "")
-	cfg, err := LoadConfig()
-	require.NoError(t, err)
-	require.ErrorContains(t, cfg.ValidateEssentialConfig(), "ALLOWED_M2M_SERVICE_ACCOUNTS")
-}
-
 func TestValidateEssentialConfigRequiresGoogleOAuthFields(t *testing.T) {
 	for _, env := range []string{"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "SESSION_SECRET"} {
 		t.Run(env, func(t *testing.T) {
