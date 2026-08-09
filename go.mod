@@ -7,8 +7,8 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/shouni/gcp-kit v1.7.0
 	github.com/shouni/go-character-kit v1.1.0
-	github.com/shouni/go-comic-kit v1.3.2
-	github.com/shouni/go-gemini-client v1.16.5
+	github.com/shouni/go-comic-kit v1.3.3
+	github.com/shouni/go-gemini-client v1.17.0
 	github.com/shouni/go-http-kit v1.8.0
 	github.com/shouni/go-job-kit v1.0.5
 	github.com/shouni/go-notify v1.2.2
@@ -55,7 +55,7 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/shouni/gemini-image-kit v1.12.4 // indirect
+	github.com/shouni/gemini-image-kit v1.13.0 // indirect
 	github.com/slack-go/slack v0.27.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
