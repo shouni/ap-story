@@ -122,14 +122,26 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) error {
 
 // run はステップ列の実行本体です。status が有効なら各段階の状態を記録します。
 func (r *Runner) run(ctx context.Context, task *domain.Task, status statusRecorder) (err error) {
+	// 記録も通知も呼び出し元の context から切り離して行います。理由は
+	// savePartialResults と同じで、打ち切りこそが失敗理由である場面
+	// （PIPELINE_TIMEOUT の発火、Cloud Tasks の dispatch deadline 超過による
+	// リクエストのキャンセル）では ctx は既に期限切れだからです。そのまま使うと
+	// 状態は running のまま固着し、story-queue は max_attempts = 1 なので再試行も
+	// 来ません。記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように見えます。
 	defer func() {
 		if err != nil {
-			status.markFailed(ctx, task, err)
+			reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failureReportTimeout)
+			defer cancel()
+
+			status.markFailed(reportCtx, task, err)
 		}
 	}()
 	defer func() {
 		if err != nil {
-			if notifyErr := r.deps.Notifier.NotifyError(ctx, *task, err); notifyErr != nil {
+			reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failureReportTimeout)
+			defer cancel()
+
+			if notifyErr := r.deps.Notifier.NotifyError(reportCtx, *task, err); notifyErr != nil {
 				slog.ErrorContext(ctx, "failed to send error notification",
 					"job_id", task.JobID, "original_error", err, "notification_error", notifyErr)
 			}
@@ -194,6 +206,10 @@ func (r *Runner) run(ctx context.Context, task *domain.Task, status statusRecord
 // partialSaveTimeout は、失敗時の保存に許す時間です。
 // 呼び出し元の context から切り離して使うため、短く区切ります。
 const partialSaveTimeout = 30 * time.Second
+
+// failureReportTimeout は、失敗の記録と通知に許す時間です。
+// partialSaveTimeout と同じく、呼び出し元の context から切り離して使います。
+const failureReportTimeout = 30 * time.Second
 
 // savePartialResults は、ステップが失敗した時点までの成果を保存します。
 //
