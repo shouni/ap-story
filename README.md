@@ -195,10 +195,34 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 |---|---|---|
 | `SERVER_ROLE` | `web` | `worker` |
 | 提供するルート | `/api/*`, `/auth/*` | `/tasks/generate` |
-| 公開 | あり | **なし**（Cloud Run の IAM で遮断） |
+| 公開 | あり | **なし**（ingress と Cloud Run の IAM で遮断） |
+| ingress | `all` | **`internal`**（到達経路を Cloud Tasks に限定） |
 | memory / cpu | 512Mi / 1 | 1Gi / 2 |
+| concurrency / timeout | 20 / 300s | 10 / 1800s |
 | 実行 SA | `ap-story-web-runner` | `ap-story-worker-runner` |
 | シークレット | OAuth 4 点 | `SLACK_WEBHOOK_URL` のみ |
+
+worker の実行時間の上限を決める値は 3 つあり、この大小関係を守ります。
+
+```
+PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
+   25m (アプリ)        30m (タスク)            1800s (サービス)
+```
+
+実効上限を決めるのは**いちばん小さい値**です。dispatch deadline だけは未指定でも既定の
+10 分が効くため、指定を忘れると Cloud Run の timeout が何であれ 10 分でワーカーが
+打ち切られます（値は `internal/adapters/tasks.go` の `tasks.Config.DispatchDeadline`）。
+
+`PIPELINE_TIMEOUT` を**いちばん短く**取るのが要点で、**アプリが自分で先に諦める**ことで
+ジョブ状態に `failed` を書き、途中までの成果を保存し、Slack に通知してから終われます。
+逆順にすると先に Cloud Tasks がリクエストを打ち切ります。`story-queue` は
+`max_attempts = 1` なので再試行も来ず、ジョブは `running` のまま残り続けます。
+記録・通知・部分保存はいずれも打ち切られた context から切り離して行っています
+（`internal/pipeline/runner.go` の `failureReportTimeout` と `partialSaveTimeout`）。
+
+`RATE_INTERVAL` を上げるときはこの 3 段に収まるかを先に確認してください。`compose_comic` は
+既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分です。dispatch deadline の上限が
+30 分なので、タイムアウトを伸ばして対処する余地はほとんどありません。
 
 `SERVER_ROLE=both` にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動かします。
 
