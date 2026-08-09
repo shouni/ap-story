@@ -9,7 +9,10 @@ import (
 )
 
 // referenceAspectOrder は character_detail.html でのアスペクト比表示順です。
-var referenceAspectOrder = []string{"16:9", "9:16", "1:1"}
+// 3:4 を先頭に置くのは、パネルとページがその比率で生成されるためです（go-comic-kit の
+// layout.PanelAspectRatio / PageAspectRatio）。参照画像は生成対象と同じ比率のものが
+// 優先して使われるので、漫画生成に効くのは 3:4 のシートです。
+var referenceAspectOrder = []string{"3:4", "16:9", "9:16", "1:1"}
 
 // characterListItem は characters.html テンプレートに渡す1キャラクター分のデータです。
 type characterListItem struct {
