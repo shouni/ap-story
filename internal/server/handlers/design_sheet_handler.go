@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,6 +67,19 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 		data.Models = append(data.Models, designSheetModelOption{Value: model, Label: label})
 	}
 	return data
+}
+
+// validateModelOverride は、指定された画像モデルが IMAGE_MODELS に含まれるかを確かめます。
+// 空文字は「既定モデル（worker 側の IMAGE_MODELS 先頭）を使う」意味なので常に有効です。
+//
+// domain.Task の検証ではなくここに置くのは、許可リストが env 由来でドメイン層が知らないためです。
+// ブラウザは <select> の選択肢に縛られますが、JSON API は任意の文字列を送れます。
+func (h *Handler) validateModelOverride(model string) error {
+	model = strings.TrimSpace(model)
+	if model == "" || slices.Contains(h.imageModels, model) {
+		return nil
+	}
+	return fmt.Errorf("不正な画像モデルです: %s", model)
 }
 
 // splitVisualCues は、改行またはカンマ区切りの入力を見た目特徴のリストへ分割します。
@@ -185,6 +200,12 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := task.ValidateSubmission(); err != nil {
+		formData.ErrorMessage = err.Error()
+		h.render(w, r, http.StatusBadRequest, "design_sheet_form.html", "デザインシートを生成", formData)
+		return
+	}
+
+	if err := h.validateModelOverride(task.ModelOverride); err != nil {
 		formData.ErrorMessage = err.Error()
 		h.render(w, r, http.StatusBadRequest, "design_sheet_form.html", "デザインシートを生成", formData)
 		return

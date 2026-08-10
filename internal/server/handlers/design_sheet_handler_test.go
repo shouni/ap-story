@@ -132,15 +132,55 @@ func TestEnqueueDesignSheetFormAcceptsModelOverride(t *testing.T) {
 
 	values := url.Values{}
 	values.Add("character_ids", "zundamon")
-	values.Set("model_override", "standard-model")
+	values.Set("model_override", "image-alt")
 	rec := postDesignSheetForm(t, h, values)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
-	if q.lastTask.ModelOverride != "standard-model" {
-		t.Errorf("ModelOverride = %q, want %q", q.lastTask.ModelOverride, "standard-model")
+	if q.lastTask.ModelOverride != "image-alt" {
+		t.Errorf("ModelOverride = %q, want %q", q.lastTask.ModelOverride, "image-alt")
 	}
+}
+
+// モデル名は IMAGE_MODELS の許可リストで縛ります。ブラウザは <select> に縛られますが、
+// JSON API は任意の文字列を送れるため、投入前に弾かないと未知のモデルが worker まで届きます。
+func TestEnqueueDesignSheetRejectsUnknownModelOverride(t *testing.T) {
+	t.Parallel()
+
+	t.Run("フォーム", func(t *testing.T) {
+		q := &fakeTaskQueue{}
+		h := newTestHandler(t, q)
+
+		values := url.Values{}
+		values.Add("character_ids", "zundamon")
+		values.Set("model_override", "gemini-not-configured")
+		rec := postDesignSheetForm(t, h, values)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if q.lastTask.JobID != "" {
+			t.Error("未知のモデルなのにジョブが投入されました")
+		}
+	})
+
+	t.Run("JSON API", func(t *testing.T) {
+		q := &fakeTaskQueue{}
+		h := newTestHandler(t, q)
+
+		body := `{"character_ids":["zundamon"],"model_override":"gemini-not-configured"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.EnqueueDesignSheet(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		if q.lastTask.JobID != "" {
+			t.Error("未知のモデルなのにジョブが投入されました")
+		}
+	})
 }
 
 func TestEnqueueDesignSheetFormDefaultsModelOverrideToEmpty(t *testing.T) {

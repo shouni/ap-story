@@ -49,5 +49,12 @@ func (h *Handler) EnqueueDesignSheet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// モデル名は env 由来の許可リストで縛る。ブラウザは <select> に縛られるが、
+	// この JSON 経路は任意の文字列を送れるため、ここが唯一の関門になる。
+	if err := h.validateModelOverride(task.ModelOverride); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	h.enqueueAndRespond(w, r, task)
 }
