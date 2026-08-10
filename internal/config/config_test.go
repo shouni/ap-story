@@ -107,6 +107,45 @@ func TestLoadConfigParsesAllowedTaskServiceAccounts(t *testing.T) {
 	}, cfg.Tasks.AllowedServiceAccounts)
 }
 
+func TestLoadConfigAppliesAIDefaults(t *testing.T) {
+	setDefaultURLConfigEnv(t)
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	// go-comic-kit はモデル名と画風指定の既定値を持たないため、アプリ側で埋める。
+	require.Equal(t, DefaultGeminiModel, cfg.AI.GeminiModel)
+	require.Equal(t, DefaultImageStandardModel, cfg.AI.ImageStandardModel)
+	require.Equal(t, DefaultImageQualityModel, cfg.AI.ImageQualityModel)
+	require.Equal(t, DefaultStyleSuffix, cfg.AI.StyleSuffix)
+	require.Equal(t, DefaultDesignStyleSuffix, cfg.AI.DesignStyleSuffix)
+}
+
+func TestLoadConfigProducesValidKitConfig(t *testing.T) {
+	setDefaultURLConfigEnv(t)
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	// env を何も与えなくても go-comic-kit の必須項目を満たすこと。キットが必須項目を
+	// 増やしたときに、本番の起動時ではなくここで落ちるようにするための番人。
+	kit := cfg.AI.KitConfig()
+	require.NoError(t, kit.Validate())
+}
+
+func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
+	setDefaultURLConfigEnv(t)
+	t.Setenv("GEMINI_MODEL", " gemini-explicit ")
+	t.Setenv("STYLE_SUFFIX", "watercolor")
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	require.Equal(t, "gemini-explicit", cfg.AI.GeminiModel)
+	require.Equal(t, "watercolor", cfg.AI.StyleSuffix)
+	require.Equal(t, DefaultDesignStyleSuffix, cfg.AI.DesignStyleSuffix)
+}
+
 func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	ai := AIConfig{
 		GeminiModel:         "gemini-x",

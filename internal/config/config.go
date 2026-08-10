@@ -18,6 +18,29 @@ const (
 	DefaultHTTPTimeout = 60 * time.Second
 )
 
+// AI モデルと画風指定の既定値。
+//
+// go-comic-kit はこの2種類の既定値を持たず、未設定のまま渡すと
+// ports.ErrConfigInvalid で構築に失敗します。モデル ID は Google 側の都合で
+// 世代交代し、画風指定は作品ごとに調整する文言で、どちらもキットのリリースを
+// 挟まずに変えたいためです。したがって既定値はこのアプリが持ちます。
+const (
+	// DefaultGeminiModel は台本生成（章立て・章台本）の既定モデルです。
+	DefaultGeminiModel = "gemini-3.6-flash"
+	// DefaultImageStandardModel はパネル画像の既定モデル（標準・高速）です。
+	DefaultImageStandardModel = "gemini-3.1-flash-image"
+	// DefaultImageQualityModel はデザインシート・ページ合成の既定モデル（高品質）です。
+	DefaultImageQualityModel = "gemini-3-pro-image"
+
+	// DefaultStyleSuffix はパネル・ページ画像に付与する既定の画風指定です。
+	// 演出（cinematic lighting 等）を含むため、デザインシートには使いません。
+	DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, high-quality manga coloring, expressive eyes, vibrant colors, cinematic lighting, masterpiece, ultra-detailed, flat shading, clear character features, no 3D effect, high resolution"
+
+	// DefaultDesignStyleSuffix はデザインシートに付与する既定の画風指定です。
+	// シートは他生成物の同一性アンカーなので、照明・演出系の指定を含めません。
+	DefaultDesignStyleSuffix = "Japanese anime style, official character reference art, cel-shaded, clean line art, vibrant colors, clear character features, no 3D effect, high resolution"
+)
+
 // ServerConfig は HTTP サーバーの設定です。
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
@@ -124,8 +147,26 @@ type AIConfig struct {
 	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"45m"`
 }
 
+// applyDefaults はモデル名と画風指定の未設定を既定値で補完します。
+// 並列数・タイムアウト・各種上限はキットの ApplyDefaults に任せます
+// （キットを壊さず動かすための値なので、既定値の持ち主はキット側です）。
+func (a *AIConfig) applyDefaults() {
+	a.GeminiModel = defaultIfEmpty(a.GeminiModel, DefaultGeminiModel)
+	a.ImageStandardModel = defaultIfEmpty(a.ImageStandardModel, DefaultImageStandardModel)
+	a.ImageQualityModel = defaultIfEmpty(a.ImageQualityModel, DefaultImageQualityModel)
+	a.StyleSuffix = defaultIfEmpty(a.StyleSuffix, DefaultStyleSuffix)
+	a.DesignStyleSuffix = defaultIfEmpty(a.DesignStyleSuffix, DefaultDesignStyleSuffix)
+}
+
+// defaultIfEmpty は、値が空白のみなら fallback を返します。
+func defaultIfEmpty(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
+}
+
 // KitConfig は go-comic-kit の ports.Config に変換します。
-// ゼロ値のフィールドは go-comic-kit 側の ApplyDefaults が既定値で補完します。
 func (a AIConfig) KitConfig() ports.Config {
 	return ports.Config{
 		GeminiModel:         a.GeminiModel,
@@ -210,5 +251,6 @@ func (c *Config) normalize() error {
 	}
 	c.Tasks.WorkerURL = workerURL
 	c.Tasks.TaskAudienceURL = strings.TrimSpace(c.Tasks.TaskAudienceURL)
+	c.AI.applyDefaults()
 	return nil
 }
