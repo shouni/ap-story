@@ -59,7 +59,9 @@ func (c *Container) Close() {
 		}
 	}
 	if c.Ops != nil {
-		c.Ops.Close()
+		if err := c.Ops.Close(); err != nil {
+			slog.Error("failed to close comic operations", "error", err)
+		}
 	}
 	if c.HistoryCache != nil {
 		c.HistoryCache.Close()

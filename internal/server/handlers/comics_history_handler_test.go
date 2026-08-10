@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	kitports "github.com/shouni/go-comic-kit/ports"
+	kitcomic "github.com/shouni/go-comic-kit/comic"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -58,8 +58,8 @@ func TestListComicsReturns500OnRepositoryError(t *testing.T) {
 func TestGetComicSuccess(t *testing.T) {
 	t.Parallel()
 
-	state := &kitports.MangaState{ID: "job-1", Title: "夜明けのデプロイ", CreatedAt: time.Now()}
-	repo := &fakeComicRepository{states: map[string]*kitports.MangaState{"job-1": state}}
+	state := &kitcomic.MangaState{ID: "job-1", Title: "夜明けのデプロイ", CreatedAt: time.Now()}
+	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/job-1", "", "jobID", "job-1")
@@ -69,7 +69,7 @@ func TestGetComicSuccess(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	var got kitports.MangaState
+	var got kitcomic.MangaState
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}

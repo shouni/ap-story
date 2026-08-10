@@ -6,7 +6,8 @@ import (
 	"log/slog"
 	"strings"
 
-	kitports "github.com/shouni/go-comic-kit/ports"
+	kitcomic "github.com/shouni/go-comic-kit/comic"
+
 	"github.com/shouni/go-comic-kit/store"
 	"github.com/shouni/go-job-kit/paging"
 	"github.com/shouni/go-utils/jobid"
@@ -125,7 +126,7 @@ func (r *ComicRepository) buildHistory(ctx context.Context, jobID string) (domai
 	return history, nil
 }
 
-func historyFromState(jobID string, state *kitports.MangaState) domain.ComicHistory {
+func historyFromState(jobID string, state *kitcomic.MangaState) domain.ComicHistory {
 	title := strings.TrimSpace(state.Title)
 	if title == "" {
 		title = jobID
@@ -143,7 +144,7 @@ func historyFromState(jobID string, state *kitports.MangaState) domain.ComicHist
 }
 
 // GetState は指定ジョブの MangaState を取得します。
-func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitports.MangaState, error) {
+func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic.MangaState, error) {
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return nil, err
 	}

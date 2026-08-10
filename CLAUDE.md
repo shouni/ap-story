@@ -95,6 +95,8 @@ Character design sheets are stored outside `comics/{jobID}/` because a character
 
 **There is one image model, not two.** Design sheets, panels and pages all use the head of `IMAGE_MODELS`. The kit used to split standard (panels) from quality (sheets, pages); which model counts as "quality" is Google's lineup talking, so the list's remaining entries are simply offered as choices in the design-sheet form instead.
 
+**Reference images are this app's responsibility, not the kit's.** Panels and pages resolve a character's reference through `ReferenceURLFor(aspectRatio)` (go-character-kit): an entry in `reference_urls` matching the generated ratio wins, otherwise it falls back to the aspect-agnostic `reference_url` — silently, since a missing match is not an error. Design-sheet generation deliberately reads `reference_url` only, so a generated sheet never becomes the input for the next one. Nothing feeds generated sheets back into `characters.json`; that curation is manual, and until a `3:4` entry exists there, panel and page generation runs on the aspect-agnostic master with the drift suppression switched off. `IMAGE_ASPECT_RATIO` therefore only pays off once the matching references are curated.
+
 ## Conventions worth knowing
 
 - Comments and many identifiers/docstrings in this codebase are in Japanese; match the existing language when editing a file that's already documented in Japanese.

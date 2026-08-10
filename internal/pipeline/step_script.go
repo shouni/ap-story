@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/shouni/go-comic-kit/comic"
+
 	"github.com/shouni/go-comic-kit/ports"
 )
 
@@ -92,7 +94,7 @@ func (SingleChapterScriptStep) Execute(ctx context.Context, pc *Context) error {
 }
 
 // chapterHasPanels は、指定章のネームがすでに生成済みかを返します。
-func chapterHasPanels(state *ports.MangaState, chapterID string) bool {
+func chapterHasPanels(state *comic.MangaState, chapterID string) bool {
 	for i := range state.Panels {
 		if state.Panels[i].ChapterID == chapterID {
 			return true

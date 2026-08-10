@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shouni/go-comic-kit/comic"
+
 	"github.com/shouni/go-comic-kit/ports"
 )
 
@@ -72,7 +74,7 @@ func TestScriptPromptsBuildChapterScript(t *testing.T) {
 		WorkTitle:       "テスト作品",
 		WorkDescription: "あらすじ",
 		OutlineDigest:   "第1章",
-		Chapter: ports.Chapter{
+		Chapter: comic.Chapter{
 			ID:      "ch1",
 			Title:   "章タイトル",
 			Summary: "章の狙い",

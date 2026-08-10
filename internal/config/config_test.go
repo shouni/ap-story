@@ -133,7 +133,9 @@ func TestLoadConfigProducesValidKitConfig(t *testing.T) {
 
 	// モデル名さえ与えれば go-comic-kit の必須項目を満たすこと。キットが必須項目を
 	// 増やしたときに、本番の起動時ではなくここで落ちるようにするための番人。
+	// 順序は workflow.New と同じ（ApplyDefaults → Validate）にします。
 	kit := cfg.AI.KitConfig()
+	kit.ApplyDefaults()
 	require.NoError(t, kit.Validate())
 }
 

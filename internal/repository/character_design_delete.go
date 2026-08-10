@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	kitcomic "github.com/shouni/go-comic-kit/comic"
+
 	"github.com/shouni/go-comic-kit/asset"
-	kitports "github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-comic-kit/store"
 
 	"github.com/shouni/ap-story/internal/domain"
@@ -79,7 +80,7 @@ func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID strin
 		return r.DeleteHistory(ctx, jobID)
 	}
 
-	kept := make([]kitports.DesignSheetRef, 0, len(state.DesignSheets))
+	kept := make([]kitcomic.DesignSheetRef, 0, len(state.DesignSheets))
 	for _, ds := range state.DesignSheets {
 		if ds.ImageURL != deletedImagePath {
 			kept = append(kept, ds)

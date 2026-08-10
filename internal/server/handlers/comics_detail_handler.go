@@ -4,8 +4,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	kitcomic "github.com/shouni/go-comic-kit/comic"
+
 	"github.com/go-chi/chi/v5"
-	kitports "github.com/shouni/go-comic-kit/ports"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -97,7 +98,7 @@ func (h *Handler) ServeDetails(w http.ResponseWriter, r *http.Request) {
 // buildDetailData は MangaState を詳細画面用の表示データへ変換します。
 // GCS 上の画像 URL（gs://）は、署名 URL へ 302 リダイレクトする既存の画像エンドポイント
 // （/api/comics/{jobID}/images/*）のパスに変換します。
-func (h *Handler) buildDetailData(jobID string, state *kitports.MangaState) historyDetailData {
+func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) historyDetailData {
 	data := historyDetailData{
 		JobID:       jobID,
 		Title:       state.Title,
@@ -153,7 +154,7 @@ func (h *Handler) buildDetailData(jobID string, state *kitports.MangaState) hist
 // imageProgress は、未生成の画像が残っているか・1枚でも生成済みかを返します。
 // 台本だけの state（stop_after_script）と、途中で失敗した state のどちらでも
 // 「続きを生成」へ誘導できるようにするための判定です。
-func imageProgress(state *kitports.MangaState) (pending, generated bool) {
+func imageProgress(state *kitcomic.MangaState) (pending, generated bool) {
 	pageCount := map[int]struct{}{}
 	for i := range state.Panels {
 		pageCount[state.Panels[i].Page] = struct{}{}

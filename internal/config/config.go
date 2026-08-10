@@ -126,6 +126,13 @@ type AIConfig struct {
 	GeminiModel  string   `env:"-"`
 	ImageModel   string   `env:"-"`
 
+	// 比率と解像度は未設定ならキットの既定（3:4 / パネル 1K / ページ・シート 2K）に
+	// 落ちます。従来の固定値と同じなので、設定しなければ挙動は変わりません。
+	// 解像度は1コマごとに費用が効くため、デプロイ側で選べるようにしてあります。
+	AspectRatio    string `env:"IMAGE_ASPECT_RATIO"`
+	PanelImageSize string `env:"PANEL_IMAGE_SIZE"`
+	PageImageSize  string `env:"PAGE_IMAGE_SIZE"`
+
 	StyleSuffix         string `env:"STYLE_SUFFIX"`
 	DesignStyleSuffix   string `env:"DESIGN_STYLE_SUFFIX"`
 	MaxConcurrency      int    `env:"MAX_CONCURRENCY"`
@@ -202,6 +209,9 @@ func (a AIConfig) KitConfig() ports.Config {
 	return ports.Config{
 		GeminiModel:         a.GeminiModel,
 		ImageModel:          a.ImageModel,
+		AspectRatio:         a.AspectRatio,
+		PanelImageSize:      a.PanelImageSize,
+		PageImageSize:       a.PageImageSize,
 		MaxConcurrency:      a.MaxConcurrency,
 		RateInterval:        a.RateInterval,
 		StyleSuffix:         a.StyleSuffix,

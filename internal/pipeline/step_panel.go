@@ -23,7 +23,7 @@ func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 		return fmt.Errorf("panels: manga state is nil")
 	}
 
-	manga, err := pc.Ops.PanelBatch.GenerateAllPanels(ctx, pc.Manga, ports.BatchOptions{
+	manga, err := pc.Ops.Panel.GenerateAllPanels(ctx, pc.Manga, ports.BatchOptions{
 		Seed:          pc.Task.Seed,
 		OutputDir:     pc.OutputDir,
 		SkipGenerated: s.SkipGenerated,

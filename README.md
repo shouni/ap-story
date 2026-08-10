@@ -171,6 +171,8 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
 | `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定。**worker で必須**（web は台本を作りません） |
 | `IMAGE_MODELS` | 画像生成（デザインシート・パネル・ページ）のモデル。カンマ区切りで先頭が既定、残りはデザインシート生成フォームの選択肢。**どの役割でも必須** |
+| `IMAGE_ASPECT_RATIO` | パネル・ページ・デザインシート既定の共通比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。**3つで1つの設定**なのは、揃っていないと参照画像によるブレ抑制が黙って無効になるためです |
+| `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | 生成画像の解像度（`1K` / `2K`）。未設定ならパネル 1K・ページ/シート 2K。1コマごとに費用が効くのでデプロイ側で選べます |
 | `STYLE_SUFFIX` / `DESIGN_STYLE_SUFFIX` | 画風指定。省略時は `internal/config` の既定値。go-comic-kit は既定値を持たないため、画風指定の既定値はこのアプリが持ちます（モデル名は誰も既定値を持たず、未設定なら起動時エラー） |
 | `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | go-comic-kit Config の台本・ページ割り制御 |
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
