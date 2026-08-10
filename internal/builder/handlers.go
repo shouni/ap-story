@@ -89,14 +89,13 @@ func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 
 	// 2. Web/API 用Handlerの初期化
 	webHandler, err := handlers.NewHandler(handlers.HandlerOptions{
-		TaskQueue:          appCtx.TaskQueue,
-		Repository:         appCtx.Repository,
-		JobStatus:          appCtx.JobStatus,
-		Signer:             appCtx.RemoteIO.Signer,
-		Bucket:             appCtx.Config.Storage.GCSBucket,
-		Characters:         appCtx.Characters,
-		ImageStandardModel: appCtx.Config.AI.ImageStandardModel,
-		ImageQualityModel:  appCtx.Config.AI.ImageQualityModel,
+		TaskQueue:   appCtx.TaskQueue,
+		Repository:  appCtx.Repository,
+		JobStatus:   appCtx.JobStatus,
+		Signer:      appCtx.RemoteIO.Signer,
+		Bucket:      appCtx.Config.Storage.GCSBucket,
+		Characters:  appCtx.Characters,
+		ImageModels: appCtx.Config.AI.ImageModels,
 	})
 	if err != nil {
 		return fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)

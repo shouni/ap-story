@@ -38,7 +38,7 @@ func TestDesignSheetFormRendersModelOptions(t *testing.T) {
 	h.DesignSheetForm(rec, req)
 
 	body := rec.Body.String()
-	for _, want := range []string{`name="model_override"`, "quality-model", "standard-model"} {
+	for _, want := range []string{`name="model_override"`, "image-model", "image-alt"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
 		}

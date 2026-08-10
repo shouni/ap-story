@@ -19,6 +19,9 @@ func newRoleTestConfig(role ServerRole) *Config {
 	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://ap-story-worker.example.run.app"
 	cfg.Storage.GCSBucket = "ap-story"
+	// 画像モデルはどの役割でも必須。テキストモデルは台本を作る worker だけ。
+	cfg.AI.ImageModels = []string{"image-test"}
+	cfg.AI.GeminiModels = []string{"gemini-test"}
 	return cfg
 }
 

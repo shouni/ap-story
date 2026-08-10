@@ -151,13 +151,12 @@ func newTestHandlerWithRepo(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepos
 func newTestHandlerFull(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepository, signer *fakeSigner) *Handler {
 	t.Helper()
 	h, err := NewHandler(HandlerOptions{
-		TaskQueue:          q,
-		Repository:         repo,
-		Signer:             signer,
-		Bucket:             "test-bucket",
-		Characters:         testCharacters(t),
-		ImageStandardModel: "standard-model",
-		ImageQualityModel:  "quality-model",
+		TaskQueue:   q,
+		Repository:  repo,
+		Signer:      signer,
+		Bucket:      "test-bucket",
+		Characters:  testCharacters(t),
+		ImageModels: []string{"image-model", "image-alt"},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler failed: %v", err)

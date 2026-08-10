@@ -56,15 +56,13 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 			})
 		}
 	}
-	if h.imageQualityModel != "" {
-		data.Models = append(data.Models, designSheetModelOption{
-			Value: h.imageQualityModel, Label: "品質重視（既定）: " + h.imageQualityModel,
-		})
-	}
-	if h.imageStandardModel != "" && h.imageStandardModel != h.imageQualityModel {
-		data.Models = append(data.Models, designSheetModelOption{
-			Value: h.imageStandardModel, Label: "標準: " + h.imageStandardModel,
-		})
+	// 先頭が既定モデル。用途ごとの使い分けは持たないので、一覧をそのまま選択肢にします。
+	for i, model := range h.imageModels {
+		label := model
+		if i == 0 {
+			label = "既定: " + model
+		}
+		data.Models = append(data.Models, designSheetModelOption{Value: model, Label: label})
 	}
 	return data
 }

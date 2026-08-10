@@ -107,41 +107,50 @@ func TestLoadConfigParsesAllowedTaskServiceAccounts(t *testing.T) {
 	}, cfg.Tasks.AllowedServiceAccounts)
 }
 
+// 画風指定はアプリが既定値を持ちますが、モデル名は持ちません。既定値へ黙って落ちると、
+// 古いモデルを使い続けたまま気付けないためです。
 func TestLoadConfigAppliesAIDefaults(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 
-	// go-comic-kit はモデル名と画風指定の既定値を持たないため、アプリ側で埋める。
-	require.Equal(t, DefaultGeminiModel, cfg.AI.GeminiModel)
-	require.Equal(t, DefaultImageStandardModel, cfg.AI.ImageStandardModel)
-	require.Equal(t, DefaultImageQualityModel, cfg.AI.ImageQualityModel)
+	require.Empty(t, cfg.AI.GeminiModels)
+	require.Empty(t, cfg.AI.ImageModels)
+	require.Empty(t, cfg.AI.GeminiModel)
+	require.Empty(t, cfg.AI.ImageModel)
 	require.Equal(t, DefaultStyleSuffix, cfg.AI.StyleSuffix)
 	require.Equal(t, DefaultDesignStyleSuffix, cfg.AI.DesignStyleSuffix)
 }
 
 func TestLoadConfigProducesValidKitConfig(t *testing.T) {
 	setDefaultURLConfigEnv(t)
+	t.Setenv("GEMINI_MODELS", "gemini-test")
+	t.Setenv("IMAGE_MODELS", "image-test")
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 
-	// env を何も与えなくても go-comic-kit の必須項目を満たすこと。キットが必須項目を
+	// モデル名さえ与えれば go-comic-kit の必須項目を満たすこと。キットが必須項目を
 	// 増やしたときに、本番の起動時ではなくここで落ちるようにするための番人。
 	kit := cfg.AI.KitConfig()
 	require.NoError(t, kit.Validate())
 }
 
+// モデル一覧は先頭が既定で、残りはフォームの選択肢になります。
 func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 	setDefaultURLConfigEnv(t)
-	t.Setenv("GEMINI_MODEL", " gemini-explicit ")
+	t.Setenv("GEMINI_MODELS", " gemini-explicit , gemini-alt ")
+	t.Setenv("IMAGE_MODELS", "image-explicit,image-alt")
 	t.Setenv("STYLE_SUFFIX", "watercolor")
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 
+	require.Equal(t, []string{"gemini-explicit", "gemini-alt"}, cfg.AI.GeminiModels)
+	require.Equal(t, []string{"image-explicit", "image-alt"}, cfg.AI.ImageModels)
 	require.Equal(t, "gemini-explicit", cfg.AI.GeminiModel)
+	require.Equal(t, "image-explicit", cfg.AI.ImageModel)
 	require.Equal(t, "watercolor", cfg.AI.StyleSuffix)
 	require.Equal(t, DefaultDesignStyleSuffix, cfg.AI.DesignStyleSuffix)
 }
@@ -149,8 +158,7 @@ func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	ai := AIConfig{
 		GeminiModel:         "gemini-x",
-		ImageStandardModel:  "image-std",
-		ImageQualityModel:   "image-quality",
+		ImageModel:          "image-x",
 		StyleSuffix:         "style",
 		DesignStyleSuffix:   "design-style",
 		MaxConcurrency:      3,
@@ -161,8 +169,7 @@ func TestAIConfigKitConfigMapsFields(t *testing.T) {
 
 	kit := ai.KitConfig()
 	require.Equal(t, "gemini-x", kit.GeminiModel)
-	require.Equal(t, "image-std", kit.ImageStandardModel)
-	require.Equal(t, "image-quality", kit.ImageQualityModel)
+	require.Equal(t, "image-x", kit.ImageModel)
 	require.Equal(t, "style", kit.StyleSuffix)
 	require.Equal(t, "design-style", kit.DesignStyleSuffix)
 	require.Equal(t, 3, kit.MaxConcurrency)
@@ -188,6 +195,8 @@ func essentialConfigEnv(t *testing.T) {
 	t.Setenv("ALLOWED_TASK_SERVICE_ACCOUNTS", "caller@project.iam.gserviceaccount.com")
 	t.Setenv("STORY_BUCKET", "bucket")
 	t.Setenv("CHARACTERS_JSON_PATH", "gs://bucket/characters.json")
+	t.Setenv("GEMINI_MODELS", "gemini-test")
+	t.Setenv("IMAGE_MODELS", "image-test")
 }
 
 func TestValidateEssentialConfigPassesWithAllRequiredFields(t *testing.T) {
@@ -195,6 +204,35 @@ func TestValidateEssentialConfigPassesWithAllRequiredFields(t *testing.T) {
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 	require.NoError(t, cfg.ValidateEssentialConfig())
+}
+
+// 画像モデルは両ロールに要り（web はフォームの選択肢、worker は生成）、
+// テキストモデルは台本を作る worker だけの要件です。
+func TestValidateEssentialConfigRequiresModels(t *testing.T) {
+	t.Run("IMAGE_MODELS はどの役割でも必須", func(t *testing.T) {
+		for _, role := range []ServerRole{ServerRoleWeb, ServerRoleWorker, ServerRoleBoth} {
+			essentialConfigEnv(t)
+			t.Setenv("SERVER_ROLE", string(role))
+			t.Setenv("IMAGE_MODELS", "")
+			cfg, err := LoadConfig()
+			require.NoError(t, err)
+			require.ErrorContains(t, cfg.ValidateEssentialConfig(), "IMAGE_MODELS", "role=%s", role)
+		}
+	})
+
+	t.Run("GEMINI_MODELS は worker だけの要件", func(t *testing.T) {
+		essentialConfigEnv(t)
+		t.Setenv("SERVER_ROLE", string(ServerRoleWeb))
+		t.Setenv("GEMINI_MODELS", "")
+		cfg, err := LoadConfig()
+		require.NoError(t, err)
+		require.NoError(t, cfg.ValidateEssentialConfig())
+
+		t.Setenv("SERVER_ROLE", string(ServerRoleWorker))
+		cfg, err = LoadConfig()
+		require.NoError(t, err)
+		require.ErrorContains(t, cfg.ValidateEssentialConfig(), "GEMINI_MODELS")
+	})
 }
 
 func TestValidateEssentialConfigRequiresHTTPSServiceURL(t *testing.T) {

@@ -18,20 +18,13 @@ const (
 	DefaultHTTPTimeout = 60 * time.Second
 )
 
-// AI モデルと画風指定の既定値。
+// 画風指定の既定値。
 //
-// go-comic-kit はこの2種類の既定値を持たず、未設定のまま渡すと
-// ports.ErrConfigInvalid で構築に失敗します。モデル ID は Google 側の都合で
-// 世代交代し、画風指定は作品ごとに調整する文言で、どちらもキットのリリースを
-// 挟まずに変えたいためです。したがって既定値はこのアプリが持ちます。
+// go-comic-kit はモデル名と画風指定のどちらも既定値を持たず、未設定のまま渡すと
+// ports.ErrConfigInvalid で構築に失敗します。画風指定は作品ごとに調整する文言なので
+// このアプリが既定値を持ちますが、モデル ID は Google 側の都合で世代交代するため
+// 既定値を持たず、GEMINI_MODELS / IMAGE_MODELS で必ず指定させます。
 const (
-	// DefaultGeminiModel は台本生成（章立て・章台本）の既定モデルです。
-	DefaultGeminiModel = "gemini-3.6-flash"
-	// DefaultImageStandardModel はパネル画像の既定モデル（標準・高速）です。
-	DefaultImageStandardModel = "gemini-3.1-flash-image"
-	// DefaultImageQualityModel はデザインシート・ページ合成の既定モデル（高品質）です。
-	DefaultImageQualityModel = "gemini-3-pro-image"
-
 	// DefaultStyleSuffix はパネル・ページ画像に付与する既定の画風指定です。
 	// 演出（cinematic lighting 等）を含むため、デザインシートには使いません。
 	DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, high-quality manga coloring, expressive eyes, vibrant colors, cinematic lighting, masterpiece, ultra-detailed, flat shading, clear character features, no 3D effect, high resolution"
@@ -121,9 +114,18 @@ type NotificationConfig struct {
 
 // AIConfig は AI モデルと実行制御の設定です。go-comic-kit の ports.Config にマップされます。
 type AIConfig struct {
-	GeminiModel         string `env:"GEMINI_MODEL"`
-	ImageStandardModel  string `env:"IMAGE_STANDARD_MODEL"`
-	ImageQualityModel   string `env:"IMAGE_QUALITY_MODEL"`
+	// モデル一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が
+	// 一覧の先頭から埋めるので、環境変数からは読みません。既定値は持たず、
+	// 空なら ValidateEssentialConfig が起動時に落とします。
+	//
+	// ImageModels はデザインシート・パネル・ページのすべてに使います（先頭が既定で、
+	// 残りはデザインシート生成フォームの選択肢になります）。用途ごとにモデルを
+	// 分ける仕組みは持ちません。
+	GeminiModels []string `env:"GEMINI_MODELS"`
+	ImageModels  []string `env:"IMAGE_MODELS"`
+	GeminiModel  string   `env:"-"`
+	ImageModel   string   `env:"-"`
+
 	StyleSuffix         string `env:"STYLE_SUFFIX"`
 	DesignStyleSuffix   string `env:"DESIGN_STYLE_SUFFIX"`
 	MaxConcurrency      int    `env:"MAX_CONCURRENCY"`
@@ -147,15 +149,44 @@ type AIConfig struct {
 	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"45m"`
 }
 
-// applyDefaults はモデル名と画風指定の未設定を既定値で補完します。
+// applyDefaults は画風指定の未設定を既定値で補完し、モデル一覧を正規化します。
 // 並列数・タイムアウト・各種上限はキットの ApplyDefaults に任せます
 // （キットを壊さず動かすための値なので、既定値の持ち主はキット側です）。
 func (a *AIConfig) applyDefaults() {
-	a.GeminiModel = defaultIfEmpty(a.GeminiModel, DefaultGeminiModel)
-	a.ImageStandardModel = defaultIfEmpty(a.ImageStandardModel, DefaultImageStandardModel)
-	a.ImageQualityModel = defaultIfEmpty(a.ImageQualityModel, DefaultImageQualityModel)
+	a.GeminiModels = normalizeList(a.GeminiModels)
+	a.ImageModels = normalizeList(a.ImageModels)
+	a.GeminiModel = firstModel(a.GeminiModels)
+	a.ImageModel = firstModel(a.ImageModels)
 	a.StyleSuffix = defaultIfEmpty(a.StyleSuffix, DefaultStyleSuffix)
 	a.DesignStyleSuffix = defaultIfEmpty(a.DesignStyleSuffix, DefaultDesignStyleSuffix)
+}
+
+// normalizeList は env が分割しただけのカンマ区切り値を整えます。
+// 前後の空白を落とし、空要素と重複を捨て、順序は保ちます。
+func normalizeList(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		normalized = append(normalized, v)
+	}
+	return normalized
+}
+
+// firstModel は一覧の先頭（＝既定として使うモデル）を返します。
+// 一覧が空になるのは設定漏れのときだけで、その値は使われる前に起動時検証で弾かれます。
+func firstModel(models []string) string {
+	if len(models) == 0 {
+		return ""
+	}
+	return models[0]
 }
 
 // defaultIfEmpty は、値が空白のみなら fallback を返します。
@@ -170,8 +201,7 @@ func defaultIfEmpty(value, fallback string) string {
 func (a AIConfig) KitConfig() ports.Config {
 	return ports.Config{
 		GeminiModel:         a.GeminiModel,
-		ImageStandardModel:  a.ImageStandardModel,
-		ImageQualityModel:   a.ImageQualityModel,
+		ImageModel:          a.ImageModel,
 		MaxConcurrency:      a.MaxConcurrency,
 		RateInterval:        a.RateInterval,
 		StyleSuffix:         a.StyleSuffix,

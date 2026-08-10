@@ -169,8 +169,9 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `WORKER_URL` | Cloud Tasks が呼び出す Worker エンドポイント（省略時は SERVICE_URL 由来）。web 面のみ使用 |
 | `STORY_BUCKET` | 成果物・state の GCS バケット |
 | `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
-| `GEMINI_MODEL` / `IMAGE_STANDARD_MODEL` / `IMAGE_QUALITY_MODEL` | モデル指定（Vertex AI 経由、ADC 認証のため API キーは不要）。省略時は `internal/config` の既定値（`gemini-3.6-flash` / `gemini-3.1-flash-image` / `gemini-3-pro-image`） |
-| `STYLE_SUFFIX` / `DESIGN_STYLE_SUFFIX` | 画風指定。省略時は `internal/config` の既定値。go-comic-kit はモデル名と画風指定の既定値を持たないため、既定値はこのアプリが持ちます |
+| `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定。**worker で必須**（web は台本を作りません） |
+| `IMAGE_MODELS` | 画像生成（デザインシート・パネル・ページ）のモデル。カンマ区切りで先頭が既定、残りはデザインシート生成フォームの選択肢。**どの役割でも必須** |
+| `STYLE_SUFFIX` / `DESIGN_STYLE_SUFFIX` | 画風指定。省略時は `internal/config` の既定値。go-comic-kit は既定値を持たないため、画風指定の既定値はこのアプリが持ちます（モデル名は誰も既定値を持たず、未設定なら起動時エラー） |
 | `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | go-comic-kit Config の台本・ページ割り制御 |
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
