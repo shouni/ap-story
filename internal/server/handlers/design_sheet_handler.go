@@ -11,6 +11,15 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
+// DefaultDesignSheetAspectRatio は、比率を指定せずにデザインシートを依頼したときに使う比率です。
+//
+// 既定のレイアウトが3面図ターンアラウンドなので、横長のほうが1体あたりの解像度を稼げます。
+// パネル・ページの参照アンカーにするシートは 3:4（+ 単一ポーズ）で作ってください。
+//
+// キット側にも未指定時のフォールバック（ports.Config.AspectRatio）がありますが、
+// そこへ落とさずここで埋めるのは、フォームと JSON API で答えが変わらないようにするためです。
+const DefaultDesignSheetAspectRatio = "16:9"
+
 // designSheetCharacterOption は design_sheet_form.html に渡す1キャラクター分の選択肢です。
 type designSheetCharacterOption struct {
 	ID      string
@@ -130,12 +139,17 @@ func newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
 		return domain.Task{}, err
 	}
 
+	aspectRatio := strings.TrimSpace(p.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = DefaultDesignSheetAspectRatio
+	}
+
 	return domain.Task{
 		Command:              domain.TaskCommandGenerateDesignSheet,
 		JobID:                jobID,
 		CreatedAt:            time.Now().UTC(),
 		CharacterIDs:         p.CharacterIDs,
-		AspectRatio:          p.AspectRatio,
+		AspectRatio:          aspectRatio,
 		Layout:               p.Layout,
 		ModelOverride:        p.ModelOverride,
 		ReferenceURLOverride: p.ReferenceURLOverride,

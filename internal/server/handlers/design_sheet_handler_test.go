@@ -216,3 +216,39 @@ func TestEnqueueDesignSheetFormRejectsNoCharacters(t *testing.T) {
 		t.Errorf("enqueue called %d times, want 0", q.called)
 	}
 }
+
+// 比率を指定しない依頼は、フォームでも JSON API でもアプリ側の既定で埋めます。
+// キットのフォールバックへ落とすと、経路ごとに答えが変わりかねません。
+func TestDesignSheetDefaultsAspectRatio(t *testing.T) {
+	t.Parallel()
+
+	t.Run("フォーム", func(t *testing.T) {
+		q := &fakeTaskQueue{}
+		h := newTestHandler(t, q)
+
+		values := url.Values{}
+		values.Add("character_ids", "zundamon")
+		if rec := postDesignSheetForm(t, h, values); rec.Code != http.StatusAccepted {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
+		}
+		if q.lastTask.AspectRatio != DefaultDesignSheetAspectRatio {
+			t.Errorf("AspectRatio = %q, want %q", q.lastTask.AspectRatio, DefaultDesignSheetAspectRatio)
+		}
+	})
+
+	t.Run("JSON API", func(t *testing.T) {
+		q := &fakeTaskQueue{}
+		h := newTestHandler(t, q)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", strings.NewReader(`{"character_ids":["zundamon"]}`))
+		rec := httptest.NewRecorder()
+		h.EnqueueDesignSheet(rec, req)
+
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
+		}
+		if q.lastTask.AspectRatio != DefaultDesignSheetAspectRatio {
+			t.Errorf("AspectRatio = %q, want %q", q.lastTask.AspectRatio, DefaultDesignSheetAspectRatio)
+		}
+	})
+}

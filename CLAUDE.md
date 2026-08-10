@@ -97,6 +97,8 @@ Character design sheets are stored outside `comics/{jobID}/` because a character
 
 **Reference images are this app's responsibility, not the kit's.** Panels and pages resolve a character's reference through `ReferenceURLFor(aspectRatio)` (go-character-kit): an entry in `reference_urls` matching the generated ratio wins, otherwise it falls back to the aspect-agnostic `reference_url` — silently, since a missing match is not an error. Design-sheet generation deliberately reads `reference_url` only, so a generated sheet never becomes the input for the next one. Nothing feeds generated sheets back into `characters.json`; that curation is manual, and until a `3:4` entry exists there, panel and page generation runs on the aspect-agnostic master with the drift suppression switched off. `IMAGE_ASPECT_RATIO` therefore only pays off once the matching references are curated.
 
+A design-sheet request without an aspect ratio is filled in by `newDesignSheetTask` with `DefaultDesignSheetAspectRatio` (16:9, which suits the default three-view turnaround), not left for the kit to resolve — the form and the JSON API must not answer differently. A sheet meant as a panel/page anchor is the other combination: 3:4 plus the single-view layout.
+
 ## Conventions worth knowing
 
 - Comments and many identifiers/docstrings in this codebase are in Japanese; match the existing language when editing a file that's already documented in Japanese.
