@@ -135,16 +135,40 @@ func renderDetail(t *testing.T, state *kitcomic.MangaState) string {
 	return rec.Body.String()
 }
 
-func TestServeDetailsOffersImageGenerationForScriptOnlyState(t *testing.T) {
+// コマとページはボタンを分けます。ページはコマを並べた合成物なので、
+// コマの出来を見てから合成へ進めるようにするためです。
+func TestServeDetailsOffersPanelsFirstForScriptOnlyState(t *testing.T) {
 	t.Parallel()
 
 	body := renderDetail(t, scriptOnlyState())
 
-	if !strings.Contains(body, "js-render-comic") {
-		t.Error("台本だけの state に「画像生成へ進む」ボタンが出ていない")
+	if !strings.Contains(body, `data-stage="panels"`) {
+		t.Error("台本だけの state に「コマを生成」ボタンが出ていない")
 	}
-	if !strings.Contains(body, "画像生成へ進む") {
-		t.Error("画像が1枚も無いのに「続きを生成」表記になっている")
+	if !strings.Contains(body, "コマを生成") {
+		t.Error("画像が1枚も無いのに「続きのコマを生成」表記になっている")
+	}
+	if strings.Contains(body, "ページを合成") {
+		t.Error("コマが1枚も無いのにページ合成ボタンが出ている")
+	}
+}
+
+// コマが揃ったら、次はページ合成だけを出します。
+func TestServeDetailsOffersPageCompositionAfterPanels(t *testing.T) {
+	t.Parallel()
+
+	state := scriptOnlyState()
+	for i := range state.Panels {
+		state.Panels[i].Generation = &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/p.png"}
+	}
+
+	body := renderDetail(t, state)
+
+	if !strings.Contains(body, "ページを合成") {
+		t.Error("コマが揃ったのにページ合成ボタンが出ていない")
+	}
+	if strings.Contains(body, `data-stage="panels"`) {
+		t.Error("コマが揃っているのにコマ生成ボタンが残っている")
 	}
 }
 
@@ -158,11 +182,11 @@ func TestServeDetailsOffersResumeForPartiallyGeneratedState(t *testing.T) {
 
 	body := renderDetail(t, state)
 
-	if !strings.Contains(body, "js-render-comic") {
-		t.Error("未生成が残る state に再開ボタンが出ていない")
+	if !strings.Contains(body, `data-stage="panels"`) {
+		t.Error("未生成のコマが残る state に再開ボタンが出ていない")
 	}
-	if !strings.Contains(body, "続きを生成") {
-		t.Error("生成済みがあるのに「続きを生成」表記になっていない")
+	if !strings.Contains(body, "続きのコマを生成") {
+		t.Error("生成済みがあるのに「続きのコマを生成」表記になっていない")
 	}
 }
 
@@ -179,8 +203,10 @@ func TestServeDetailsHidesRenderButtonWhenComplete(t *testing.T) {
 
 	body := renderDetail(t, state)
 
-	if strings.Contains(body, "js-render-comic") {
-		t.Error("全て生成済みなのに「続きを生成」ボタンが出ている")
+	for _, unwanted := range []string{`data-stage="panels"`, "ページを合成"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("全て生成済みなのに %q のボタンが出ている", unwanted)
+		}
 	}
 }
 
@@ -234,7 +260,7 @@ func TestServeDetailsRendersChapterRenderControl(t *testing.T) {
 	for _, want := range []string{
 		`data-command="render_comic"`,
 		`data-target="ch01"`,
-		`この章の画像を生成`,
+		`この章のコマを生成`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("章カードに %q が無い", want)
@@ -250,7 +276,7 @@ func TestServeDetailsHidesChapterRenderWithoutPanels(t *testing.T) {
 	state.Panels = nil
 	state.Chapters[0].PanelIDs = nil
 
-	if body := renderDetail(t, state); strings.Contains(body, `この章の画像を生成`) {
+	if body := renderDetail(t, state); strings.Contains(body, `この章のコマを生成`) {
 		t.Error("コマの無い章に画像生成ボタンが出ている")
 	}
 }

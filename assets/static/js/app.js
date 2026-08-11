@@ -137,27 +137,20 @@ window.App.enqueueRegenerate = async ({ jobId, payload, button, pendingLabel = '
 // シードを変えないと go-comic-kit は前回と同じ条件で生成するため、絵が変わりません。
 const randomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
 
-// 画像生成へ進む / 続きを生成（render_comic）
-document.addEventListener('click', (event) => {
-    const btn = event.target.closest('.js-render-comic');
-    if (!btn) return;
-
-    if (!confirm('未生成のコマとページの画像生成を開始しますか？')) return;
-    window.App.enqueueRegenerate({
-        jobId: btn.dataset.jobId,
-        payload: { command: 'render_comic' },
-        button: btn,
-        pendingLabel: '<i class="bi bi-hourglass-split me-1"></i>投入中…'
-    });
-});
-
-// コマ・ページの再生成（シード振り直し / 指示による編集）
+// 画像生成の投入（コマ・ページの生成、章単位の生成、個別の再生成）。
+// 作品全体と章とで別のハンドラを持たないのは、送るものが command と対象だけで同じだからです。
 document.addEventListener('click', (event) => {
     const btn = event.target.closest('.js-regenerate');
     if (!btn) return;
 
-    const { jobId, command, target, mode } = btn.dataset;
+    const { jobId, command, target, mode, stage } = btn.dataset;
     const payload = { command };
+
+    // ページはコマを並べた合成物なので、コマの出来を見てから進める。
+    // ページ合成はコマが揃った状態で同じコマンドを投げれば走る（生成済みは飛ばされる）。
+    if (stage === 'panels') {
+        payload.stop_after_panels = true;
+    }
 
     // regenerate_panel は panel_id、regenerate_page は page で対象を指定する
     if (command === 'regenerate_panel') {

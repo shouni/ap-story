@@ -48,7 +48,13 @@ func (DefaultPlanner) Plan(task *domain.Task) ([]Step, error) {
 	case domain.TaskCommandRenderComic:
 		// 既存 state の未生成分だけを埋める。台本確認後の「続きを生成」と、
 		// 失敗・打ち切りからの再開の両方がこの1コマンドで済む。
-		return append([]Step{LoadStateStep{}}, renderSteps(true)...), nil
+		steps := []Step{LoadStateStep{}}
+		if task.StopAfterPanels {
+			// コマの出来を見てからページへ進む運用。ページ合成は
+			// 同じコマンドをもう一度投げれば走る（生成済みのコマは飛ばされる）。
+			return append(steps, AllPanelsStep{SkipGenerated: true}, SaveStateStep{}), nil
+		}
+		return append(steps, renderSteps(true)...), nil
 	case domain.TaskCommandRegenerateChapterScript:
 		return []Step{
 			LoadStateStep{},

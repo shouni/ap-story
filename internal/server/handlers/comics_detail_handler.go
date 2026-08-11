@@ -38,6 +38,12 @@ type detailChapter struct {
 	Title   string
 	Summary string
 	Panels  []detailPanel
+	// PendingPanels / PendingPages は、その章に未生成のコマ・ページが残っているかです。
+	// ボタンを「コマを生成」と「ページを合成」で出し分けるために使います。
+	// コマが揃うまでページ合成を出さないのは、ページがコマを並べた合成物だからです
+	// （崩れたコマから2Kのページを作っても払い直しになります）。
+	PendingPanels bool
+	PendingPages  bool
 }
 
 // detailPage は詳細画面の1ページ分の表示データです。
@@ -67,6 +73,9 @@ type historyDetailData struct {
 	// HasAnyImage は画像が1枚でも生成済みかです。ボタンの文言を
 	// 「画像生成へ進む」と「続きを生成」で切り替えるために使います。
 	HasAnyImage bool
+	// PendingPanels / PendingPages は作品全体での未生成の有無です（章ごとの同名項目と同じ役割）。
+	PendingPanels bool
+	PendingPages  bool
 }
 
 // historyPendingData は history_pending.html テンプレートに渡すデータです。
@@ -148,7 +157,36 @@ func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) hist
 	}
 
 	data.HasPendingImages, data.HasAnyImage = imageProgress(state)
+	data.PendingPanels, data.PendingPages = pendingImages(state, "")
+	for i := range data.Chapters {
+		data.Chapters[i].PendingPanels, data.Chapters[i].PendingPages = pendingImages(state, data.Chapters[i].ID)
+	}
 	return data
+}
+
+// pendingImages は、未生成のコマ・ページが残っているかを返します。
+// chapterID が空なら作品全体、指定があればその章だけを見ます。
+//
+// ページを章で絞れるのは、Repaginate が章境界でページを割る（1ページに2章を混ぜない）
+// ためです。go-comic-kit の PagesForChapter が同じ前提に乗っています。
+func pendingImages(state *kitcomic.MangaState, chapterID string) (panels, pages bool) {
+	targetPages := map[int]struct{}{}
+	for i := range state.Panels {
+		if chapterID != "" && state.Panels[i].ChapterID != chapterID {
+			continue
+		}
+		targetPages[state.Panels[i].Page] = struct{}{}
+		if state.Panels[i].Generation == nil {
+			panels = true
+		}
+	}
+	for page := range targetPages {
+		artifact := state.PageArtifactByNumber(page)
+		if artifact == nil || artifact.Generation == nil {
+			pages = true
+		}
+	}
+	return panels, pages
 }
 
 // imageProgress は、未生成の画像が残っているか・1枚でも生成済みかを返します。

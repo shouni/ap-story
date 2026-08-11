@@ -107,7 +107,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | command | 実行する go-comic-kit 操作 | 入力パラメータ |
 |---|---|---|
 | `compose_comic` | 全工程: GenerateOutline → 各章 GenerateChapterScript → GenerateAllPanels → ComposeAllPages（デザインシートは含まない。単体生成 `generate_design_sheet` で別途作成）。`stop_after_script` を指定すると台本までで止まる | source_url / source_text, script_mode, style_mode, text_model, image_model, stop_after_script |
-| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の「続きを生成」と、失敗・打ち切りからの再開を兼ねる。`chapter_id` を添えるとその章だけを生成（画像はいちばん高価な工程なので、1章で試してから残りへ進める） | job_id, chapter_id（任意） |
+| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の続行と、失敗・打ち切りからの再開を兼ねる。`chapter_id` でその章だけ、`stop_after_panels` でコマまでに絞れる（画像はいちばん高価な工程なので、1章・1段階ずつ試してから進める） | job_id, chapter_id（任意）, stop_after_panels（任意） |
 | `regenerate_chapter_script` | GenerateChapterScript（1章。後続のパネル・ページは別途再生成） | job_id, chapter_id |
 | `generate_design_sheet` | GenerateDesignSheet | job_id（省略時は state なしの単発生成）, character_ids, aspect_ratio, layout, style_mode, model_override, seed |
 | `regenerate_panel` | GeneratePanel | job_id, panel_id, seed / edit_prompt / prompt_override |
@@ -137,9 +137,11 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 1. `/compose` で原稿を投入する。台本モード・画風モード・モデルを選んで「台本を生成」。
    **このフォームは章立てとネームまでしか作らない。** 押した時点では章立てが未実行で、
    何コマになるか分からないため、画像の開始はコマ数が見えている作品詳細に任せる。
-2. `/history/{jobID}` で台本を確認する。問題なければ**「画像生成へ進む」**で `render_comic`
-   を投入する。途中で失敗した場合も同じボタンが**「続きを生成」**になり、未生成分だけを埋める。
-3. 気に入らないコマ・ページは詳細画面から個別に直す。
+2. `/history/{jobID}` で台本を確認する。問題なければ**「コマを生成」**。作品全体でも、
+   章カードから1章だけでも始められる。途中で失敗しても**「続きのコマを生成」**が未生成分だけを埋める。
+3. コマが揃うと、同じ場所のボタンが**「ページを合成」**に変わる。ページはコマを並べた合成物なので、
+   コマの出来を見てから合成へ進む（崩れたコマから2Kのページを作ると払い直しになる）。
+4. 気に入らないコマ・ページは詳細画面から個別に直す。
    * **シャッフル**（<code>bi-shuffle</code>）: シードを振り直して別の絵にする。
    * **鉛筆**（<code>bi-pencil</code>）: 「表情を笑顔に」のような指示で、構図を保ったまま部分編集する
      （生成済み画像が入力になるため、未生成のコマには表示されない）。
