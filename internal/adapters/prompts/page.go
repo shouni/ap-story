@@ -223,7 +223,13 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 }
 
 // writePanelDialogues はセリフ・ナレーション・SFX の描画指示を kind 別に出力します。
+//
+// 同じコマに複数の発話があるときは読む順序を明示します。順序を言わないと吹き出しの
+// 配置が絵の都合で決まり、掛け合いが逆順に読めてしまいます。
 func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters) {
+	if countSpokenLines(panel) > 1 {
+		sb.WriteString("- BALLOON ORDER: Place the balloons below in the listed order, read right-to-left then top-to-bottom within this panel.\n")
+	}
 	for _, line := range panel.Dialogues {
 		text := strings.TrimSpace(line.Text)
 		if text == "" {
@@ -259,6 +265,17 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 		fmt.Fprintf(sb, "  - TYPOGRAPHY: Use professional Japanese manga font (Gothic/Mincho). %s.\n", layoutDesc)
 		sb.WriteString("  - LANGUAGE: Japanese characters. Ensure accurate rendering of Kanji/Kana.\n")
 	}
+}
+
+// countSpokenLines は、そのコマの空でない発話の数を返します。
+func countSpokenLines(panel *comic.Panel) int {
+	n := 0
+	for _, line := range panel.Dialogues {
+		if strings.TrimSpace(line.Text) != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // speakerName は話者IDから表示名を引きます。未知IDは空文字列です。

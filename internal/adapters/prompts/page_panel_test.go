@@ -178,3 +178,51 @@ func testStyles(t *testing.T) *Styles {
 func testPanelPrompt(t *testing.T) PanelPrompt   { return PanelPrompt{Styles: testStyles(t)} }
 func testPagePrompt(t *testing.T) PagePrompt     { return PagePrompt{Styles: testStyles(t)} }
 func testDesignPrompt(t *testing.T) DesignPrompt { return DesignPrompt{Styles: testStyles(t)} }
+
+// 1コマに複数の発話があるときは読む順序を指示すること。
+// 順序を言わないと吹き出しの配置が絵の都合で決まり、掛け合いが逆順に読めます。
+func TestPagePromptOrdersMultipleBalloons(t *testing.T) {
+	t.Parallel()
+
+	chars := testCharacters(t)
+	multi := comic.Panel{
+		ID: "ch01-p01", Page: 1, VisualAnchor: "bridge",
+		Characters: []comic.PanelCharacter{
+			{CharacterID: "zundamon", Prominence: comic.ProminencePrimary},
+			{CharacterID: "metan", Prominence: comic.ProminenceSecondary},
+		},
+		Dialogues: []comic.DialogueLine{
+			{SpeakerID: "zundamon", Text: "全自動なのだ！", Kind: comic.DialogueKindShout},
+			{SpeakerID: "metan", Text: "勘違いよ。", Kind: comic.DialogueKindSpeech},
+		},
+	}
+
+	_, user, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{multi}, Characters: chars,
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if !strings.Contains(user, "BALLOON ORDER") {
+		t.Errorf("複数の吹き出しがあるのに読み順の指示が無い:\n%s", user)
+	}
+	// 話者ごとに誰の吹き出しかが伝わること
+	for _, want := range []string{"ずんだもん", "めたん", `"全自動なのだ！"`, `"勘違いよ。"`} {
+		if !strings.Contains(user, want) {
+			t.Errorf("prompt missing %q", want)
+		}
+	}
+
+	// 1つだけのときは余計な指示を出さない
+	single := multi
+	single.Dialogues = multi.Dialogues[:1]
+	_, user, _, err = testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{single}, Characters: chars,
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if strings.Contains(user, "BALLOON ORDER") {
+		t.Error("吹き出しが1つなのに読み順の指示が出ている")
+	}
+}
