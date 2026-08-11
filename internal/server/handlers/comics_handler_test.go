@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/shouni/ap-story/internal/adapters/prompts"
 	"github.com/shouni/ap-story/internal/domain"
 )
 
@@ -229,5 +230,39 @@ func TestEnqueueComicFillsInDefaultModels(t *testing.T) {
 	}
 	if q.lastTask.ModelOverride != "image-model" {
 		t.Errorf("ModelOverride = %q, want image-model (the head of IMAGE_MODELS)", q.lastTask.ModelOverride)
+	}
+}
+
+// 選択肢を引ける口があること。ブラウザは <select> を見て選べますが、JSON API の
+// 呼び出し側には何が指定できるか知る手段がなく、知らずに送れば 400 になります。
+func TestComicOptionsListsChoices(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler(t, &fakeTaskQueue{})
+
+	rec := httptest.NewRecorder()
+	h.ComicOptions(rec, httptest.NewRequest(http.MethodGet, "/api/comic-options", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp comicOptionsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.ScriptModes) == 0 || len(resp.StyleModes) == 0 {
+		t.Fatalf("modes = %+v/%+v, want both listed", resp.ScriptModes, resp.StyleModes)
+	}
+	// 先頭が既定モデル。フォームと同じ並びで返す。
+	if len(resp.TextModels) == 0 || resp.TextModels[0] != "gemini-model" {
+		t.Errorf("text models = %v, want gemini-model first", resp.TextModels)
+	}
+	if len(resp.ImageModels) == 0 || resp.ImageModels[0] != "image-model" {
+		t.Errorf("image models = %v, want image-model first", resp.ImageModels)
+	}
+	// 名前だけでは選べないので、投入時の許可リストと同じ値が名前として返ること。
+	if resp.StyleModes[0].Name != prompts.ModeDefault {
+		t.Errorf("style modes[0] = %q, want %q", resp.StyleModes[0].Name, prompts.ModeDefault)
 	}
 }

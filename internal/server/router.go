@@ -96,6 +96,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 				r.Get("/{jobID}/images/*", h.Web.RedirectComicImage)
 				r.Get("/{jobID}/status", h.Web.JobStatus)
 			})
+			r.Get("/api/comic-options", h.Web.ComicOptions)
 			r.Get("/api/characters", h.Web.ListCharacters)
 			r.Get("/api/characters/{characterID}", h.Web.GetCharacterDetail)
 			r.Get("/api/characters/images/*", h.Web.RedirectCharacterImage)
