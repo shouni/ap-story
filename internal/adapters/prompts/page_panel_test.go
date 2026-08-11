@@ -104,8 +104,9 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 		"PANEL 2: ROW 1, LEFT column",
 		"SUBJECT [ずんだもん]: Match input_file_1",
 		"SUBJECT [めたん]: Match input_file_2",
-		"COMPOSITION_GUIDE: Recreate the composition, posing, and background from input_file_3",
-		"CHARACTER_IDENTITY: [ ずんだもん ] from input_file_1",
+		"COMPOSITION_GUIDE: Recreate the composition, posing, background, and character appearance from input_file_3",
+		// コマ画像がある側が正解。立ち絵は細部の補助に降りる。
+		"CHARACTER_IDENTITY: [ ずんだもん ] already appears in input_file_3",
 		"SHOUT: Jagged, explosive speech bubble for [ずんだもん]",
 		"NARRATION: Rectangular caption box",
 		`TEXT_TO_RENDER: "なんなのだ！？"`,
@@ -274,5 +275,45 @@ func TestPanelNegativePromptStillExcludesText(t *testing.T) {
 		if !strings.Contains(negative, want) {
 			t.Errorf("コマのネガティブプロンプトに %q が無い", want)
 		}
+	}
+}
+
+// ページにとっての正解は、既に生成されたコマ画像です。立ち絵は比率も絵柄も違う別の絵で、
+// 優先させると寄せ直しが起きます。コマ画像が無いときだけ立ち絵が唯一の手がかりになります。
+func TestPagePromptPrefersPanelOverCharacterSheet(t *testing.T) {
+	t.Parallel()
+
+	chars := testCharacters(t)
+	panel := comic.Panel{
+		ID: "ch01-p01", Page: 1, VisualAnchor: "bridge",
+		Characters: []comic.PanelCharacter{{CharacterID: "zundamon", Prominence: comic.ProminencePrimary}},
+		Generation: &comic.GenerationRecord{ImageURL: "gs://b/panel.png"},
+	}
+
+	_, withGuide, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{panel}, Characters: chars,
+		CharacterFile: map[string]int{"zundamon": 1},
+		PanelFile:     map[string]int{"ch01-p01": 2},
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if !strings.Contains(withGuide, "already appears in input_file_2") {
+		t.Errorf("コマ画像を正解として指示していない:\n%s", withGuide)
+	}
+	if strings.Contains(withGuide, "MUST match input_file_1 exactly") {
+		t.Error("立ち絵を優先させる指示が残っている")
+	}
+
+	// コマ画像が無いページでは、立ち絵が唯一の手がかりになる。
+	_, withoutGuide, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{panel}, Characters: chars,
+		CharacterFile: map[string]int{"zundamon": 1},
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if !strings.Contains(withoutGuide, "MUST match input_file_1 exactly") {
+		t.Errorf("コマ画像が無いのに立ち絵を使う指示が出ていない:\n%s", withoutGuide)
 	}
 }
