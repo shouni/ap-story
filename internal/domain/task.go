@@ -19,6 +19,9 @@ const (
 	// TaskCommandRenderComic は、既存 state のパネル画像とページ画像だけを生成するコマンドです。
 	// 台本を確認してから画像生成へ進む「続きを生成」と、失敗・打ち切りからの再開を兼ねます。
 	// すでに生成済みのコマ・ページは飛ばすため、何度実行しても未生成分だけが埋まります。
+	//
+	// chapter_id を添えると、その章のコマ・ページだけを生成します。画像は工程中で
+	// いちばん高価なので、1章で試してから残りへ進めるようにしてあります。
 	TaskCommandRenderComic TaskCommand = "render_comic"
 	// TaskCommandRegenerateChapterScript は、指定章の台本（ネーム）のみを再生成するコマンドです。
 	TaskCommandRegenerateChapterScript TaskCommand = "regenerate_chapter_script"
@@ -93,6 +96,8 @@ func (t Task) ValidateSubmission() error {
 		return t.validateComposeComicSubmission()
 	case TaskCommandRenderComic:
 		// 対象は state 全体なので、job_id 以外に必要な入力はありません。
+		// chapter_id は任意で、指定するとその章だけに絞られます（存在しない章は
+		// 実行時に go-comic-kit が ErrNotFound を返します）。
 		return nil
 	case TaskCommandRegenerateChapterScript:
 		if strings.TrimSpace(t.ChapterID) == "" {

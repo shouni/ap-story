@@ -23,22 +23,20 @@ type Handler struct {
 	bucket     string
 	templates  map[string]*template.Template
 	characters *characterkit.Characters
-	// imageStandardModel / imageQualityModel は、デザインシート生成フォームの
-	// モデル選択肢として提示する既定モデル名です（空文字の場合は選択肢から除外）。
-	imageStandardModel string
-	imageQualityModel  string
+	// imageModels は、デザインシート生成フォームのモデル選択肢です（先頭が既定）。
+	// 空なら選択肢を出しません。
+	imageModels []string
 }
 
 // HandlerOptions は、NewHandler に渡す Handler の構築用オプションです。
 type HandlerOptions struct {
-	TaskQueue          domain.TaskQueue
-	Repository         domain.ComicRepository
-	JobStatus          domain.JobStatusStore
-	Signer             remoteio.URLSigner
-	Bucket             string
-	Characters         *characterkit.Characters
-	ImageStandardModel string
-	ImageQualityModel  string
+	TaskQueue   domain.TaskQueue
+	Repository  domain.ComicRepository
+	JobStatus   domain.JobStatusStore
+	Signer      remoteio.URLSigner
+	Bucket      string
+	Characters  *characterkit.Characters
+	ImageModels []string
 }
 
 // NewHandler は指定された構成に基づいて新しいハンドラーを初期化します。
@@ -64,14 +62,13 @@ func NewHandler(opts HandlerOptions) (*Handler, error) {
 		return nil, fmt.Errorf("failed to load HTML templates: %w", err)
 	}
 	return &Handler{
-		taskQueue:          opts.TaskQueue,
-		repository:         opts.Repository,
-		jobStatus:          opts.JobStatus,
-		signer:             opts.Signer,
-		bucket:             bucket,
-		templates:          templates,
-		characters:         opts.Characters,
-		imageStandardModel: strings.TrimSpace(opts.ImageStandardModel),
-		imageQualityModel:  strings.TrimSpace(opts.ImageQualityModel),
+		taskQueue:   opts.TaskQueue,
+		repository:  opts.Repository,
+		jobStatus:   opts.JobStatus,
+		signer:      opts.Signer,
+		bucket:      bucket,
+		templates:   templates,
+		characters:  opts.Characters,
+		imageModels: opts.ImageModels,
 	}, nil
 }

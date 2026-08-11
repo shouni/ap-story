@@ -23,9 +23,12 @@ func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 		return fmt.Errorf("panels: manga state is nil")
 	}
 
-	manga, err := pc.Ops.PanelBatch.GenerateAllPanels(ctx, pc.Manga, ports.BatchOptions{
-		Seed:          pc.Task.Seed,
-		OutputDir:     pc.OutputDir,
+	manga, err := pc.Ops.Panel.GenerateAllPanels(ctx, pc.Manga, ports.BatchOptions{
+		Seed:      pc.Task.Seed,
+		OutputDir: pc.OutputDir,
+		// 章の指定があればその章だけを生成する。画像はいちばん高価な工程なので、
+		// 確認の単位を台本（章単位）と揃えられるようにしている。
+		ChapterID:     pc.Task.ChapterID,
 		SkipGenerated: s.SkipGenerated,
 	})
 	// 一括生成は一部が失敗しても、成功分を記録した state をエラーと一緒に返す。

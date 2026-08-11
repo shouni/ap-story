@@ -3,6 +3,7 @@
 package pipeline
 
 import (
+	"github.com/shouni/go-comic-kit/comic"
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-remote-io/remoteio"
 
@@ -14,7 +15,7 @@ type State struct {
 	Task *domain.Task
 	// Manga は実行対象の MangaState です。ステップが読み書きします。
 	// compose_comic の最初のステップ（Outline）でのみ nil から新規作成されます。
-	Manga *ports.MangaState
+	Manga *comic.MangaState
 	// OutputDir はこのジョブの成果物を格納する GCS URI です。作品ジョブでは
 	// comics/{jobID} を指します。デザインシート単体生成で既存の作品 state が
 	// 見つからない場合、LoadStateStepOptional が DesignJobOutputDir へ切り替えます。

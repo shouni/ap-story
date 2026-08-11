@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	kitports "github.com/shouni/go-comic-kit/ports"
+	kitcomic "github.com/shouni/go-comic-kit/comic"
 )
 
 // TaskQueue は非同期キューを抽象化します。
@@ -17,7 +17,7 @@ type TaskQueue interface {
 // MusicRecipe に相当する独自のドメイン型を持たず、state 自体が完結した表現だからです。
 type ComicRepository interface {
 	ListHistoryPage(ctx context.Context, page int, perPage int) (ComicHistoryPage, error)
-	GetState(ctx context.Context, jobID string) (*kitports.MangaState, error)
+	GetState(ctx context.Context, jobID string) (*kitcomic.MangaState, error)
 	DeleteHistory(ctx context.Context, jobID string) error
 	// ListCharacterDesignHistory は、指定キャラクター単体のデザインシート生成履歴を
 	// 新しい順で返します。複数キャラクター合成生成のシートは対象外です

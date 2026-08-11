@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	kitports "github.com/shouni/go-comic-kit/ports"
+	kitcomic "github.com/shouni/go-comic-kit/comic"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -43,32 +43,32 @@ func TestServeHistoryRendersItemsWithPaging(t *testing.T) {
 func TestServeDetailsRendersStateWithImageLinks(t *testing.T) {
 	t.Parallel()
 
-	state := &kitports.MangaState{
+	state := &kitcomic.MangaState{
 		Title:       "テスト作品",
 		Description: "あらすじ",
 		UpdatedAt:   time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC),
-		Chapters: []kitports.Chapter{
+		Chapters: []kitcomic.Chapter{
 			{ID: "ch01", Title: "第一章", Summary: "導入"},
 		},
-		Panels: []kitports.Panel{
+		Panels: []kitcomic.Panel{
 			{
 				ID: "ch01-p01", ChapterID: "ch01", Page: 1, Shot: "close-up",
-				Dialogues: []kitports.DialogueLine{
+				Dialogues: []kitcomic.DialogueLine{
 					{SpeakerID: "zundamon", Text: "なのだ！", Kind: "speech"},
 					{SpeakerID: "", Text: "そして時は動き出す", Kind: "narration"},
 				},
-				Generation: &kitports.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/panel_ch01-p01.png"},
+				Generation: &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/panel_ch01-p01.png"},
 			},
 			{ID: "ch01-p02", ChapterID: "ch01", Page: 1},
 		},
-		Pages: []kitports.PageArtifact{
-			{PageNumber: 1, Generation: &kitports.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
+		Pages: []kitcomic.PageArtifact{
+			{PageNumber: 1, Generation: &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
 		},
-		DesignSheets: []kitports.DesignSheetRef{
+		DesignSheets: []kitcomic.DesignSheetRef{
 			{CharacterID: "zundamon", ImageURL: "gs://test-bucket/character/zundamon/job-1.png"},
 		},
 	}
-	repo := &fakeComicRepository{states: map[string]*kitports.MangaState{"job-1": state}}
+	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
@@ -98,7 +98,7 @@ func TestServeDetailsRendersStateWithImageLinks(t *testing.T) {
 func TestServeDetailsReturns404ForMissingJob(t *testing.T) {
 	t.Parallel()
 
-	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, &fakeComicRepository{states: map[string]*kitports.MangaState{}})
+	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, &fakeComicRepository{states: map[string]*kitcomic.MangaState{}})
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-x", "", "jobID", "job-x")
 	rec := httptest.NewRecorder()
 
@@ -109,20 +109,20 @@ func TestServeDetailsReturns404ForMissingJob(t *testing.T) {
 	}
 }
 
-func scriptOnlyState() *kitports.MangaState {
-	return &kitports.MangaState{
+func scriptOnlyState() *kitcomic.MangaState {
+	return &kitcomic.MangaState{
 		Title:    "台本だけの作品",
-		Chapters: []kitports.Chapter{{ID: "ch01", Title: "第一章"}},
-		Panels: []kitports.Panel{
+		Chapters: []kitcomic.Chapter{{ID: "ch01", Title: "第一章"}},
+		Panels: []kitcomic.Panel{
 			{ID: "ch01-p01", ChapterID: "ch01", Page: 1},
 			{ID: "ch01-p02", ChapterID: "ch01", Page: 1},
 		},
 	}
 }
 
-func renderDetail(t *testing.T, state *kitports.MangaState) string {
+func renderDetail(t *testing.T, state *kitcomic.MangaState) string {
 	t.Helper()
-	repo := &fakeComicRepository{states: map[string]*kitports.MangaState{"job-1": state}}
+	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
@@ -152,7 +152,7 @@ func TestServeDetailsOffersResumeForPartiallyGeneratedState(t *testing.T) {
 	t.Parallel()
 
 	state := scriptOnlyState()
-	state.Panels[0].Generation = &kitports.GenerationRecord{
+	state.Panels[0].Generation = &kitcomic.GenerationRecord{
 		ImageURL: "gs://test-bucket/comics/job-1/images/panel_ch01-p01.png",
 	}
 
@@ -171,10 +171,10 @@ func TestServeDetailsHidesRenderButtonWhenComplete(t *testing.T) {
 
 	state := scriptOnlyState()
 	for i := range state.Panels {
-		state.Panels[i].Generation = &kitports.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/p.png"}
+		state.Panels[i].Generation = &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/p.png"}
 	}
-	state.Pages = []kitports.PageArtifact{
-		{PageNumber: 1, Generation: &kitports.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
+	state.Pages = []kitcomic.PageArtifact{
+		{PageNumber: 1, Generation: &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
 	}
 
 	body := renderDetail(t, state)
@@ -188,11 +188,11 @@ func TestServeDetailsRendersRegenerateControls(t *testing.T) {
 	t.Parallel()
 
 	state := scriptOnlyState()
-	state.Panels[0].Generation = &kitports.GenerationRecord{
+	state.Panels[0].Generation = &kitcomic.GenerationRecord{
 		ImageURL: "gs://test-bucket/comics/job-1/images/panel_ch01-p01.png",
 	}
-	state.Pages = []kitports.PageArtifact{
-		{PageNumber: 1, Generation: &kitports.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
+	state.Pages = []kitcomic.PageArtifact{
+		{PageNumber: 1, Generation: &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
 	}
 
 	body := renderDetail(t, state)
@@ -221,5 +221,36 @@ func TestServeDetailsHidesEditForUngeneratedPanel(t *testing.T) {
 
 	if strings.Contains(body, `data-mode="edit"`) {
 		t.Error("画像が無いコマに編集ボタンが出ている")
+	}
+}
+
+// 章カードには「この章の画像を生成」が並びます。画像はいちばん高価な工程なので、
+// 作品まるごとではなく章単位で試せる入口を、台本再生成と同じ場所に置いています。
+func TestServeDetailsRendersChapterRenderControl(t *testing.T) {
+	t.Parallel()
+
+	body := renderDetail(t, scriptOnlyState())
+
+	for _, want := range []string{
+		`data-command="render_comic"`,
+		`data-target="ch01"`,
+		`この章の画像を生成`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("章カードに %q が無い", want)
+		}
+	}
+}
+
+// 台本がまだ無い章に画像生成のボタンを出しても、押せば0件で終わるだけです。
+func TestServeDetailsHidesChapterRenderWithoutPanels(t *testing.T) {
+	t.Parallel()
+
+	state := scriptOnlyState()
+	state.Panels = nil
+	state.Chapters[0].PanelIDs = nil
+
+	if body := renderDetail(t, state); strings.Contains(body, `この章の画像を生成`) {
+		t.Error("コマの無い章に画像生成ボタンが出ている")
 	}
 }

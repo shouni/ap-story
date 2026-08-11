@@ -79,6 +79,12 @@ func (c *Config) ValidateEssentialConfig() error {
 	// CHARACTERS_JSON_PATH は任意。未設定時は go-character-kit の埋め込みデフォルト
 	// キャラクター定義にフォールバックする（internal/adapters.LoadCharacters）。
 
+	// 画像モデルは両ロールに要ります。worker は生成に、web はデザインシート生成
+	// フォームの選択肢に使うためで、片方だけ検証するともう一方が空のまま起動します。
+	if len(c.AI.ImageModels) == 0 {
+		return fmt.Errorf("IMAGE_MODELS が設定されていません（カンマ区切りで複数指定すると、先頭が既定でフォームの選択肢になります）")
+	}
+
 	if c.Server.Role.ServesWeb() {
 		if err := c.validateWebConfig(); err != nil {
 			return err
@@ -86,6 +92,11 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 
 	if c.Server.Role.ServesWorker() {
+		// 台本生成は worker だけが行うため、テキストモデルは worker の要件です
+		// （web は画像モデルしか使いません）。
+		if len(c.AI.GeminiModels) == 0 {
+			return fmt.Errorf("GEMINI_MODELS が設定されていません（台本生成に必須）")
+		}
 		if c.Tasks.TaskAudienceURL == "" {
 			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
 		}
@@ -134,11 +145,6 @@ func (c *Config) validateWebConfig() error {
 	// SessionEncryptKey の長さチェック (AES要件: 16, 24, 32 bytes)
 	if keyLen := len(c.Auth.SessionEncryptKey); keyLen != 16 && keyLen != 24 && keyLen != 32 {
 		return fmt.Errorf("SESSION_ENCRYPT_KEY の長さが不正です (%d バイト)。16, 24, 32 バイトのいずれかにしてください", keyLen)
-	}
-
-	// M2M（ap-mcp 等からの呼び出し）も継続して受け付けるため、SA 許可リストも必須とする。
-	if len(c.Auth.AllowedM2MServiceAccounts) == 0 {
-		return fmt.Errorf("ALLOWED_M2M_SERVICE_ACCOUNTS が設定されていません（M2M 呼び出しを許可する SA が1つも登録されていません）")
 	}
 
 	return nil

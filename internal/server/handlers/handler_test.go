@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	kitcomic "github.com/shouni/go-comic-kit/comic"
+
 	"github.com/go-chi/chi/v5"
 	characterkit "github.com/shouni/go-character-kit/character"
-	kitports "github.com/shouni/go-comic-kit/ports"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -70,7 +71,7 @@ func (f *fakeTaskQueue) Enqueue(_ context.Context, task domain.Task) error {
 type fakeComicRepository struct {
 	historyPage         domain.ComicHistoryPage
 	listErr             error
-	states              map[string]*kitports.MangaState
+	states              map[string]*kitcomic.MangaState
 	getErr              error
 	deleted             []string
 	deleteErr           error
@@ -99,7 +100,7 @@ func (f *fakeComicRepository) ListHistoryPage(_ context.Context, _ int, _ int) (
 	return f.historyPage, f.listErr
 }
 
-func (f *fakeComicRepository) GetState(_ context.Context, jobID string) (*kitports.MangaState, error) {
+func (f *fakeComicRepository) GetState(_ context.Context, jobID string) (*kitcomic.MangaState, error) {
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
@@ -151,13 +152,12 @@ func newTestHandlerWithRepo(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepos
 func newTestHandlerFull(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepository, signer *fakeSigner) *Handler {
 	t.Helper()
 	h, err := NewHandler(HandlerOptions{
-		TaskQueue:          q,
-		Repository:         repo,
-		Signer:             signer,
-		Bucket:             "test-bucket",
-		Characters:         testCharacters(t),
-		ImageStandardModel: "standard-model",
-		ImageQualityModel:  "quality-model",
+		TaskQueue:   q,
+		Repository:  repo,
+		Signer:      signer,
+		Bucket:      "test-bucket",
+		Characters:  testCharacters(t),
+		ImageModels: []string{"image-model", "image-alt"},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler failed: %v", err)

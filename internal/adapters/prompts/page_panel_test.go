@@ -4,13 +4,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shouni/go-comic-kit/comic"
+
 	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-comic-kit/ports"
 )
 
-func testCharacters(t *testing.T) *ports.Characters {
+func testCharacters(t *testing.T) *comic.Characters {
 	t.Helper()
-	cm, err := characterkit.NewCharacters([]ports.Character{
+	cm, err := characterkit.NewCharacters([]comic.Character{
 		{ID: "zundamon", Name: "ずんだもん", ReferenceURL: "gs://b/zunda.png", VisualCues: []string{"green hair"}, IsDefault: true},
 		{ID: "metan", Name: "めたん", ReferenceURL: "gs://b/metan.png", VisualCues: []string{"purple hair"}},
 	})
@@ -28,14 +30,14 @@ func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 	cm := testCharacters(t)
 
 	system, user, negative, err := PanelPrompt{}.BuildPanel(&ports.PanelPromptData{
-		Panel: ports.Panel{
+		Panel: comic.Panel{
 			ID:      "ch01-p01",
 			Shot:    "wide",
 			Setting: "放課後の音楽室",
-			Characters: []ports.PanelCharacter{
-				{CharacterID: "zundamon", Prominence: ports.ProminencePrimary, Emotion: "驚き"},
-				{CharacterID: "metan", Prominence: ports.ProminenceSecondary},
-				{CharacterID: "students", Prominence: ports.ProminenceBackground, Action: "ざわめく"},
+			Characters: []comic.PanelCharacter{
+				{CharacterID: "zundamon", Prominence: comic.ProminencePrimary, Emotion: "驚き"},
+				{CharacterID: "metan", Prominence: comic.ProminenceSecondary},
+				{CharacterID: "students", Prominence: comic.ProminenceBackground, Action: "ざわめく"},
 			},
 		},
 		Characters:  cm,
@@ -72,19 +74,19 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 	cm := testCharacters(t)
 
 	data := &ports.PagePromptData{
-		Panels: []ports.Panel{
+		Panels: []comic.Panel{
 			{
 				ID: "ch01-p01", Shot: "wide",
-				Characters: []ports.PanelCharacter{{CharacterID: "zundamon", Prominence: ports.ProminencePrimary}},
-				Dialogues: []ports.DialogueLine{
-					{SpeakerID: "zundamon", Kind: ports.DialogueKindShout, Text: "なんなのだ！？"},
-					{Kind: ports.DialogueKindNarration, Text: "その時、事件は起きた。"},
+				Characters: []comic.PanelCharacter{{CharacterID: "zundamon", Prominence: comic.ProminencePrimary}},
+				Dialogues: []comic.DialogueLine{
+					{SpeakerID: "zundamon", Kind: comic.DialogueKindShout, Text: "なんなのだ！？"},
+					{Kind: comic.DialogueKindNarration, Text: "その時、事件は起きた。"},
 				},
 			},
 			{
 				ID:         "ch01-p02",
-				Characters: []ports.PanelCharacter{{CharacterID: "metan", Prominence: ports.ProminencePrimary}},
-				Dialogues:  []ports.DialogueLine{{SpeakerID: "metan", Text: "落ち着きなさい。"}},
+				Characters: []comic.PanelCharacter{{CharacterID: "metan", Prominence: comic.ProminencePrimary}},
+				Dialogues:  []comic.DialogueLine{{SpeakerID: "metan", Text: "落ち着きなさい。"}},
 			},
 		},
 		Characters:    cm,
@@ -128,7 +130,7 @@ func TestPagePromptFullWidthImpactForOddCount(t *testing.T) {
 	cm := testCharacters(t)
 
 	_, user, _, err := PagePrompt{}.BuildPage(&ports.PagePromptData{
-		Panels:     []ports.Panel{{ID: "p1"}, {ID: "p2"}, {ID: "p3"}},
+		Panels:     []comic.Panel{{ID: "p1"}, {ID: "p2"}, {ID: "p3"}},
 		Characters: cm,
 	})
 	if err != nil {

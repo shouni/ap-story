@@ -1,13 +1,24 @@
 package handlers
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
+
+// DefaultDesignSheetAspectRatio は、比率を指定せずにデザインシートを依頼したときに使う比率です。
+//
+// 既定のレイアウトが3面図ターンアラウンドなので、横長のほうが1体あたりの解像度を稼げます。
+// パネル・ページの参照アンカーにするシートは 3:4（+ 単一ポーズ）で作ってください。
+//
+// キット側にも未指定時のフォールバック（ports.Config.AspectRatio）がありますが、
+// そこへ落とさずここで埋めるのは、フォームと JSON API で答えが変わらないようにするためです。
+const DefaultDesignSheetAspectRatio = "16:9"
 
 // designSheetCharacterOption は design_sheet_form.html に渡す1キャラクター分の選択肢です。
 type designSheetCharacterOption struct {
@@ -56,17 +67,28 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 			})
 		}
 	}
-	if h.imageQualityModel != "" {
-		data.Models = append(data.Models, designSheetModelOption{
-			Value: h.imageQualityModel, Label: "品質重視（既定）: " + h.imageQualityModel,
-		})
-	}
-	if h.imageStandardModel != "" && h.imageStandardModel != h.imageQualityModel {
-		data.Models = append(data.Models, designSheetModelOption{
-			Value: h.imageStandardModel, Label: "標準: " + h.imageStandardModel,
-		})
+	// 先頭が既定モデル。用途ごとの使い分けは持たないので、一覧をそのまま選択肢にします。
+	for i, model := range h.imageModels {
+		label := model
+		if i == 0 {
+			label = "既定: " + model
+		}
+		data.Models = append(data.Models, designSheetModelOption{Value: model, Label: label})
 	}
 	return data
+}
+
+// validateModelOverride は、指定された画像モデルが IMAGE_MODELS に含まれるかを確かめます。
+// 空文字は「既定モデル（worker 側の IMAGE_MODELS 先頭）を使う」意味なので常に有効です。
+//
+// domain.Task の検証ではなくここに置くのは、許可リストが env 由来でドメイン層が知らないためです。
+// ブラウザは <select> の選択肢に縛られますが、JSON API は任意の文字列を送れます。
+func (h *Handler) validateModelOverride(model string) error {
+	model = strings.TrimSpace(model)
+	if model == "" || slices.Contains(h.imageModels, model) {
+		return nil
+	}
+	return fmt.Errorf("不正な画像モデルです: %s", model)
 }
 
 // splitVisualCues は、改行またはカンマ区切りの入力を見た目特徴のリストへ分割します。
@@ -117,12 +139,17 @@ func newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
 		return domain.Task{}, err
 	}
 
+	aspectRatio := strings.TrimSpace(p.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = DefaultDesignSheetAspectRatio
+	}
+
 	return domain.Task{
 		Command:              domain.TaskCommandGenerateDesignSheet,
 		JobID:                jobID,
 		CreatedAt:            time.Now().UTC(),
 		CharacterIDs:         p.CharacterIDs,
-		AspectRatio:          p.AspectRatio,
+		AspectRatio:          aspectRatio,
 		Layout:               p.Layout,
 		ModelOverride:        p.ModelOverride,
 		ReferenceURLOverride: p.ReferenceURLOverride,
@@ -187,6 +214,12 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := task.ValidateSubmission(); err != nil {
+		formData.ErrorMessage = err.Error()
+		h.render(w, r, http.StatusBadRequest, "design_sheet_form.html", "デザインシートを生成", formData)
+		return
+	}
+
+	if err := h.validateModelOverride(task.ModelOverride); err != nil {
 		formData.ErrorMessage = err.Error()
 		h.render(w, r, http.StatusBadRequest, "design_sheet_form.html", "デザインシートを生成", formData)
 		return

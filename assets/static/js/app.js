@@ -166,6 +166,9 @@ document.addEventListener('click', (event) => {
         payload.page = Number(target);
     } else if (command === 'regenerate_chapter_script') {
         payload.chapter_id = target;
+    } else if (command === 'render_comic' && target) {
+        // 章カードからの「この章の画像を生成」。target が無ければ作品全体になる。
+        payload.chapter_id = target;
     }
 
     if (mode === 'edit') {
@@ -174,7 +177,7 @@ document.addEventListener('click', (event) => {
         payload.edit_prompt = instruction.trim();
     } else if (mode === 'reroll') {
         payload.seed = randomSeed();
-    } else if (!confirm('再生成しますか？')) {
+    } else if (!confirm(btn.dataset.confirm || '再生成しますか？')) {
         return;
     }
 

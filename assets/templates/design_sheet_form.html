@@ -41,9 +41,8 @@
             <div class="col-12 col-md-6">
                 <label for="aspect_ratio" class="form-label fw-bold">アスペクト比</label>
                 <select class="form-select" id="aspect_ratio" name="aspect_ratio">
-                    <option value="" {{if not .Data.AspectRatio}}selected{{end}}>既定（16:9）</option>
-                    <option value="3:4" {{if eq .Data.AspectRatio "3:4"}}selected{{end}}>3:4（パネル・ページ用）</option>
-                    <option value="16:9" {{if eq .Data.AspectRatio "16:9"}}selected{{end}}>16:9</option>
+                    <option value="16:9" {{if or (not .Data.AspectRatio) (eq .Data.AspectRatio "16:9")}}selected{{end}}>16:9（既定・3面図向き）</option>
+                    <option value="3:4" {{if eq .Data.AspectRatio "3:4"}}selected{{end}}>3:4（パネル・ページの参照用）</option>
                     <option value="1:1" {{if eq .Data.AspectRatio "1:1"}}selected{{end}}>1:1</option>
                     <option value="9:16" {{if eq .Data.AspectRatio "9:16"}}selected{{end}}>9:16</option>
                 </select>

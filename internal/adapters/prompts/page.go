@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shouni/go-comic-kit/comic"
+
 	"github.com/shouni/go-comic-kit/ports"
 )
 
@@ -159,7 +161,7 @@ func writePanelHeader(sb *strings.Builder, index, numPanels int) {
 }
 
 // writePanelScene はシーン演出と構図ガイド（生成済みパネル画像）を出力します。
-func writePanelScene(sb *strings.Builder, panel *ports.Panel, data *ports.PagePromptData) {
+func writePanelScene(sb *strings.Builder, panel *comic.Panel, data *ports.PagePromptData) {
 	if panel.Shot != "" {
 		fmt.Fprintf(sb, "- SHOT: %s\n", panel.Shot)
 	}
@@ -175,10 +177,10 @@ func writePanelScene(sb *strings.Builder, panel *ports.Panel, data *ports.PagePr
 }
 
 // writePanelCharacters は登場キャラクターの同一性・演出指示を出力します。
-func writePanelCharacters(sb *strings.Builder, panel *ports.Panel, data *ports.PagePromptData) {
+func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.PagePromptData) {
 	for i := range panel.Characters {
 		pc := &panel.Characters[i]
-		if pc.Prominence == ports.ProminenceBackground {
+		if pc.Prominence == comic.ProminenceBackground {
 			fmt.Fprintf(sb, "- BACKGROUND_EXTRA: %s (generic, no reference)\n", backgroundExtraDesc(pc))
 			continue
 		}
@@ -208,23 +210,23 @@ func writePanelCharacters(sb *strings.Builder, panel *ports.Panel, data *ports.P
 }
 
 // writePanelDialogues はセリフ・ナレーション・SFX の描画指示を kind 別に出力します。
-func writePanelDialogues(sb *strings.Builder, panel *ports.Panel, characters *ports.Characters) {
+func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters) {
 	for _, line := range panel.Dialogues {
 		text := strings.TrimSpace(line.Text)
 		if text == "" {
 			continue
 		}
 		switch line.Kind {
-		case ports.DialogueKindNarration:
+		case comic.DialogueKindNarration:
 			sb.WriteString("- NARRATION: Rectangular caption box.\n")
-		case ports.DialogueKindThought:
+		case comic.DialogueKindThought:
 			fmt.Fprintf(sb, "- THOUGHT: Cloud-shaped thought bubble for [%s].\n", speakerName(characters, line.SpeakerID))
-		case ports.DialogueKindShout:
+		case comic.DialogueKindShout:
 			fmt.Fprintf(sb, "- SHOUT: Jagged, explosive speech bubble for [%s].\n", speakerName(characters, line.SpeakerID))
-		case ports.DialogueKindSFX:
+		case comic.DialogueKindSFX:
 			sb.WriteString("- SFX: Stylized sound-effect lettering integrated into the artwork.\n")
 		default:
-			// SpeakerID が空のセリフはナレーション/キャプション扱い（ports.DialogueLine 参照）
+			// SpeakerID が空のセリフはナレーション/キャプション扱い（comic.DialogueLine 参照）
 			if strings.TrimSpace(line.SpeakerID) == "" {
 				sb.WriteString("- NARRATION: Rectangular caption box.\n")
 			} else {
@@ -247,7 +249,7 @@ func writePanelDialogues(sb *strings.Builder, panel *ports.Panel, characters *po
 }
 
 // speakerName は話者IDから表示名を引きます。未知IDは空文字列です。
-func speakerName(characters *ports.Characters, speakerID string) string {
+func speakerName(characters *comic.Characters, speakerID string) string {
 	if speakerID == "" || characters == nil {
 		return ""
 	}

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shouni/go-comic-kit/comic"
+
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-remote-io/remoteio"
 
@@ -21,32 +23,32 @@ import (
 
 type fakeOutline struct{ called int }
 
-func (f *fakeOutline) GenerateOutline(_ context.Context, req ports.OutlineRequest) (*ports.MangaState, error) {
+func (f *fakeOutline) GenerateOutline(_ context.Context, req ports.OutlineRequest) (*comic.MangaState, error) {
 	f.called++
-	return &ports.MangaState{
-		Version:  ports.StateSchemaVersion,
+	return &comic.MangaState{
+		Version:  comic.StateSchemaVersion,
 		Title:    "title from " + req.SourceText,
-		Chapters: []ports.Chapter{{ID: "ch01", Title: "第一章"}, {ID: "ch02", Title: "第二章"}},
+		Chapters: []comic.Chapter{{ID: "ch01", Title: "第一章"}, {ID: "ch02", Title: "第二章"}},
 	}, nil
 }
 
 type fakeChapterScript struct{ calledChapters []string }
 
-func (f *fakeChapterScript) GenerateChapterScript(_ context.Context, state *ports.MangaState, chapterID string) (*ports.MangaState, error) {
+func (f *fakeChapterScript) GenerateChapterScript(_ context.Context, state *comic.MangaState, chapterID string) (*comic.MangaState, error) {
 	f.calledChapters = append(f.calledChapters, chapterID)
-	state.Panels = append(state.Panels, ports.Panel{ID: chapterID + "-p01", ChapterID: chapterID, Page: len(f.calledChapters)})
+	state.Panels = append(state.Panels, comic.Panel{ID: chapterID + "-p01", ChapterID: chapterID, Page: len(f.calledChapters)})
 	return state, nil
 }
 
 type fakeDesignSheet struct{ called int }
 
-func (f *fakeDesignSheet) GenerateDesignSheet(_ context.Context, state *ports.MangaState, req ports.DesignSheetRequest) (*ports.MangaState, error) {
+func (f *fakeDesignSheet) GenerateDesignSheet(_ context.Context, state *comic.MangaState, req ports.DesignSheetRequest) (*comic.MangaState, error) {
 	f.called++
 	if state == nil {
-		state = &ports.MangaState{Version: ports.StateSchemaVersion}
+		state = &comic.MangaState{Version: comic.StateSchemaVersion}
 	}
 	for _, id := range req.CharacterIDs {
-		state.SetDesignSheet(ports.DesignSheetRef{CharacterID: id, ImageURL: "gs://out/design_" + id + ".png"})
+		state.SetDesignSheet(comic.DesignSheetRef{CharacterID: id, ImageURL: "gs://out/design_" + id + ".png"})
 	}
 	return state, nil
 }
@@ -57,19 +59,19 @@ type fakePanel struct {
 	lastBatchOpts ports.BatchOptions
 }
 
-func (f *fakePanel) GeneratePanel(_ context.Context, state *ports.MangaState, panelID string, opts ports.GenerateOptions) (*ports.MangaState, error) {
+func (f *fakePanel) GeneratePanel(_ context.Context, state *comic.MangaState, panelID string, opts ports.GenerateOptions) (*comic.MangaState, error) {
 	f.calledPanels = append(f.calledPanels, panelID)
 	f.lastOpts = opts
 	p := state.PanelByID(panelID)
 	if p != nil {
-		p.Generation = &ports.GenerationRecord{ImageURL: "gs://out/" + panelID + ".png"}
+		p.Generation = &comic.GenerationRecord{ImageURL: "gs://out/" + panelID + ".png"}
 	}
 	return state, nil
 }
 
 // GenerateAllPanels は一括生成を単体生成の繰り返しで模します。
 // 並列数の検証は go-comic-kit 側のテストが担うため、ここでは呼び出し内容だけを見ます。
-func (f *fakePanel) GenerateAllPanels(ctx context.Context, state *ports.MangaState, opts ports.BatchOptions) (*ports.MangaState, error) {
+func (f *fakePanel) GenerateAllPanels(ctx context.Context, state *comic.MangaState, opts ports.BatchOptions) (*comic.MangaState, error) {
 	f.lastBatchOpts = opts
 	for i := range state.Panels {
 		if opts.SkipGenerated && state.Panels[i].Generation != nil {
@@ -91,17 +93,17 @@ type fakePage struct {
 	lastBatchOpts ports.BatchOptions
 }
 
-func (f *fakePage) ComposePage(_ context.Context, state *ports.MangaState, page int, opts ports.GenerateOptions) (*ports.MangaState, error) {
+func (f *fakePage) ComposePage(_ context.Context, state *comic.MangaState, page int, opts ports.GenerateOptions) (*comic.MangaState, error) {
 	f.calledPages = append(f.calledPages, page)
 	f.lastOpts = opts
-	state.SetPageArtifact(ports.PageArtifact{PageNumber: page, Generation: &ports.GenerationRecord{
+	state.SetPageArtifact(comic.PageArtifact{PageNumber: page, Generation: &comic.GenerationRecord{
 		ImageURL: fmt.Sprintf("gs://out/page_%d.png", page),
 	}})
 	return state, nil
 }
 
 // ComposeAllPages は一括合成を単体合成の繰り返しで模します。
-func (f *fakePage) ComposeAllPages(ctx context.Context, state *ports.MangaState, opts ports.BatchOptions) (*ports.MangaState, error) {
+func (f *fakePage) ComposeAllPages(ctx context.Context, state *comic.MangaState, opts ports.BatchOptions) (*comic.MangaState, error) {
 	f.lastBatchOpts = opts
 	seen := map[int]struct{}{}
 	pages := make([]int, 0, len(state.Panels))
@@ -220,8 +222,6 @@ func fullOps(outline *fakeOutline, chapter *fakeChapterScript, design *fakeDesig
 		DesignSheet:   design,
 		Panel:         panel,
 		Page:          page,
-		PanelBatch:    panel,
-		PageBatch:     page,
 	}
 }
 
@@ -231,8 +231,8 @@ func TestNewValidatesRequiredDependencies(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
 	batchless := completeOps()
-	batchless.PanelBatch = nil
-	batchless.PageBatch = nil
+	batchless.Panel = nil
+	batchless.Page = nil
 
 	cases := map[string]Dependencies{
 		"Ops":    {Reader: store, Writer: store, Bucket: "b"},
@@ -240,7 +240,7 @@ func TestNewValidatesRequiredDependencies(t *testing.T) {
 		"Writer": {Ops: completeOps(), Reader: store, Bucket: "b"},
 		"Bucket": {Ops: completeOps(), Reader: store, Writer: store},
 		// 一括生成はステップから直接呼ぶため、欠けていれば起動時に落ちること
-		"Ops.PanelBatch/PageBatch": {Ops: batchless, Reader: store, Writer: store, Bucket: "b"},
+		"Ops.Panel/Page": {Ops: batchless, Reader: store, Writer: store, Bucket: "b"},
 	}
 	for name, deps := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -448,8 +448,6 @@ func TestRunnerNotifiesErrorOnStepFailure(t *testing.T) {
 		DesignSheet:   &fakeDesignSheet{},
 		Panel:         failingPanel,
 		Page:          &fakePage{},
-		PanelBatch:    failingPanel,
-		PageBatch:     &fakePage{},
 	}
 	r := newTestRunnerWithNotifier(t, store, ops, notifier)
 
@@ -469,11 +467,11 @@ func TestRunnerNotifiesErrorOnStepFailure(t *testing.T) {
 // fakeFailingPanel always returns err, used to exercise the error-notification path.
 type fakeFailingPanel struct{ err error }
 
-func (f *fakeFailingPanel) GeneratePanel(_ context.Context, _ *ports.MangaState, _ string, _ ports.GenerateOptions) (*ports.MangaState, error) {
+func (f *fakeFailingPanel) GeneratePanel(_ context.Context, _ *comic.MangaState, _ string, _ ports.GenerateOptions) (*comic.MangaState, error) {
 	return nil, f.err
 }
 
-func (f *fakeFailingPanel) GenerateAllPanels(_ context.Context, state *ports.MangaState, _ ports.BatchOptions) (*ports.MangaState, error) {
+func (f *fakeFailingPanel) GenerateAllPanels(_ context.Context, state *comic.MangaState, _ ports.BatchOptions) (*comic.MangaState, error) {
 	return state, f.err
 }
 
@@ -491,19 +489,19 @@ type fakePartialPanel struct {
 	failOn string
 }
 
-func (f *fakePartialPanel) GeneratePanel(_ context.Context, state *ports.MangaState, panelID string, _ ports.GenerateOptions) (*ports.MangaState, error) {
+func (f *fakePartialPanel) GeneratePanel(_ context.Context, state *comic.MangaState, panelID string, _ ports.GenerateOptions) (*comic.MangaState, error) {
 	if panelID == f.failOn {
 		return nil, errors.New("boom")
 	}
 	if p := state.PanelByID(panelID); p != nil {
-		p.Generation = &ports.GenerationRecord{ImageURL: "gs://out/" + panelID + ".png"}
+		p.Generation = &comic.GenerationRecord{ImageURL: "gs://out/" + panelID + ".png"}
 	}
 	return state, nil
 }
 
 // GenerateAllPanels は go-comic-kit の一括生成と同じく、失敗しても成功分を記録した
 // state をエラーと一緒に返します。
-func (f *fakePartialPanel) GenerateAllPanels(_ context.Context, state *ports.MangaState, opts ports.BatchOptions) (*ports.MangaState, error) {
+func (f *fakePartialPanel) GenerateAllPanels(_ context.Context, state *comic.MangaState, opts ports.BatchOptions) (*comic.MangaState, error) {
 	var failure error
 	for i := range state.Panels {
 		if opts.SkipGenerated && state.Panels[i].Generation != nil {
@@ -513,7 +511,7 @@ func (f *fakePartialPanel) GenerateAllPanels(_ context.Context, state *ports.Man
 			failure = errors.New("boom")
 			continue
 		}
-		state.Panels[i].Generation = &ports.GenerationRecord{ImageURL: "gs://out/" + state.Panels[i].ID + ".png"}
+		state.Panels[i].Generation = &comic.GenerationRecord{ImageURL: "gs://out/" + state.Panels[i].ID + ".png"}
 	}
 	return state, failure
 }
@@ -546,8 +544,6 @@ func TestRunnerSavesPartialResultsOnFailure(t *testing.T) {
 		DesignSheet:   &fakeDesignSheet{},
 		Panel:         partialPanel,
 		Page:          pageFake,
-		PanelBatch:    partialPanel,
-		PageBatch:     pageFake,
 	}
 	r := newTestRunner(t, store, ops)
 
@@ -582,8 +578,6 @@ func TestRunnerSavesPartialResultsWhenContextExpired(t *testing.T) {
 		DesignSheet:   &fakeDesignSheet{},
 		Panel:         partialPanel,
 		Page:          pageFake,
-		PanelBatch:    partialPanel,
-		PageBatch:     pageFake,
 	}
 	r := newTestRunner(t, store, ops)
 
@@ -608,13 +602,13 @@ func statePathFor(jobID string) string {
 }
 
 // loadSavedState は memStore に保存された state を読み出します。未保存なら nil を返します。
-func loadSavedState(t *testing.T, store *memStore, jobID string) *ports.MangaState {
+func loadSavedState(t *testing.T, store *memStore, jobID string) *comic.MangaState {
 	t.Helper()
 	data, ok := store.files[statePathFor(jobID)]
 	if !ok {
 		return nil
 	}
-	var state ports.MangaState
+	var state comic.MangaState
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatalf("保存された state のパースに失敗しました: %v", err)
 	}
@@ -700,7 +694,7 @@ func TestRunnerRenderComicGeneratesOnlyMissing(t *testing.T) {
 	}
 
 	// 1コマだけ生成済みにしてから再開する
-	saved.Panels[0].Generation = &ports.GenerationRecord{ImageURL: "gs://out/already.png"}
+	saved.Panels[0].Generation = &comic.GenerationRecord{ImageURL: "gs://out/already.png"}
 	writeState(t, store, "job-resume", saved)
 
 	panel := &fakePanel{}
@@ -720,7 +714,7 @@ func TestRunnerRenderComicGeneratesOnlyMissing(t *testing.T) {
 }
 
 // writeState は memStore に state を直接書き込みます。
-func writeState(t *testing.T, store *memStore, jobID string, state *ports.MangaState) {
+func writeState(t *testing.T, store *memStore, jobID string, state *comic.MangaState) {
 	t.Helper()
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -740,7 +734,7 @@ func TestRunnerComposeComicRetryResumesInsteadOfRestarting(t *testing.T) {
 	partial := &fakePartialPanel{failOn: "ch02-p01"}
 	firstOps := &ports.Operations{
 		Outline: &fakeOutline{}, ChapterScript: &fakeChapterScript{}, DesignSheet: &fakeDesignSheet{},
-		Panel: partial, Page: &fakePage{}, PanelBatch: partial, PageBatch: &fakePage{},
+		Panel: partial, Page: &fakePage{},
 	}
 	task := &domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-retry", SourceText: "元文章"}
 	if err := newTestRunner(t, store, firstOps).Run(context.Background(), task); err == nil {

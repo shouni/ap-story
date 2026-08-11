@@ -23,8 +23,10 @@ func (s AllPagesStep) Execute(ctx context.Context, pc *Context) error {
 		return fmt.Errorf("pages: manga state is nil")
 	}
 
-	manga, err := pc.Ops.PageBatch.ComposeAllPages(ctx, pc.Manga, ports.BatchOptions{
-		OutputDir:     pc.OutputDir,
+	manga, err := pc.Ops.Page.ComposeAllPages(ctx, pc.Manga, ports.BatchOptions{
+		OutputDir: pc.OutputDir,
+		// 章の指定があればその章のページだけを合成する（AllPanelsStep 参照）。
+		ChapterID:     pc.Task.ChapterID,
 		SkipGenerated: s.SkipGenerated,
 	})
 	// パネルと同じく、エラー時も成功分を記録した state を受け取る（AllPanelsStep 参照）。

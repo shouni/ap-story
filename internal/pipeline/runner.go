@@ -48,7 +48,7 @@ type Runner struct {
 // New は依存を検証して Runner を生成します。必須依存が欠けている場合はエラーを返し、
 // 実行時ではなく起動時に構成ミスを検出します。
 func New(deps Dependencies) (*Runner, error) {
-	// 一括生成（Ops.PanelBatch / PageBatch）はステップから直接呼ぶため、欠けていれば
+	// 一括生成（Ops.Panel.GenerateAllPanels / Ops.Page.ComposeAllPages）はステップから直接呼ぶため、欠けていれば
 	// ジョブ実行中ではなく起動時に落とす。workflow.New は常に設定するので、ここに
 	// 引っかかるのは Operations を手組みしたときだけ。
 	var ops = deps.Ops
@@ -58,8 +58,8 @@ func New(deps Dependencies) (*Runner, error) {
 		ok   bool
 	}{
 		{"Ops", ops != nil},
-		{"Ops.PanelBatch", ops != nil && ops.PanelBatch != nil},
-		{"Ops.PageBatch", ops != nil && ops.PageBatch != nil},
+		{"Ops.Panel", ops != nil && ops.Panel != nil},
+		{"Ops.Page", ops != nil && ops.Page != nil},
 		{"Reader", deps.Reader != nil},
 		{"Writer", deps.Writer != nil},
 		{"Bucket", deps.Bucket != ""},

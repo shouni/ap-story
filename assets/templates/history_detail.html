@@ -72,12 +72,23 @@
                 <span class="fw-bold">{{.ID}}: {{.Title}}</span>
                 {{if .Summary}}<div class="text-muted small mt-1">{{.Summary}}</div>{{end}}
             </div>
-            <button class="btn btn-outline-secondary btn-sm flex-shrink-0 js-regenerate"
-                    data-job-id="{{$.Data.JobID}}" data-command="regenerate_chapter_script"
-                    data-target="{{.ID}}"
-                    type="button" title="この章のネームを作り直す（コマは作り直しになります）">
-                <i class="bi bi-arrow-clockwise me-1"></i>台本を再生成
-            </button>
+            <div class="d-flex gap-2 flex-shrink-0">
+                {{if .Panels}}
+                <button class="btn btn-outline-primary btn-sm js-regenerate"
+                        data-job-id="{{$.Data.JobID}}" data-command="render_comic"
+                        data-target="{{.ID}}"
+                        data-confirm="この章の未生成のコマ・ページを生成しますか？"
+                        type="button" title="この章の未生成のコマ・ページだけを生成します">
+                    <i class="bi bi-images me-1"></i>この章の画像を生成
+                </button>
+                {{end}}
+                <button class="btn btn-outline-secondary btn-sm js-regenerate"
+                        data-job-id="{{$.Data.JobID}}" data-command="regenerate_chapter_script"
+                        data-target="{{.ID}}"
+                        type="button" title="この章のネームを作り直す（コマは作り直しになります）">
+                    <i class="bi bi-arrow-clockwise me-1"></i>台本を再生成
+                </button>
+            </div>
         </div>
         <div class="card-body">
             {{if .Panels}}

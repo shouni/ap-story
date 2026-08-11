@@ -107,7 +107,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | command | 実行する go-comic-kit 操作 | 入力パラメータ |
 |---|---|---|
 | `compose_comic` | 全工程: GenerateOutline → 各章 GenerateChapterScript → GenerateAllPanels → ComposeAllPages（デザインシートは含まない。単体生成 `generate_design_sheet` で別途作成）。`stop_after_script` を指定すると台本までで止まる | source_url / source_text, script_mode, style_mode, stop_after_script |
-| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の「続きを生成」と、失敗・打ち切りからの再開を兼ねる | job_id |
+| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の「続きを生成」と、失敗・打ち切りからの再開を兼ねる。`chapter_id` を添えるとその章だけを生成（画像はいちばん高価な工程なので、1章で試してから残りへ進める） | job_id, chapter_id（任意） |
 | `regenerate_chapter_script` | GenerateChapterScript（1章。後続のパネル・ページは別途再生成） | job_id, chapter_id |
 | `generate_design_sheet` | GenerateDesignSheet | job_id（省略時は state なしの単発生成）, character_ids, aspect_ratio, layout, seed |
 | `regenerate_panel` | GeneratePanel | job_id, panel_id, seed / edit_prompt / prompt_override |
@@ -169,8 +169,11 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `WORKER_URL` | Cloud Tasks が呼び出す Worker エンドポイント（省略時は SERVICE_URL 由来）。web 面のみ使用 |
 | `STORY_BUCKET` | 成果物・state の GCS バケット |
 | `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
-| `GEMINI_MODEL` / `IMAGE_STANDARD_MODEL` / `IMAGE_QUALITY_MODEL` | go-comic-kit Config のモデル指定（Vertex AI 経由、ADC 認証のため API キーは不要） |
-| `STYLE_SUFFIX` / `DESIGN_STYLE_SUFFIX` | 画風指定（省略時は kit の既定） |
+| `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定。**worker で必須**（web は台本を作りません） |
+| `IMAGE_MODELS` | 画像生成（デザインシート・パネル・ページ）のモデル。カンマ区切りで先頭が既定、残りはデザインシート生成フォームの選択肢。**どの役割でも必須** |
+| `IMAGE_ASPECT_RATIO` | パネル・ページ・デザインシート既定の共通比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。**3つで1つの設定**なのは、揃っていないと参照画像によるブレ抑制が黙って無効になるためです |
+| `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | 生成画像の解像度（`1K` / `2K`）。未設定ならパネル 1K・ページ/シート 2K。1コマごとに費用が効くのでデプロイ側で選べます |
+| `STYLE_SUFFIX` / `DESIGN_STYLE_SUFFIX` | 画風指定。省略時は `internal/config` の既定値。go-comic-kit は既定値を持たないため、画風指定の既定値はこのアプリが持ちます（モデル名は誰も既定値を持たず、未設定なら起動時エラー） |
 | `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | go-comic-kit Config の台本・ページ割り制御 |
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
@@ -184,7 +187,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
 | `SESSION_SECRET` / `SESSION_ENCRYPT_KEY` | セッションクッキーの署名鍵・暗号化鍵 |
 | `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可するメール/ドメイン（カンマ区切り、いずれか必須） |
-| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り） |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り）。`web` 面では必須で、未設定だと起動に失敗します |
 | `SLACK_WEBHOOK_URL` | 完了通知（任意）。worker 面のみ使用 |
 
 ## 🔀 web / worker の分離

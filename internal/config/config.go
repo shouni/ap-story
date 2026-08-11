@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shouni/gcp-kit/serverrole"
+
 	"github.com/caarlos0/env/v11"
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-utils/text"
@@ -18,49 +20,30 @@ const (
 	DefaultHTTPTimeout = 60 * time.Second
 )
 
+// 画風指定の既定値。
+//
+// go-comic-kit はモデル名と画風指定のどちらも既定値を持たず、未設定のまま渡すと
+// ports.ErrConfigInvalid で構築に失敗します。画風指定は作品ごとに調整する文言なので
+// このアプリが既定値を持ちますが、モデル ID は Google 側の都合で世代交代するため
+// 既定値を持たず、GEMINI_MODELS / IMAGE_MODELS で必ず指定させます。
+const (
+	// DefaultStyleSuffix はパネル・ページ画像に付与する既定の画風指定です。
+	// 演出（cinematic lighting 等）を含むため、デザインシートには使いません。
+	DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, high-quality manga coloring, expressive eyes, vibrant colors, cinematic lighting, masterpiece, ultra-detailed, flat shading, clear character features, no 3D effect, high resolution"
+
+	// DefaultDesignStyleSuffix はデザインシートに付与する既定の画風指定です。
+	// シートは他生成物の同一性アンカーなので、照明・演出系の指定を含めません。
+	DefaultDesignStyleSuffix = "Japanese anime style, official character reference art, cel-shaded, clean line art, vibrant colors, clear character features, no 3D effect, high resolution"
+)
+
 // ServerConfig は HTTP サーバーの設定です。
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
 	Port       string `env:"PORT" envDefault:"8080"`
 	// Role はこのプロセスが担う役割です。明示が必須で、未設定は起動時エラーになります。
-	Role            ServerRole `env:"SERVER_ROLE"`
+	Role            serverrole.Role `env:"SERVER_ROLE"`
 	ShutdownTimeout time.Duration
 }
-
-// ServerRole はプロセスが担う役割です。Cloud Run のサービスを web と worker に
-// 分けたときに、各プロセスが必要とする依存だけを構築するために使います。
-type ServerRole string
-
-const (
-	// ServerRoleBoth は Web と Worker の両方を提供します（ローカル開発用）。
-	ServerRoleBoth ServerRole = "both"
-	// ServerRoleWeb は Web UI と M2M API だけを提供し、/tasks/generate を公開しません。
-	ServerRoleWeb ServerRole = "web"
-	// ServerRoleWorker は /tasks/generate だけを提供し、Web UI と OAuth を持ちません。
-	ServerRoleWorker ServerRole = "worker"
-)
-
-// ParseServerRole は SERVER_ROLE の値を役割に変換します。空文字も未知の値もエラーです。
-//
-// 未設定を both とみなすと、本番の環境変数が 1 つ欠けただけで公開 web に
-// ワーカールートが復活します。未知の値を黙って受け入れると、今度は何のルートも
-// 提供しないサービスがデプロイされます。どちらも起動時に落とすほうが安全です。
-func ParseServerRole(raw string) (ServerRole, error) {
-	role := ServerRole(strings.ToLower(strings.TrimSpace(raw)))
-	switch role {
-	case ServerRoleBoth, ServerRoleWeb, ServerRoleWorker:
-		return role, nil
-	default:
-		return "", fmt.Errorf("SERVER_ROLE (%q) は %q, %q, %q のいずれかである必要があります",
-			raw, ServerRoleWeb, ServerRoleWorker, ServerRoleBoth)
-	}
-}
-
-// ServesWeb は、この役割が Web 面（/api/* と OAuth）を提供するかを返します。
-func (r ServerRole) ServesWeb() bool { return r == ServerRoleBoth || r == ServerRoleWeb }
-
-// ServesWorker は、この役割が Worker 面（/tasks/generate）を提供するかを返します。
-func (r ServerRole) ServesWorker() bool { return r == ServerRoleBoth || r == ServerRoleWorker }
 
 // GCPConfig は Google Cloud Platform の設定です。
 type GCPConfig struct {
@@ -98,9 +81,25 @@ type NotificationConfig struct {
 
 // AIConfig は AI モデルと実行制御の設定です。go-comic-kit の ports.Config にマップされます。
 type AIConfig struct {
-	GeminiModel         string `env:"GEMINI_MODEL"`
-	ImageStandardModel  string `env:"IMAGE_STANDARD_MODEL"`
-	ImageQualityModel   string `env:"IMAGE_QUALITY_MODEL"`
+	// モデル一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が
+	// 一覧の先頭から埋めるので、環境変数からは読みません。既定値は持たず、
+	// 空なら ValidateEssentialConfig が起動時に落とします。
+	//
+	// ImageModels はデザインシート・パネル・ページのすべてに使います（先頭が既定で、
+	// 残りはデザインシート生成フォームの選択肢になります）。用途ごとにモデルを
+	// 分ける仕組みは持ちません。
+	GeminiModels []string `env:"GEMINI_MODELS"`
+	ImageModels  []string `env:"IMAGE_MODELS"`
+	GeminiModel  string   `env:"-"`
+	ImageModel   string   `env:"-"`
+
+	// 比率と解像度は未設定ならキットの既定（3:4 / パネル 1K / ページ・シート 2K）に
+	// 落ちます。従来の固定値と同じなので、設定しなければ挙動は変わりません。
+	// 解像度は1コマごとに費用が効くため、デプロイ側で選べるようにしてあります。
+	AspectRatio    string `env:"IMAGE_ASPECT_RATIO"`
+	PanelImageSize string `env:"PANEL_IMAGE_SIZE"`
+	PageImageSize  string `env:"PAGE_IMAGE_SIZE"`
+
 	StyleSuffix         string `env:"STYLE_SUFFIX"`
 	DesignStyleSuffix   string `env:"DESIGN_STYLE_SUFFIX"`
 	MaxConcurrency      int    `env:"MAX_CONCURRENCY"`
@@ -124,13 +123,62 @@ type AIConfig struct {
 	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"45m"`
 }
 
+// applyDefaults は画風指定の未設定を既定値で補完し、モデル一覧を正規化します。
+// 並列数・タイムアウト・各種上限はキットの ApplyDefaults に任せます
+// （キットを壊さず動かすための値なので、既定値の持ち主はキット側です）。
+func (a *AIConfig) applyDefaults() {
+	a.GeminiModels = normalizeList(a.GeminiModels)
+	a.ImageModels = normalizeList(a.ImageModels)
+	a.GeminiModel = firstModel(a.GeminiModels)
+	a.ImageModel = firstModel(a.ImageModels)
+	a.StyleSuffix = defaultIfEmpty(a.StyleSuffix, DefaultStyleSuffix)
+	a.DesignStyleSuffix = defaultIfEmpty(a.DesignStyleSuffix, DefaultDesignStyleSuffix)
+}
+
+// normalizeList は env が分割しただけのカンマ区切り値を整えます。
+// 前後の空白を落とし、空要素と重複を捨て、順序は保ちます。
+func normalizeList(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		normalized = append(normalized, v)
+	}
+	return normalized
+}
+
+// firstModel は一覧の先頭（＝既定として使うモデル）を返します。
+// 一覧が空になるのは設定漏れのときだけで、その値は使われる前に起動時検証で弾かれます。
+func firstModel(models []string) string {
+	if len(models) == 0 {
+		return ""
+	}
+	return models[0]
+}
+
+// defaultIfEmpty は、値が空白のみなら fallback を返します。
+func defaultIfEmpty(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
+}
+
 // KitConfig は go-comic-kit の ports.Config に変換します。
-// ゼロ値のフィールドは go-comic-kit 側の ApplyDefaults が既定値で補完します。
 func (a AIConfig) KitConfig() ports.Config {
 	return ports.Config{
 		GeminiModel:         a.GeminiModel,
-		ImageStandardModel:  a.ImageStandardModel,
-		ImageQualityModel:   a.ImageQualityModel,
+		ImageModel:          a.ImageModel,
+		AspectRatio:         a.AspectRatio,
+		PanelImageSize:      a.PanelImageSize,
+		PageImageSize:       a.PageImageSize,
 		MaxConcurrency:      a.MaxConcurrency,
 		RateInterval:        a.RateInterval,
 		StyleSuffix:         a.StyleSuffix,
@@ -197,9 +245,10 @@ func LoadConfig() (*Config, error) {
 }
 
 func (c *Config) normalize() error {
-	role, err := ParseServerRole(string(c.Server.Role))
+	// 環境変数名はアプリ側の関心事なので、キットのエラーへここで文脈を足します。
+	role, err := serverrole.Parse(string(c.Server.Role))
 	if err != nil {
-		return err
+		return fmt.Errorf("SERVER_ROLE: %w", err)
 	}
 	c.Server.Role = role
 
@@ -210,5 +259,6 @@ func (c *Config) normalize() error {
 	}
 	c.Tasks.WorkerURL = workerURL
 	c.Tasks.TaskAudienceURL = strings.TrimSpace(c.Tasks.TaskAudienceURL)
+	c.AI.applyDefaults()
 	return nil
 }
