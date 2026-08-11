@@ -123,12 +123,14 @@ func (h *Handler) EnqueueComic(w http.ResponseWriter, r *http.Request) {
 
 // enqueueAndRespond は Task をキューに投入し、成功したら 202 Accepted と jobID を返します。
 func (h *Handler) enqueueAndRespond(w http.ResponseWriter, r *http.Request, task domain.Task) {
+	// 状態を先に書く。worker は配信されたタスクより先に状態を読むので、順序を逆にすると
+	// 1つ前の succeeded を読んで投入が黙って捨てられます（recordQueuedStatus 参照）。
+	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
 		slog.Error("failed to enqueue task", "job_id", task.JobID, "command", task.Command, "error", err)
 		writeErrorJSON(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
-	h.recordQueuedStatus(r, task)
 
 	writeJSON(w, http.StatusAccepted, enqueueResponse{Status: "queued", JobID: task.JobID})
 }

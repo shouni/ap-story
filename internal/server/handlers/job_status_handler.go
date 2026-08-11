@@ -13,9 +13,15 @@ import (
 	"github.com/shouni/ap-story/internal/repository"
 )
 
-// recordQueuedStatus は投入直後のジョブ状態を記録します。
-// これがあることで、ワーカーが動き出す前でも投入済みジョブを追跡できます。
-// 記録に失敗してもタスク自体は既にキューへ入っているため、警告ログに留めて受付は成功とします。
+// recordQueuedStatus はジョブ状態に queued を記録します。
+//
+// **必ず enqueue の前に呼びます。** worker は受け取ったタスクの前に状態を読み、
+// succeeded なら「再配信された完了済みジョブ」と見なして飛ばします。Cloud Tasks の配信は
+// 数十ミリ秒で届くので、投入してから書くと、同じ作品への次の操作が1つ前の succeeded を
+// 読んで黙って捨てられます（ジョブ状態は job_id 単位で、コマンド別ではありません）。
+//
+// 記録に失敗しても受付は成功とします。ここで失敗するのは GCS 側の問題で、
+// タスクを止める理由にはなりません（状態が追えなくなるだけです）。
 func (h *Handler) recordQueuedStatus(r *http.Request, task domain.Task) {
 	if h.jobStatus == nil {
 		return

@@ -208,13 +208,14 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// 状態を先に書く（recordQueuedStatus 参照）。
+	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
 		slog.Error("failed to enqueue task", "job_id", task.JobID, "command", task.Command, "error", err)
 		formData.ErrorMessage = "ジョブの投入に失敗しました。時間をおいて再度お試しください。"
 		h.render(w, r, http.StatusInternalServerError, "design_sheet_form.html", "デザインシートを生成", formData)
 		return
 	}
-	h.recordQueuedStatus(r, task)
 
 	h.render(w, r, http.StatusAccepted, "accepted.html", "受付完了", newDesignSheetAcceptedData(task.JobID, characterIDs))
 }
