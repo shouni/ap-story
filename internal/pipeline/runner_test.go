@@ -960,3 +960,47 @@ func TestRunnerPassesImageLayout(t *testing.T) {
 			page.lastBatchOpts.AspectRatio, page.lastBatchOpts.ImageSize)
 	}
 }
+
+// ページはコマを並べた合成物なので、コマの出来を見てから合成へ進めるようにします。
+// 止めたあとのページ合成は、同じコマンドをもう一度投げれば走ります（生成済みは飛ばされる）。
+func TestRunnerRenderComicStopsAfterPanels(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	store.files["gs://test-bucket/comics/job-stage/comic_state.json"] = []byte(`{
+		"version": 1,
+		"id": "job-stage",
+		"text_model": "gemini-model",
+		"image_model": "image-model",
+		"chapters": [{"id": "ch01", "title": "第一章"}],
+		"panels": [{"id": "ch01-p01", "chapter_id": "ch01", "page": 1, "visual_anchor": "a", "characters": [], "dialogues": []}]
+	}`)
+	panel := &fakePanel{}
+	page := &fakePage{}
+	r := newTestRunner(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, page))
+
+	task := &domain.Task{Command: domain.TaskCommandRenderComic, JobID: "job-stage", StopAfterPanels: true}
+	if err := r.Run(context.Background(), task); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if len(panel.calledPanels) != 1 {
+		t.Errorf("panels = %v, want 1 generated", panel.calledPanels)
+	}
+	if len(page.calledPages) != 0 {
+		t.Errorf("pages = %v, want none composed", page.calledPages)
+	}
+
+	// 続きを投げるとページだけが走る（コマは生成済みなので飛ばされる）。
+	panel.calledPanels = nil
+	if err := r.Run(context.Background(), &domain.Task{
+		Command: domain.TaskCommandRenderComic, JobID: "job-stage",
+	}); err != nil {
+		t.Fatalf("Run (pages) failed: %v", err)
+	}
+	if len(panel.calledPanels) != 0 {
+		t.Errorf("panels = %v, want none regenerated", panel.calledPanels)
+	}
+	if len(page.calledPages) != 1 {
+		t.Errorf("pages = %v, want 1 composed", page.calledPages)
+	}
+}

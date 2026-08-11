@@ -11,12 +11,21 @@
         <a href="/history" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>一覧へ戻る
         </a>
-        {{if .Data.HasPendingImages}}
-        <button class="btn btn-primary btn-sm js-render-comic"
-                data-job-id="{{.Data.JobID}}"
+        {{if .Data.PendingPanels}}
+        <button class="btn btn-primary btn-sm js-regenerate"
+                data-job-id="{{.Data.JobID}}" data-command="render_comic" data-stage="panels"
+                data-confirm="未生成のコマを生成しますか？（ページの合成はコマを確認してから行います）"
                 type="button"
-                title="未生成のコマ・ページだけを生成します">
-            <i class="bi bi-images me-1"></i>{{if .Data.HasAnyImage}}続きを生成{{else}}画像生成へ進む{{end}}
+                title="未生成のコマだけを生成します。ページの合成は行いません">
+            <i class="bi bi-images me-1"></i>{{if .Data.HasAnyImage}}続きのコマを生成{{else}}コマを生成{{end}}
+        </button>
+        {{else if .Data.PendingPages}}
+        <button class="btn btn-primary btn-sm js-regenerate"
+                data-job-id="{{.Data.JobID}}" data-command="render_comic"
+                data-confirm="コマを並べてページを合成しますか？"
+                type="button"
+                title="未合成のページだけを合成します">
+            <i class="bi bi-file-earmark-image me-1"></i>ページを合成
         </button>
         {{end}}
         <button class="btn btn-outline-danger btn-sm js-delete-history"
@@ -73,13 +82,21 @@
                 {{if .Summary}}<div class="text-muted small mt-1">{{.Summary}}</div>{{end}}
             </div>
             <div class="d-flex gap-2 flex-shrink-0">
-                {{if .Panels}}
+                {{if .PendingPanels}}
+                <button class="btn btn-outline-primary btn-sm js-regenerate"
+                        data-job-id="{{$.Data.JobID}}" data-command="render_comic" data-stage="panels"
+                        data-target="{{.ID}}"
+                        data-confirm="この章の未生成のコマを生成しますか？（ページの合成はコマを確認してから行います）"
+                        type="button" title="この章の未生成のコマだけを生成します。ページの合成は行いません">
+                    <i class="bi bi-images me-1"></i>この章のコマを生成
+                </button>
+                {{else if .PendingPages}}
                 <button class="btn btn-outline-primary btn-sm js-regenerate"
                         data-job-id="{{$.Data.JobID}}" data-command="render_comic"
                         data-target="{{.ID}}"
-                        data-confirm="この章の未生成のコマ・ページを生成しますか？"
-                        type="button" title="この章の未生成のコマ・ページだけを生成します">
-                    <i class="bi bi-images me-1"></i>この章の画像を生成
+                        data-confirm="この章のページを合成しますか？"
+                        type="button" title="この章の未合成のページだけを合成します">
+                    <i class="bi bi-file-earmark-image me-1"></i>この章のページを合成
                 </button>
                 {{end}}
                 <button class="btn btn-outline-secondary btn-sm js-regenerate"

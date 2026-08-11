@@ -21,28 +21,25 @@ type composeFormData struct {
 	StyleModes  []selectOption
 	// TextModels / ImageModels はモデルの選択肢です（先頭が既定）。
 	// 空なら選択欄そのものを出しません。
-	TextModels  []selectOption
-	ImageModels []selectOption
-	// StopAfterScript はチェックボックスの状態です（エラーで再表示するときに保つため）。
-	StopAfterScript bool
-	ErrorMessage    string
+	TextModels   []selectOption
+	ImageModels  []selectOption
+	ErrorMessage string
 }
 
 // buildComposeFormData は入力値を反映したフォーム表示用データを構築します。
 // 初回表示（ゼロ値の req）とエラー再表示で同じ組み立てを通します。
 func (h *Handler) buildComposeFormData(req composeComicRequest) composeFormData {
 	return composeFormData{
-		SourceURL:       req.SourceURL,
-		SourceText:      req.SourceText,
-		ScriptMode:      req.ScriptMode,
-		StyleMode:       req.StyleMode,
-		TextModel:       req.TextModel,
-		ImageModel:      req.ImageModel,
-		ScriptModes:     modeOptions(h.scriptModes, req.ScriptMode),
-		StyleModes:      modeOptions(h.styleModes, req.StyleMode),
-		TextModels:      modelOptions(h.geminiModels, req.TextModel),
-		ImageModels:     modelOptions(h.imageModels, req.ImageModel),
-		StopAfterScript: req.StopAfterScript,
+		SourceURL:   req.SourceURL,
+		SourceText:  req.SourceText,
+		ScriptMode:  req.ScriptMode,
+		StyleMode:   req.StyleMode,
+		TextModel:   req.TextModel,
+		ImageModel:  req.ImageModel,
+		ScriptModes: modeOptions(h.scriptModes, req.ScriptMode),
+		StyleModes:  modeOptions(h.styleModes, req.StyleMode),
+		TextModels:  modelOptions(h.geminiModels, req.TextModel),
+		ImageModels: modelOptions(h.imageModels, req.ImageModel),
 	}
 }
 
@@ -61,13 +58,16 @@ func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := composeComicRequest{
-		SourceURL:       strings.TrimSpace(r.PostFormValue("source_url")),
-		SourceText:      strings.TrimSpace(r.PostFormValue("source_text")),
-		ScriptMode:      strings.TrimSpace(r.PostFormValue("script_mode")),
-		StyleMode:       strings.TrimSpace(r.PostFormValue("style_mode")),
-		TextModel:       strings.TrimSpace(r.PostFormValue("text_model")),
-		ImageModel:      strings.TrimSpace(r.PostFormValue("image_model")),
-		StopAfterScript: r.PostFormValue("stop_after_script") != "",
+		SourceURL:  strings.TrimSpace(r.PostFormValue("source_url")),
+		SourceText: strings.TrimSpace(r.PostFormValue("source_text")),
+		ScriptMode: strings.TrimSpace(r.PostFormValue("script_mode")),
+		StyleMode:  strings.TrimSpace(r.PostFormValue("style_mode")),
+		TextModel:  strings.TrimSpace(r.PostFormValue("text_model")),
+		ImageModel: strings.TrimSpace(r.PostFormValue("image_model")),
+		// このフォームは台本までしか作りません。押した時点では章立てが未実行で、
+		// 何コマになるか誰も知らないためです。金額の分からない支払いを承認させない。
+		// 画像はコマ数が見えている作品詳細から始めます（JSON API は最後まで走れます）。
+		StopAfterScript: true,
 	}
 	formData := h.buildComposeFormData(req)
 

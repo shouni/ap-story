@@ -61,6 +61,12 @@ type Task struct {
 	// StopAfterScript を指定すると、compose_comic は章立てと台本の生成までで止まります。
 	// 高価な画像生成に進む前に内容を確認するための指定で、続きは render_comic で行います。
 	StopAfterScript bool `json:"stop_after_script,omitempty"`
+	// StopAfterPanels を指定すると、render_comic はコマの生成までで止まります。
+	//
+	// ページはコマを並べた合成物なので、コマの出来を見てから進めるための指定です。
+	// コマが全部そろった state に render_comic をもう一度投げると、生成済みのコマは
+	// 飛ばされてページ合成だけが走ります（「ページだけ」の専用コマンドは要りません）。
+	StopAfterPanels bool `json:"stop_after_panels,omitempty"`
 
 	// --- generate_design_sheet ---
 	CharacterIDs []string `json:"character_ids,omitempty"`
