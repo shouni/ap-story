@@ -129,12 +129,17 @@ func TestComposeFormRendersChoiceSelects(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`name="script_mode"`, `name="style_mode"`, `name="text_model"`, `name="image_model"`,
-		`value="watercolor"`, `value="gemini-alt"`, `value="image-alt"`,
+		`name="script_mode"`, `name="style_mode"`, `name="text_model"`,
+		`value="watercolor"`, `value="gemini-alt"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("compose form is missing %q", want)
 		}
+	}
+	// 画像モデルはここでは選ばせない。台本の時点ではコマ数も絵柄も分からないので、
+	// 選ぶのは作品詳細（画像生成を始める画面）。
+	if strings.Contains(body, `name="image_model"`) {
+		t.Error("台本生成のフォームに画像モデルの選択が残っている")
 	}
 }
 
@@ -150,7 +155,6 @@ func TestEnqueueComicFormCarriesChoices(t *testing.T) {
 		"script_mode": {"alt"},
 		"style_mode":  {"watercolor"},
 		"text_model":  {"gemini-alt"},
-		"image_model": {"image-alt"},
 	})
 
 	if rec.Code != http.StatusAccepted {
@@ -160,8 +164,8 @@ func TestEnqueueComicFormCarriesChoices(t *testing.T) {
 	if task.ScriptMode != "alt" || task.StyleMode != "watercolor" {
 		t.Errorf("modes = %q/%q, want alt/watercolor", task.ScriptMode, task.StyleMode)
 	}
-	if task.TextModel != "gemini-alt" || task.ModelOverride != "image-alt" {
-		t.Errorf("models = %q/%q, want gemini-alt/image-alt", task.TextModel, task.ModelOverride)
+	if task.TextModel != "gemini-alt" {
+		t.Errorf("text model = %q, want gemini-alt", task.TextModel)
 	}
 }
 
@@ -183,7 +187,6 @@ func TestComposeFormAlwaysSubmitsAModel(t *testing.T) {
 	// 未選択のときは先頭（＝既定モデル）が選ばれた状態で表示される。
 	for _, want := range []string{
 		`<option value="gemini-model" selected>既定: gemini-model</option>`,
-		`<option value="image-model" selected>既定: image-model</option>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("既定モデルが選択済みで表示されていません: want %q", want)

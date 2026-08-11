@@ -11,6 +11,14 @@
         <a href="/history" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>一覧へ戻る
         </a>
+        {{if and .Data.ImageModels (or .Data.PendingPanels .Data.PendingPages)}}
+        <select class="form-select form-select-sm w-auto js-image-model" aria-label="画像モデル"
+                title="コマ・ページを描くモデル。最初の生成でこの作品に記録され、以降は既定になります">
+            {{range .Data.ImageModels}}
+            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+        </select>
+        {{end}}
         {{if .Data.PendingPanels}}
         <button class="btn btn-primary btn-sm js-regenerate"
                 data-job-id="{{.Data.JobID}}" data-command="render_comic" data-stage="panels"

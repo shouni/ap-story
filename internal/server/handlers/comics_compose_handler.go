@@ -14,7 +14,6 @@ type composeFormData struct {
 	ScriptMode string
 	StyleMode  string
 	TextModel  string
-	ImageModel string
 	// ScriptModes / StyleModes は台本モード・スタイルモードの選択肢
 	// （assets/prompts 配下のテンプレート）です。
 	ScriptModes []selectOption
@@ -35,11 +34,9 @@ func (h *Handler) buildComposeFormData(req composeComicRequest) composeFormData 
 		ScriptMode:  req.ScriptMode,
 		StyleMode:   req.StyleMode,
 		TextModel:   req.TextModel,
-		ImageModel:  req.ImageModel,
 		ScriptModes: modeOptions(h.scriptModes, req.ScriptMode),
 		StyleModes:  modeOptions(h.styleModes, req.StyleMode),
 		TextModels:  modelOptions(h.geminiModels, req.TextModel),
-		ImageModels: modelOptions(h.imageModels, req.ImageModel),
 	}
 }
 
@@ -63,7 +60,6 @@ func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
 		ScriptMode: strings.TrimSpace(r.PostFormValue("script_mode")),
 		StyleMode:  strings.TrimSpace(r.PostFormValue("style_mode")),
 		TextModel:  strings.TrimSpace(r.PostFormValue("text_model")),
-		ImageModel: strings.TrimSpace(r.PostFormValue("image_model")),
 		// このフォームは台本までしか作りません。押した時点では章立てが未実行で、
 		// 何コマになるか誰も知らないためです。金額の分からない支払いを承認させない。
 		// 画像はコマ数が見えている作品詳細から始めます（JSON API は最後まで走れます）。

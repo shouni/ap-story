@@ -280,3 +280,49 @@ func TestServeDetailsHidesChapterRenderWithoutPanels(t *testing.T) {
 		t.Error("コマの無い章に画像生成ボタンが出ている")
 	}
 }
+
+// 画像モデルは台本生成のフォームではなく、画像生成を始めるこの画面で選びます。
+// 初期選択は state に記録された値で、押し続ける限り作品内で揃います。
+func TestServeDetailsOffersImageModelDefaultedToRecorded(t *testing.T) {
+	t.Parallel()
+
+	state := scriptOnlyState()
+	state.ImageModel = "image-alt"
+
+	body := renderDetail(t, state)
+
+	if !strings.Contains(body, "js-image-model") {
+		t.Fatal("画像モデルの選択が出ていない")
+	}
+	if !strings.Contains(body, `<option value="image-alt" selected>`) {
+		t.Errorf("記録済みのモデルが初期選択になっていない:\n%s", body)
+	}
+}
+
+// まだ記録が無い作品（台本だけ）は、一覧の先頭が初期選択になります。
+func TestServeDetailsDefaultsImageModelToHeadWhenUnrecorded(t *testing.T) {
+	t.Parallel()
+
+	body := renderDetail(t, scriptOnlyState())
+
+	if !strings.Contains(body, `<option value="image-model" selected>`) {
+		t.Errorf("既定モデルが初期選択になっていない:\n%s", body)
+	}
+}
+
+// 生成し終えた作品には、押すボタンが無いので選択も出しません。
+func TestServeDetailsHidesImageModelWhenComplete(t *testing.T) {
+	t.Parallel()
+
+	state := scriptOnlyState()
+	for i := range state.Panels {
+		state.Panels[i].Generation = &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/p.png"}
+	}
+	state.Pages = []kitcomic.PageArtifact{
+		{PageNumber: 1, Generation: &kitcomic.GenerationRecord{ImageURL: "gs://test-bucket/comics/job-1/images/comic_page_1.png"}},
+	}
+
+	if body := renderDetail(t, state); strings.Contains(body, "js-image-model") {
+		t.Error("生成が済んでいるのに画像モデルの選択が出ている")
+	}
+}
