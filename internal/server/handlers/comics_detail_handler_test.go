@@ -223,3 +223,34 @@ func TestServeDetailsHidesEditForUngeneratedPanel(t *testing.T) {
 		t.Error("画像が無いコマに編集ボタンが出ている")
 	}
 }
+
+// 章カードには「この章の画像を生成」が並びます。画像はいちばん高価な工程なので、
+// 作品まるごとではなく章単位で試せる入口を、台本再生成と同じ場所に置いています。
+func TestServeDetailsRendersChapterRenderControl(t *testing.T) {
+	t.Parallel()
+
+	body := renderDetail(t, scriptOnlyState())
+
+	for _, want := range []string{
+		`data-command="render_comic"`,
+		`data-target="ch01"`,
+		`この章の画像を生成`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("章カードに %q が無い", want)
+		}
+	}
+}
+
+// 台本がまだ無い章に画像生成のボタンを出しても、押せば0件で終わるだけです。
+func TestServeDetailsHidesChapterRenderWithoutPanels(t *testing.T) {
+	t.Parallel()
+
+	state := scriptOnlyState()
+	state.Panels = nil
+	state.Chapters[0].PanelIDs = nil
+
+	if body := renderDetail(t, state); strings.Contains(body, `この章の画像を生成`) {
+		t.Error("コマの無い章に画像生成ボタンが出ている")
+	}
+}

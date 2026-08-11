@@ -107,7 +107,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | command | 実行する go-comic-kit 操作 | 入力パラメータ |
 |---|---|---|
 | `compose_comic` | 全工程: GenerateOutline → 各章 GenerateChapterScript → GenerateAllPanels → ComposeAllPages（デザインシートは含まない。単体生成 `generate_design_sheet` で別途作成）。`stop_after_script` を指定すると台本までで止まる | source_url / source_text, script_mode, style_mode, stop_after_script |
-| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の「続きを生成」と、失敗・打ち切りからの再開を兼ねる | job_id |
+| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の「続きを生成」と、失敗・打ち切りからの再開を兼ねる。`chapter_id` を添えるとその章だけを生成（画像はいちばん高価な工程なので、1章で試してから残りへ進める） | job_id, chapter_id（任意） |
 | `regenerate_chapter_script` | GenerateChapterScript（1章。後続のパネル・ページは別途再生成） | job_id, chapter_id |
 | `generate_design_sheet` | GenerateDesignSheet | job_id（省略時は state なしの単発生成）, character_ids, aspect_ratio, layout, seed |
 | `regenerate_panel` | GeneratePanel | job_id, panel_id, seed / edit_prompt / prompt_override |

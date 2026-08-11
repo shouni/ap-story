@@ -68,6 +68,8 @@ Pipeline commands (`Task.command`, dispatched by `Planner`): `compose_comic` (fu
 
 `compose_comic` with `stop_after_script` ends after the script so the result can be reviewed before paying for an image per panel; `render_comic` then fills in the panels and pages that are missing. Because it skips what already exists, the same command also serves as the resume path, and the detail page offers it under one button whose wording follows which case applies.
 
+`render_comic` also takes an optional `chapter_id`, which the batch steps pass to `BatchOptions.ChapterID` so only that chapter's panels and pages are generated. That is the cheap way to check a change: images are the expensive half, and the script already had a chapter unit. The detail page puts the button on the chapter card next to "台本を再生成", so both chapter-scoped actions live in one place. No new command — a whole-work render is the same command without the field.
+
 Panels and pages go through the kit's batch operations (`Ops.PanelBatch` / `Ops.PageBatch`), which run at `MAX_CONCURRENCY` (default 1, i.e. serial). Those return partial successes alongside an error, so `AllPanelsStep` / `AllPagesStep` assign the returned state even when the call fails — dropping it would strip the images that were just generated and paid for.
 
 ### GCS layout
