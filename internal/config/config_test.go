@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shouni/gcp-kit/serverrole"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +15,7 @@ func setDefaultURLConfigEnv(t *testing.T) {
 	t.Setenv("WORKER_URL", "")
 	t.Setenv("TASK_AUDIENCE_URL", "")
 	// SERVER_ROLE は明示が必須。役割に関心のないテストはローカル開発と同じ both で読む。
-	t.Setenv("SERVER_ROLE", string(ServerRoleBoth))
+	t.Setenv("SERVER_ROLE", string(serverrole.Both))
 }
 
 func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
@@ -212,7 +214,7 @@ func TestValidateEssentialConfigPassesWithAllRequiredFields(t *testing.T) {
 // テキストモデルは台本を作る worker だけの要件です。
 func TestValidateEssentialConfigRequiresModels(t *testing.T) {
 	t.Run("IMAGE_MODELS はどの役割でも必須", func(t *testing.T) {
-		for _, role := range []ServerRole{ServerRoleWeb, ServerRoleWorker, ServerRoleBoth} {
+		for _, role := range []serverrole.Role{serverrole.Web, serverrole.Worker, serverrole.Both} {
 			essentialConfigEnv(t)
 			t.Setenv("SERVER_ROLE", string(role))
 			t.Setenv("IMAGE_MODELS", "")
@@ -224,13 +226,13 @@ func TestValidateEssentialConfigRequiresModels(t *testing.T) {
 
 	t.Run("GEMINI_MODELS は worker だけの要件", func(t *testing.T) {
 		essentialConfigEnv(t)
-		t.Setenv("SERVER_ROLE", string(ServerRoleWeb))
+		t.Setenv("SERVER_ROLE", string(serverrole.Web))
 		t.Setenv("GEMINI_MODELS", "")
 		cfg, err := LoadConfig()
 		require.NoError(t, err)
 		require.NoError(t, cfg.ValidateEssentialConfig())
 
-		t.Setenv("SERVER_ROLE", string(ServerRoleWorker))
+		t.Setenv("SERVER_ROLE", string(serverrole.Worker))
 		cfg, err = LoadConfig()
 		require.NoError(t, err)
 		require.ErrorContains(t, cfg.ValidateEssentialConfig(), "GEMINI_MODELS")
