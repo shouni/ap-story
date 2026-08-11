@@ -266,3 +266,27 @@ func TestComicOptionsListsChoices(t *testing.T) {
 		t.Errorf("style modes[0] = %q, want %q", resp.StyleModes[0].Name, prompts.ModeDefault)
 	}
 }
+
+// ジョブ状態は enqueue より先に書くこと。
+// worker は配信されたタスクより先に状態を読み、succeeded なら再配信と見なして飛ばします。
+// Cloud Tasks は数十ミリ秒で届くので、順序が逆だと同じ作品への次の操作が
+// 1つ前の succeeded を読んで黙って捨てられます（実際に踏みました）。
+func TestEnqueueRecordsQueuedStatusBeforeEnqueueing(t *testing.T) {
+	t.Parallel()
+
+	var order []string
+	status := &fakeJobStatusStore{onSave: func() { order = append(order, "status") }}
+	q := &fakeTaskQueue{onEnqueue: func() { order = append(order, "enqueue") }}
+	h := newTestHandlerWithJobStatus(t, q, status)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{"source_text": "元文章"}`))
+	rec := httptest.NewRecorder()
+	h.EnqueueComic(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if len(order) != 2 || order[0] != "status" || order[1] != "enqueue" {
+		t.Errorf("順序 = %v, want [status enqueue]", order)
+	}
+}

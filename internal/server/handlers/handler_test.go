@@ -61,12 +61,45 @@ type fakeTaskQueue struct {
 	lastTask domain.Task
 	called   int
 	err      error
+	// onEnqueue は呼び出し順の検証に使います（ジョブ状態の記録との前後関係）。
+	onEnqueue func()
 }
 
 func (f *fakeTaskQueue) Enqueue(_ context.Context, task domain.Task) error {
 	f.called++
 	f.lastTask = task
+	if f.onEnqueue != nil {
+		f.onEnqueue()
+	}
 	return f.err
+}
+
+// fakeJobStatusStore は投入時のジョブ状態の記録を観測します。
+type fakeJobStatusStore struct {
+	saved  []domain.JobStatus
+	onSave func()
+}
+
+func (f *fakeJobStatusStore) Save(_ context.Context, _ string, status domain.JobStatus) error {
+	f.saved = append(f.saved, status)
+	if f.onSave != nil {
+		f.onSave()
+	}
+	return nil
+}
+
+func (f *fakeJobStatusStore) Get(_ context.Context, _ string) (domain.JobStatus, error) {
+	if len(f.saved) == 0 {
+		return domain.JobStatus{}, fmt.Errorf("not recorded")
+	}
+	return f.saved[len(f.saved)-1], nil
+}
+
+func newTestHandlerWithJobStatus(t *testing.T, q *fakeTaskQueue, status domain.JobStatusStore) *Handler {
+	t.Helper()
+	h := newTestHandler(t, q)
+	h.jobStatus = status
+	return h
 }
 
 type fakeComicRepository struct {
