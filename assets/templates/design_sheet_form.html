@@ -75,9 +75,8 @@
         <div class="mb-3">
             <label for="model_override" class="form-label fw-bold">画像モデル</label>
             <select class="form-select" id="model_override" name="model_override">
-                <option value="" {{if not .Data.ModelOverride}}selected{{end}}>既定モデルを使用</option>
                 {{range .Data.Models}}
-                <option value="{{.Value}}" {{if eq $.Data.ModelOverride .Value}}selected{{end}}>{{.Label}}</option>
+                <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
                 {{end}}
             </select>
         </div>

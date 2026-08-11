@@ -21,11 +21,11 @@ func (DesignSheetStep) Execute(ctx context.Context, pc *Context) error {
 		JobID:        pc.Task.JobID,
 		// キャラクターは特定の作品に依存しない共有アセットのため、comics/{jobID}/ ではなく
 		// バケットルート（character/ 配下）に保存する。
-		OutputDir:     pc.CharacterOutputDir,
-		AspectRatio:   pc.Task.AspectRatio,
-		Layout:        pc.Task.Layout,
-		ModelOverride: pc.Task.ModelOverride,
-		StyleMode:     pc.Task.StyleMode,
+		OutputDir:   pc.CharacterOutputDir,
+		AspectRatio: pc.Task.AspectRatio,
+		Layout:      pc.Task.Layout,
+		Model:       pc.Task.ModelOverride,
+		StyleMode:   pc.Task.StyleMode,
 		// Seed はキット側も *int64 なので、nil のまま渡せば「解決はキットに任せる」意味になる。
 		Seed: pc.Task.Seed,
 	}

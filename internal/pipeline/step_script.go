@@ -26,11 +26,11 @@ func (OutlineStep) Execute(ctx context.Context, pc *Context) error {
 	}
 
 	manga, err := pc.Ops.Outline.GenerateOutline(ctx, ports.OutlineRequest{
-		SourceURL:     pc.Task.SourceURL,
-		SourceText:    pc.Task.SourceText,
-		Mode:          pc.Task.ScriptMode,
-		StyleMode:     pc.Task.StyleMode,
-		ModelOverride: pc.Task.TextModel,
+		SourceURL:  pc.Task.SourceURL,
+		SourceText: pc.Task.SourceText,
+		Mode:       pc.Task.ScriptMode,
+		StyleMode:  pc.Task.StyleMode,
+		Model:      pc.Task.TextModel,
 	})
 	if err != nil {
 		return fmt.Errorf("outline: %w", err)
@@ -73,7 +73,7 @@ func (AllChapterScriptsStep) Execute(ctx context.Context, pc *Context) error {
 	}
 
 	// 章立てと全章を同じモデルに書かせる（章ごとに書き手が変わると文体が揃わない）。
-	opts := ports.ChapterScriptOptions{ModelOverride: pc.textModel()}
+	opts := ports.ChapterScriptOptions{Model: pc.textModel()}
 	for _, chapterID := range chapterIDs {
 		manga, err := pc.Ops.ChapterScript.GenerateChapterScript(ctx, pc.Manga, chapterID, opts)
 		if err != nil {
@@ -94,7 +94,7 @@ func (SingleChapterScriptStep) Name() string { return "chapter_script" }
 // Execute は Task.ChapterID の1章のみネームを生成/再生成します。
 func (SingleChapterScriptStep) Execute(ctx context.Context, pc *Context) error {
 	// 作り直す章だけ別のモデルが書くことにならないよう、state に記録されたモデルを引き継ぐ。
-	opts := ports.ChapterScriptOptions{ModelOverride: pc.textModel()}
+	opts := ports.ChapterScriptOptions{Model: pc.textModel()}
 	manga, err := pc.Ops.ChapterScript.GenerateChapterScript(ctx, pc.Manga, pc.Task.ChapterID, opts)
 	if err != nil {
 		return fmt.Errorf("chapter_script: chapter %q: %w", pc.Task.ChapterID, err)

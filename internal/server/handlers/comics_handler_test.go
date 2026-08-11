@@ -207,3 +207,27 @@ func TestEnqueueComicRejectsUnknownChoices(t *testing.T) {
 		})
 	}
 }
+
+// モデル未指定の JSON 呼び出し（MCP 等）も、既定モデルで埋めた Task になること。
+// worker 側の設定へ落とすと、その作品だけ出自が state に残りません。
+func TestEnqueueComicFillsInDefaultModels(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeTaskQueue{}
+	h := newTestHandler(t, q)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{"source_text": "元文章"}`))
+	rec := httptest.NewRecorder()
+
+	h.EnqueueComic(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if q.lastTask.TextModel != "gemini-model" {
+		t.Errorf("TextModel = %q, want gemini-model (the head of GEMINI_MODELS)", q.lastTask.TextModel)
+	}
+	if q.lastTask.ModelOverride != "image-model" {
+		t.Errorf("ModelOverride = %q, want image-model (the head of IMAGE_MODELS)", q.lastTask.ModelOverride)
+	}
+}

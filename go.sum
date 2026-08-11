@@ -117,8 +117,8 @@ github.com/shouni/gemini-image-kit v1.13.0 h1:WhR2JzWbSt2a3Rb/tZP6H1XiHRY22Fwb4f
 github.com/shouni/gemini-image-kit v1.13.0/go.mod h1:N2QjnEBpZWIM9DMYwMCtFry5fk3ILjTCcr0oHnwpzus=
 github.com/shouni/go-character-kit v1.1.0 h1:d2fSP6V/j19ndYetFrV+98zoBSXTUBHWGDJe6G6mm1Q=
 github.com/shouni/go-character-kit v1.1.0/go.mod h1:P+RtKl6YoGQrEROnjpsFHw91cwXdO12wPFDsNUsNHfA=
-github.com/shouni/go-comic-kit v1.4.4 h1:+tcLtv3QQjkeBcbxE1lNyMPVpNBODaFu+WlsmyEbDwk=
-github.com/shouni/go-comic-kit v1.4.4/go.mod h1:SJ3GakSAaIphi5cDCKk9JGjW4ui/NtOGDP7bV0FSBHU=
+github.com/shouni/go-comic-kit v1.4.5 h1:leYEfwYFEOVZ9QR8gd8tycctmmC2/KbXTuCE/MAu0+k=
+github.com/shouni/go-comic-kit v1.4.5/go.mod h1:SJ3GakSAaIphi5cDCKk9JGjW4ui/NtOGDP7bV0FSBHU=
 github.com/shouni/go-gemini-client v1.17.0 h1:Wc4E175j/cOxryWmD2lQZ6LrQW6mk9542YM7wdEPuIk=
 github.com/shouni/go-gemini-client v1.17.0/go.mod h1:RrWlwUI7y6WASyl92m7pRgZzA7PZ7HHnoKscsCQdzwc=
 github.com/shouni/go-http-kit v1.8.0 h1:CWAJ/7mJ6i2q8SAK4iHZvJOIvfQeKIKkcZb0YZVuKGI=

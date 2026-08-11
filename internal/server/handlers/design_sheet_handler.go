@@ -68,20 +68,6 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 	return data
 }
 
-// validateModelOverride は、指定された画像モデルが IMAGE_MODELS に含まれるかを確かめます。
-// 空文字は「既定モデル（worker 側の IMAGE_MODELS 先頭）を使う」意味なので常に有効です。
-func (h *Handler) validateModelOverride(model string) error {
-	return validateAllowed("画像モデル", model, h.imageModels)
-}
-
-// validateDesignSheetChoices は、デザインシート生成の選択が許可リストに収まるかを確かめます。
-func (h *Handler) validateDesignSheetChoices(task domain.Task) error {
-	if err := validateAllowed("スタイルモード", task.StyleMode, modeNames(h.styleModes)); err != nil {
-		return err
-	}
-	return h.validateModelOverride(task.ModelOverride)
-}
-
 // splitVisualCues は、改行またはカンマ区切りの入力を見た目特徴のリストへ分割します。
 // 空行・前後の空白は除去します。
 func splitVisualCues(raw string) []string {
@@ -125,7 +111,7 @@ type designSheetTaskParams struct {
 // newDesignSheetTask は generate_design_sheet の入力からジョブ ID を採番して Task を構築します。
 // job_id はユーザーに意識させず、サーバー側で新規採番します（state を伴わない単発生成のため
 // 既存作品との紐づけは不要）。
-func newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
+func (h *Handler) newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
 	jobID, err := domain.NewJobID()
 	if err != nil {
 		return domain.Task{}, err
@@ -144,7 +130,7 @@ func newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
 		AspectRatio:          aspectRatio,
 		Layout:               p.Layout,
 		StyleMode:            p.StyleMode,
-		ModelOverride:        p.ModelOverride,
+		ModelOverride:        firstIfEmpty(p.ModelOverride, h.imageModels),
 		ReferenceURLOverride: p.ReferenceURLOverride,
 		VisualCuesOverride:   p.VisualCuesOverride,
 		Seed:                 p.Seed,
@@ -193,7 +179,7 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 	formData.ReferenceURLOverride = referenceURLOverride
 	formData.VisualCuesOverride = visualCuesOverrideRaw
 
-	task, err := newDesignSheetTask(designSheetTaskParams{
+	task, err := h.newDesignSheetTask(designSheetTaskParams{
 		CharacterIDs:         characterIDs,
 		AspectRatio:          aspectRatio,
 		Layout:               layout,
@@ -216,7 +202,7 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.validateDesignSheetChoices(task); err != nil {
+	if err := h.validateChoices(task); err != nil {
 		formData.ErrorMessage = err.Error()
 		h.render(w, r, http.StatusBadRequest, "design_sheet_form.html", "デザインシートを生成", formData)
 		return

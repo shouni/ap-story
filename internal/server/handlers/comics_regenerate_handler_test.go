@@ -265,3 +265,32 @@ func TestRegenerateComicPanelWithSeedAndEditPrompt(t *testing.T) {
 		}
 	})
 }
+
+// 再生成の経路も許可リストを通ること。compose とデザインシートだけ塞いで
+// ここが空いていると、Cloud Tasks を1往復してから worker で落ちます。
+func TestRegenerateRejectsUnknownChoices(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"画像モデル":   `{"command": "regenerate_panel", "panel_id": "ch01-p01", "model_override": "no-such-model"}`,
+		"スタイルモード": `{"command": "generate_design_sheet", "character_ids": ["zundamon"], "style_mode": "no-such-style"}`,
+		"テキストモデル": `{"command": "regenerate_chapter_script", "chapter_id": "ch01", "text_model": "no-such-model"}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			q := &fakeTaskQueue{}
+			h := newTestHandler(t, q)
+
+			rec := httptest.NewRecorder()
+			h.RegenerateComic(rec, regenerateRequest(t, body))
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			if q.called != 0 {
+				t.Errorf("Enqueue called %d times, want 0", q.called)
+			}
+		})
+	}
+}

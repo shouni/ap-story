@@ -38,7 +38,7 @@ func (h *Handler) EnqueueDesignSheet(w http.ResponseWriter, r *http.Request) {
 	params := designSheetTaskParams(req)
 	params.Seed = h.resolveDesignSheetSeed(params.CharacterIDs, params.Seed)
 
-	task, err := newDesignSheetTask(params)
+	task, err := h.newDesignSheetTask(params)
 	if err != nil {
 		slog.Error("failed to generate job id", "error", err)
 		writeErrorJSON(w, http.StatusInternalServerError, "internal server error")
@@ -52,7 +52,7 @@ func (h *Handler) EnqueueDesignSheet(w http.ResponseWriter, r *http.Request) {
 
 	// モデル名と画風は許可リストで縛る。ブラウザは <select> に縛られるが、
 	// この JSON 経路は任意の文字列を送れるため、ここが唯一の関門になる。
-	if err := h.validateDesignSheetChoices(task); err != nil {
+	if err := h.validateChoices(task); err != nil {
 		writeErrorJSON(w, http.StatusBadRequest, err.Error())
 		return
 	}

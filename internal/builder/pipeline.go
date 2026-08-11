@@ -15,9 +15,14 @@ import (
 // （pipeline.Runner）を構築します。
 func buildPipeline(cfg *config.Config, rio *app.RemoteIO, ops *ports.Operations, notifier domain.Notifier, jobStatus domain.JobStatusStore) (*pipeline.Runner, error) {
 	runner, err := pipeline.New(pipeline.Dependencies{
-		Ops:       ops,
-		Reader:    rio.Reader,
-		Writer:    rio.Writer,
+		Ops:    ops,
+		Reader: rio.Reader,
+		Writer: rio.Writer,
+		Layout: pipeline.ImageLayout{
+			AspectRatio:    cfg.AI.AspectRatio,
+			PanelImageSize: cfg.AI.PanelImageSize,
+			PageImageSize:  cfg.AI.PageImageSize,
+		},
 		Bucket:    cfg.Storage.GCSBucket,
 		Notifier:  notifier,
 		Timeout:   cfg.AI.PipelineTimeout,

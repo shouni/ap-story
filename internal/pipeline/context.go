@@ -28,12 +28,25 @@ type State struct {
 	CharacterOutputDir string
 }
 
+// ImageLayout は生成画像の比率と解像度です。
+// go-comic-kit は設定として持たず、生成のたびに受け取ります。
+type ImageLayout struct {
+	// AspectRatio はコマ・ページ・デザインシートに共通の比率です。
+	// 揃っていないと参照画像によるブレ抑制が黙って無効になるため、1つの値で持ちます。
+	AspectRatio string
+	// PanelImageSize / PageImageSize は解像度です。1コマごとに費用が効くので分けています。
+	PanelImageSize string
+	PageImageSize  string
+}
+
 // Services は、パイプライン実行中は固定の外部依存です。ステップは参照するだけで
 // 書き換えません。
 type Services struct {
 	Ops    *ports.Operations
 	Reader ports.ContentReader
 	Writer remoteio.Writer
+	// Layout は生成画像の比率と解像度です。
+	Layout ImageLayout
 }
 
 // textModel は、この実行で台本生成に使うテキストモデルを返します。

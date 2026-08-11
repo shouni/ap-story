@@ -28,7 +28,7 @@ type fakeOutline struct {
 
 func (f *fakeOutline) GenerateOutline(_ context.Context, req ports.OutlineRequest) (*comic.MangaState, error) {
 	f.called++
-	f.lastModel = req.ModelOverride
+	f.lastModel = req.Model
 	// 本物と同じく、指定されたモードを state に写して返す（以降の工程はここを見る）。
 	return &comic.MangaState{
 		Version:    comic.StateSchemaVersion,
@@ -46,7 +46,7 @@ type fakeChapterScript struct {
 
 func (f *fakeChapterScript) GenerateChapterScript(_ context.Context, state *comic.MangaState, chapterID string, opts ports.ChapterScriptOptions) (*comic.MangaState, error) {
 	f.calledChapters = append(f.calledChapters, chapterID)
-	f.lastModel = opts.ModelOverride
+	f.lastModel = opts.Model
 	state.Panels = append(state.Panels, comic.Panel{ID: chapterID + "-p01", ChapterID: chapterID, Page: len(f.calledChapters)})
 	return state, nil
 }
@@ -90,7 +90,7 @@ func (f *fakePanel) GenerateAllPanels(ctx context.Context, state *comic.MangaSta
 		}
 		var err error
 		state, err = f.GeneratePanel(ctx, state, state.Panels[i].ID,
-			ports.GenerateOptions{Seed: opts.Seed, ModelOverride: opts.ModelOverride, OutputDir: opts.OutputDir})
+			ports.GenerateOptions{Seed: opts.Seed, Model: opts.Model, OutputDir: opts.OutputDir})
 		if err != nil {
 			return state, err
 		}
@@ -135,7 +135,7 @@ func (f *fakePage) ComposeAllPages(ctx context.Context, state *comic.MangaState,
 		}
 		var err error
 		state, err = f.ComposePage(ctx, state, page,
-			ports.GenerateOptions{Seed: opts.Seed, ModelOverride: opts.ModelOverride, OutputDir: opts.OutputDir})
+			ports.GenerateOptions{Seed: opts.Seed, Model: opts.Model, OutputDir: opts.OutputDir})
 		if err != nil {
 			return state, err
 		}
@@ -842,11 +842,11 @@ func TestRunnerComposeComicPassesModelAndStyleChoices(t *testing.T) {
 	if chapter.lastModel != "gemini-selected" {
 		t.Errorf("chapter script model = %q, want gemini-selected", chapter.lastModel)
 	}
-	if panel.lastBatchOpts.ModelOverride != "image-selected" {
-		t.Errorf("panel model = %q, want image-selected", panel.lastBatchOpts.ModelOverride)
+	if panel.lastBatchOpts.Model != "image-selected" {
+		t.Errorf("panel model = %q, want image-selected", panel.lastBatchOpts.Model)
 	}
-	if page.lastBatchOpts.ModelOverride != "image-selected" {
-		t.Errorf("page model = %q, want image-selected", page.lastBatchOpts.ModelOverride)
+	if page.lastBatchOpts.Model != "image-selected" {
+		t.Errorf("page model = %q, want image-selected", page.lastBatchOpts.Model)
 	}
 	if panel.lastBatchOpts.StyleMode != "watercolor" {
 		t.Errorf("panel style mode = %q, want watercolor", panel.lastBatchOpts.StyleMode)
@@ -887,8 +887,8 @@ func TestRunnerRenderComicInheritsRecordedChoices(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	if panel.lastBatchOpts.ModelOverride != "image-recorded" {
-		t.Errorf("panel model = %q, want image-recorded", panel.lastBatchOpts.ModelOverride)
+	if panel.lastBatchOpts.Model != "image-recorded" {
+		t.Errorf("panel model = %q, want image-recorded", panel.lastBatchOpts.Model)
 	}
 	if panel.lastBatchOpts.StyleMode != "watercolor" {
 		t.Errorf("panel style mode = %q, want watercolor", panel.lastBatchOpts.StyleMode)
@@ -919,5 +919,44 @@ func TestRunnerRegenerateChapterScriptInheritsRecordedTextModel(t *testing.T) {
 
 	if chapter.lastModel != "gemini-recorded" {
 		t.Errorf("chapter script model = %q, want gemini-recorded", chapter.lastModel)
+	}
+}
+
+// 比率と解像度もキットの設定ではなく呼び出しごとの値になったので、
+// アプリ側から届いていることを確かめます（届かないとキット既定で生成されます）。
+func TestRunnerPassesImageLayout(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	panel := &fakePanel{}
+	page := &fakePage{}
+	r, err := New(Dependencies{
+		Ops:    fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, page),
+		Reader: store,
+		Writer: store,
+		Layout: ImageLayout{AspectRatio: "16:9", PanelImageSize: "1K", PageImageSize: "2K"},
+		Bucket: "test-bucket",
+	})
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+
+	task := &domain.Task{
+		Command:       domain.TaskCommandComposeComic,
+		JobID:         "job-layout",
+		SourceText:    "元文章",
+		TextModel:     "gemini-model",
+		ModelOverride: "image-model",
+	}
+	if err := r.Run(context.Background(), task); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if panel.lastBatchOpts.AspectRatio != "16:9" || panel.lastBatchOpts.ImageSize != "1K" {
+		t.Errorf("panel layout = %q/%q, want 16:9/1K",
+			panel.lastBatchOpts.AspectRatio, panel.lastBatchOpts.ImageSize)
+	}
+	if page.lastBatchOpts.AspectRatio != "16:9" || page.lastBatchOpts.ImageSize != "2K" {
+		t.Errorf("page layout = %q/%q, want 16:9/2K",
+			page.lastBatchOpts.AspectRatio, page.lastBatchOpts.ImageSize)
 	}
 }

@@ -119,8 +119,6 @@ func TestLoadConfigAppliesAIDefaults(t *testing.T) {
 
 	require.Empty(t, cfg.AI.GeminiModels)
 	require.Empty(t, cfg.AI.ImageModels)
-	require.Empty(t, cfg.AI.GeminiModel)
-	require.Empty(t, cfg.AI.ImageModel)
 }
 
 func TestLoadConfigProducesValidKitConfig(t *testing.T) {
@@ -152,14 +150,12 @@ func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 
 	require.Equal(t, []string{"gemini-explicit", "gemini-alt"}, cfg.AI.GeminiModels)
 	require.Equal(t, []string{"image-explicit", "image-alt"}, cfg.AI.ImageModels)
-	require.Equal(t, "gemini-explicit", cfg.AI.GeminiModel)
-	require.Equal(t, "image-explicit", cfg.AI.ImageModel)
 }
 
+// キットへ渡すのは実行制御だけです。モデル・画風・比率・解像度は作品ごとに変わる値なので、
+// 設定ではなく生成の呼び出しごとに渡します（渡し先は pipeline のステップ）。
 func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	ai := AIConfig{
-		GeminiModel:         "gemini-x",
-		ImageModel:          "image-x",
 		MaxConcurrency:      3,
 		MaxChapters:         5,
 		MaxPanelsPerChapter: 6,
@@ -167,8 +163,6 @@ func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	}
 
 	kit := ai.KitConfig()
-	require.Equal(t, "gemini-x", kit.GeminiModel)
-	require.Equal(t, "image-x", kit.ImageModel)
 	require.Equal(t, 3, kit.MaxConcurrency)
 	require.Equal(t, 5, kit.MaxChapters)
 	require.Equal(t, 6, kit.MaxPanelsPerChapter)
@@ -203,33 +197,30 @@ func TestValidateEssentialConfigPassesWithAllRequiredFields(t *testing.T) {
 	require.NoError(t, cfg.ValidateEssentialConfig())
 }
 
-// 画像モデルは両ロールに要り（web はフォームの選択肢、worker は生成）、
-// テキストモデルは台本を作る worker だけの要件です。
-func TestValidateEssentialConfigRequiresModels(t *testing.T) {
-	t.Run("IMAGE_MODELS はどの役割でも必須", func(t *testing.T) {
-		for _, role := range []serverrole.Role{serverrole.Web, serverrole.Worker, serverrole.Both} {
+// モデル一覧は Web 面だけの要件です。フォームの選択肢と投入時の許可リストに使い、
+// worker は読みません（ジョブが必ず自分のモデル名を運ぶため）。
+func TestValidateEssentialConfigRequiresModelsOnWebOnly(t *testing.T) {
+	for _, name := range []string{"IMAGE_MODELS", "GEMINI_MODELS"} {
+		t.Run(name+" は Web 面で必須", func(t *testing.T) {
+			for _, role := range []serverrole.Role{serverrole.Web, serverrole.Both} {
+				essentialConfigEnv(t)
+				t.Setenv("SERVER_ROLE", string(role))
+				t.Setenv(name, "")
+				cfg, err := LoadConfig()
+				require.NoError(t, err)
+				require.ErrorContains(t, cfg.ValidateEssentialConfig(), name, "role=%s", role)
+			}
+		})
+
+		t.Run(name+" は worker では不要", func(t *testing.T) {
 			essentialConfigEnv(t)
-			t.Setenv("SERVER_ROLE", string(role))
-			t.Setenv("IMAGE_MODELS", "")
+			t.Setenv("SERVER_ROLE", string(serverrole.Worker))
+			t.Setenv(name, "")
 			cfg, err := LoadConfig()
 			require.NoError(t, err)
-			require.ErrorContains(t, cfg.ValidateEssentialConfig(), "IMAGE_MODELS", "role=%s", role)
-		}
-	})
-
-	t.Run("GEMINI_MODELS は worker だけの要件", func(t *testing.T) {
-		essentialConfigEnv(t)
-		t.Setenv("SERVER_ROLE", string(serverrole.Web))
-		t.Setenv("GEMINI_MODELS", "")
-		cfg, err := LoadConfig()
-		require.NoError(t, err)
-		require.NoError(t, cfg.ValidateEssentialConfig())
-
-		t.Setenv("SERVER_ROLE", string(serverrole.Worker))
-		cfg, err = LoadConfig()
-		require.NoError(t, err)
-		require.ErrorContains(t, cfg.ValidateEssentialConfig(), "GEMINI_MODELS")
-	})
+			require.NoError(t, cfg.ValidateEssentialConfig())
+		})
+	}
 }
 
 func TestValidateEssentialConfigRequiresHTTPSServiceURL(t *testing.T) {

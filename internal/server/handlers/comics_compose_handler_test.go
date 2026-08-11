@@ -177,3 +177,29 @@ func TestEnqueueComicFormCarriesChoices(t *testing.T) {
 		t.Errorf("models = %q/%q, want gemini-alt/image-alt", task.TextModel, task.ModelOverride)
 	}
 }
+
+// モデル欄に「既定を使う」空選択は置きません。ブラウザからは常に具体名が送られ、
+// どのモデルで作られた作品かが state の記録から辿れるようにするためです。
+func TestComposeFormAlwaysSubmitsAModel(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler(t, &fakeTaskQueue{})
+
+	req := httptest.NewRequest(http.MethodGet, "/compose", nil)
+	rec := httptest.NewRecorder()
+	h.ComposeForm(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, `<option value=""`) {
+		t.Errorf("空の選択肢が残っています: %s", body)
+	}
+	// 未選択のときは先頭（＝既定モデル）が選ばれた状態で表示される。
+	for _, want := range []string{
+		`<option value="gemini-model" selected>既定: gemini-model</option>`,
+		`<option value="image-model" selected>既定: image-model</option>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("既定モデルが選択済みで表示されていません: want %q", want)
+		}
+	}
+}

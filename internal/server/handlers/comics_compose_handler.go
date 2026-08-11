@@ -71,7 +71,7 @@ func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
 	}
 	formData := h.buildComposeFormData(req)
 
-	task, err := newComposeTask(req)
+	task, err := h.newComposeTask(req)
 	if err != nil {
 		slog.Error("failed to generate job id", "error", err)
 		formData.ErrorMessage = "ジョブIDの採番に失敗しました。時間をおいて再度お試しください。"
@@ -85,7 +85,7 @@ func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.validateComposeChoices(task); err != nil {
+	if err := h.validateChoices(task); err != nil {
 		formData.ErrorMessage = err.Error()
 		h.render(w, r, http.StatusBadRequest, "compose.html", "漫画を生成", formData)
 		return

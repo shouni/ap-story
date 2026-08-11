@@ -183,7 +183,9 @@ func TestEnqueueDesignSheetRejectsUnknownModelOverride(t *testing.T) {
 	})
 }
 
-func TestEnqueueDesignSheetFormDefaultsModelOverrideToEmpty(t *testing.T) {
+// モデル未指定は既定モデル（IMAGE_MODELS の先頭）で埋めます。空のまま worker の
+// 設定へ落とすと、どのモデルで生成したのかが記録から辿れなくなります。
+func TestEnqueueDesignSheetFormFillsInDefaultModel(t *testing.T) {
 	t.Parallel()
 
 	q := &fakeTaskQueue{}
@@ -196,8 +198,8 @@ func TestEnqueueDesignSheetFormDefaultsModelOverrideToEmpty(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
-	if q.lastTask.ModelOverride != "" {
-		t.Errorf("ModelOverride = %q, want empty (use default)", q.lastTask.ModelOverride)
+	if q.lastTask.ModelOverride != "image-model" {
+		t.Errorf("ModelOverride = %q, want image-model (the head of IMAGE_MODELS)", q.lastTask.ModelOverride)
 	}
 }
 

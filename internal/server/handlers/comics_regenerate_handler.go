@@ -44,5 +44,10 @@ func (h *Handler) RegenerateComic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.validateChoices(task); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	h.enqueueAndRespond(w, r, task)
 }

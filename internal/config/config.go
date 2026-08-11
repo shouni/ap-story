@@ -72,17 +72,15 @@ type NotificationConfig struct {
 
 // AIConfig は AI モデルと実行制御の設定です。go-comic-kit の ports.Config にマップされます。
 type AIConfig struct {
-	// モデル一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が
-	// 一覧の先頭から埋めるので、環境変数からは読みません。既定値は持たず、
-	// 空なら ValidateEssentialConfig が起動時に落とします。
+	// モデル一覧はカンマ区切りで、先頭が既定モデルです。既定値は持たず、
+	// 空なら ValidateEssentialConfig が起動時に落とします（Web 面のみ）。
 	//
-	// ImageModels はデザインシート・パネル・ページのすべてに使います（先頭が既定で、
-	// 残りはデザインシート生成フォームの選択肢になります）。用途ごとにモデルを
+	// ImageModels はデザインシート・パネル・ページのすべてに使い、GeminiModels は
+	// 台本（章立て・章台本）に使います。どちらも先頭が既定で、一覧そのものが
+	// フォームの選択肢と、投入時の許可リストになります。用途ごとにモデルを
 	// 分ける仕組みは持ちません。
 	GeminiModels []string `env:"GEMINI_MODELS"`
 	ImageModels  []string `env:"IMAGE_MODELS"`
-	GeminiModel  string   `env:"-"`
-	ImageModel   string   `env:"-"`
 
 	// 比率と解像度は未設定ならキットの既定（3:4 / パネル 1K / ページ・シート 2K）に
 	// 落ちます。従来の固定値と同じなので、設定しなければ挙動は変わりません。
@@ -118,8 +116,6 @@ type AIConfig struct {
 func (a *AIConfig) applyDefaults() {
 	a.GeminiModels = normalizeList(a.GeminiModels)
 	a.ImageModels = normalizeList(a.ImageModels)
-	a.GeminiModel = firstModel(a.GeminiModels)
-	a.ImageModel = firstModel(a.ImageModels)
 }
 
 // normalizeList は env が分割しただけのカンマ区切り値を整えます。
@@ -141,23 +137,9 @@ func normalizeList(values []string) []string {
 	return normalized
 }
 
-// firstModel は一覧の先頭（＝既定として使うモデル）を返します。
-// 一覧が空になるのは設定漏れのときだけで、その値は使われる前に起動時検証で弾かれます。
-func firstModel(models []string) string {
-	if len(models) == 0 {
-		return ""
-	}
-	return models[0]
-}
-
 // KitConfig は go-comic-kit の ports.Config に変換します。
 func (a AIConfig) KitConfig() ports.Config {
 	return ports.Config{
-		GeminiModel:         a.GeminiModel,
-		ImageModel:          a.ImageModel,
-		AspectRatio:         a.AspectRatio,
-		PanelImageSize:      a.PanelImageSize,
-		PageImageSize:       a.PageImageSize,
 		MaxConcurrency:      a.MaxConcurrency,
 		RateInterval:        a.RateInterval,
 		MaxChapters:         a.MaxChapters,

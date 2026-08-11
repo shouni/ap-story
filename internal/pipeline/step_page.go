@@ -24,9 +24,11 @@ func (s AllPagesStep) Execute(ctx context.Context, pc *Context) error {
 	}
 
 	manga, err := pc.Ops.Page.ComposeAllPages(ctx, pc.Manga, ports.BatchOptions{
-		ModelOverride: pc.imageModel(),
-		StyleMode:     pc.styleMode(),
-		OutputDir:     pc.OutputDir,
+		Model:       pc.imageModel(),
+		AspectRatio: pc.Layout.AspectRatio,
+		ImageSize:   pc.Layout.PageImageSize,
+		StyleMode:   pc.styleMode(),
+		OutputDir:   pc.OutputDir,
 		// 章の指定があればその章のページだけを合成する（AllPanelsStep 参照）。
 		ChapterID:     pc.Task.ChapterID,
 		SkipGenerated: s.SkipGenerated,
@@ -54,7 +56,9 @@ func (SinglePageStep) Execute(ctx context.Context, pc *Context) error {
 		Seed:           pc.Task.Seed,
 		EditPrompt:     pc.Task.EditPrompt,
 		PromptOverride: pc.Task.PromptOverride,
-		ModelOverride:  pc.imageModel(),
+		Model:          pc.imageModel(),
+		AspectRatio:    pc.Layout.AspectRatio,
+		ImageSize:      pc.Layout.PageImageSize,
 		StyleMode:      pc.styleMode(),
 		OutputDir:      pc.OutputDir,
 	}

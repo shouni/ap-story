@@ -20,6 +20,9 @@ type Dependencies struct {
 	Ops    *ports.Operations
 	Reader ports.ContentReader
 	Writer remoteio.Writer
+	// Layout は画像の比率と解像度です。キットは設定として持たず呼び出しごとに受け取るため、
+	// 既定の出どころはアプリ側になります。ゼロ値ならキット既定（3:4 / 1K / 2K）です。
+	Layout ImageLayout
 	// Bucket はジョブ成果物を格納する GCS バケット名です（gs:// は付けない）。
 	Bucket string
 	// Planner はコマンドごとの実行計画を決定します。
@@ -174,6 +177,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task, status statusRecord
 			Ops:    r.deps.Ops,
 			Reader: r.deps.Reader,
 			Writer: r.deps.Writer,
+			Layout: r.deps.Layout,
 		},
 	}
 
