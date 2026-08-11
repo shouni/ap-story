@@ -64,8 +64,21 @@ func (pc *Context) textModel() string {
 	return ""
 }
 
-// imageModel は、この実行で画像生成に使うモデルを返します（解決規則は textModel と同じ）。
+// imageModel は、この実行で画像生成に使うモデルを返し、state に記録が無ければ書き残します。
+//
+// 記録するのは、画像モデルを選ぶ場所が台本生成のフォームではなく、作品詳細の
+// 「コマを生成」に移ったためです。台本の時点では未定で、最初の画像生成で決まります。
+// 記録しないと、次の章のボタンがモデル名を持たないまま飛んで ErrInvalidRequest になります。
+// 解決規則そのものは textModel と同じ（Task の指定 → state の記録）です。
 func (pc *Context) imageModel() string {
+	model := pc.resolveImageModel()
+	if model != "" && pc.Manga != nil && pc.Manga.ImageModel == "" {
+		pc.Manga.ImageModel = model
+	}
+	return model
+}
+
+func (pc *Context) resolveImageModel() string {
 	if pc.Task != nil && pc.Task.ModelOverride != "" {
 		return pc.Task.ModelOverride
 	}

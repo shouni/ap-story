@@ -152,6 +152,15 @@ document.addEventListener('click', (event) => {
         payload.stop_after_panels = true;
     }
 
+    // 画像を作るコマンドには、画面で選んだ画像モデルを添える。
+    // 初期選択は作品に記録された値なので、押し続ける限り作品内で揃う。
+    if (command === 'render_comic' || command === 'regenerate_panel' || command === 'regenerate_page') {
+        const model = document.querySelector('.js-image-model')?.value;
+        if (model) {
+            payload.model_override = model;
+        }
+    }
+
     // regenerate_panel は panel_id、regenerate_page は page で対象を指定する
     if (command === 'regenerate_panel') {
         payload.panel_id = target;

@@ -58,18 +58,7 @@
                     <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
                     {{end}}
                 </select>
-                <div class="form-text">章立てとネームを書く Gemini モデルです。</div>
-            </div>
-            {{end}}
-            {{if .Data.ImageModels}}
-            <div class="col-12 col-md-6">
-                <label for="image_model" class="form-label fw-bold">画像モデル</label>
-                <select class="form-select" id="image_model" name="image_model">
-                    {{range .Data.ImageModels}}
-                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
-                    {{end}}
-                </select>
-                <div class="form-text">コマ・ページを描くモデルです。デザインシートは別画面で選びます。</div>
+                <div class="form-text">章立てとネームを書く Gemini モデルです。画像モデルは、コマ数が見えている作品詳細で選びます。</div>
             </div>
             {{end}}
         </div>

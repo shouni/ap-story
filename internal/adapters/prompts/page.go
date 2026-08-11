@@ -185,7 +185,7 @@ func writePanelScene(sb *strings.Builder, panel *comic.Panel, data *ports.PagePr
 		fmt.Fprintf(sb, "- SCENE: %s\n", anchor)
 	}
 	if idx, ok := data.PanelFile[panel.ID]; ok {
-		fmt.Fprintf(sb, "- COMPOSITION_GUIDE: Recreate the composition, posing, and background from input_file_%d inside this panel.\n", idx)
+		fmt.Fprintf(sb, "- COMPOSITION_GUIDE: Recreate the composition, posing, background, and character appearance from input_file_%d inside this panel.\n", idx)
 	}
 }
 
@@ -226,9 +226,17 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 		if char == nil {
 			continue
 		}
-		if idx, ok := data.CharacterFile[pc.CharacterID]; ok {
-			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly. The master reference wins over the panel guide whenever they differ).\n", char.Name, idx, idx)
-		} else {
+		sheet, hasSheet := data.CharacterFile[pc.CharacterID]
+		switch guide, hasGuide := data.PanelFile[panel.ID]; {
+		case hasGuide && hasSheet:
+			// このコマの絵は既にあり、そこに描かれた人物がこの作品での正解です。
+			// 立ち絵は比率も絵柄も違う別の絵なので、優先させると寄せ直しが起きます。
+			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] already appears in input_file_%d — keep exactly that face, hair, and outfit. Consult input_file_%d (character sheet) only for details input_file_%d does not show clearly.\n",
+				char.Name, guide, sheet, guide)
+		case hasSheet:
+			// コマ画像が無いページ（個別再合成など）。このときだけ立ち絵が唯一の手がかりです。
+			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly).\n", char.Name, sheet, sheet)
+		default:
 			fmt.Fprintf(sb, "- SUBJECT: %s\n", char.Name)
 		}
 		var traits []string

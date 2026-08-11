@@ -76,6 +76,10 @@ type historyDetailData struct {
 	// PendingPanels / PendingPages は作品全体での未生成の有無です（章ごとの同名項目と同じ役割）。
 	PendingPanels bool
 	PendingPages  bool
+	// ImageModels は画像モデルの選択肢です。台本の時点ではコマ数も絵柄も分からないので、
+	// 選ぶのはここ（画像生成を始める画面）です。初期選択は state に記録された値で、
+	// 1作品が途中から別のモデルにならないようにしています。
+	ImageModels []selectOption
 }
 
 // historyPendingData は history_pending.html テンプレートに渡すデータです。
@@ -157,6 +161,7 @@ func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) hist
 	}
 
 	data.HasPendingImages, data.HasAnyImage = imageProgress(state)
+	data.ImageModels = modelOptions(h.imageModels, state.ImageModel)
 	data.PendingPanels, data.PendingPages = pendingImages(state, "")
 	for i := range data.Chapters {
 		data.Chapters[i].PendingPanels, data.Chapters[i].PendingPages = pendingImages(state, data.Chapters[i].ID)

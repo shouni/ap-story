@@ -1040,3 +1040,41 @@ func TestRunnerRenderComicPassesSeedToBothStages(t *testing.T) {
 		}
 	}
 }
+
+// 画像モデルは最初の画像生成で作品に記録され、次の章はそれを引き継ぎます。
+// 台本の時点では未定なので、記録しないと2回目のボタンがモデル名なしで飛びます。
+func TestRunnerRecordsImageModelOnFirstRender(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	statePath := "gs://test-bucket/comics/job-rec/comic_state.json"
+	store.files[statePath] = []byte(`{
+		"version": 1,
+		"id": "job-rec",
+		"chapters": [{"id": "ch01", "title": "第一章"}],
+		"panels": [{"id": "ch01-p01", "chapter_id": "ch01", "page": 1, "visual_anchor": "a", "characters": [], "dialogues": []}]
+	}`)
+	panel := &fakePanel{}
+	r := newTestRunner(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, &fakePage{}))
+
+	// 1回目: 画面で選んだモデルが Task に乗ってくる。
+	if err := r.Run(context.Background(), &domain.Task{
+		Command: domain.TaskCommandRenderComic, JobID: "job-rec",
+		ModelOverride: "image-alt", StopAfterPanels: true,
+	}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if !strings.Contains(string(store.files[statePath]), `"image_model": "image-alt"`) {
+		t.Fatalf("画像モデルが作品に記録されていない: %s", store.files[statePath])
+	}
+
+	// 2回目: モデル指定なしでも、記録した値を引き継ぐ。
+	panel.lastBatchOpts = ports.BatchOptions{}
+	if err := r.Run(context.Background(), &domain.Task{
+		Command: domain.TaskCommandRenderComic, JobID: "job-rec", StopAfterPanels: true,
+	}); err != nil {
+		t.Fatalf("Run (2nd) failed: %v", err)
+	}
+	if panel.lastBatchOpts.Model != "image-alt" {
+		t.Errorf("model = %q, want image-alt (記録の引き継ぎ)", panel.lastBatchOpts.Model)
+	}
+}
