@@ -102,7 +102,7 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 		"PANEL COUNT: [ 2 ]",
 		"PANEL 1: ROW 1, RIGHT column",
 		"PANEL 2: ROW 1, LEFT column",
-		"SUBJECT [ずんだもん]: Match input_file_1",
+		// コマ画像がある側が正解なので、立ち絵の一覧は出さない（下の専用テスト参照）。
 		"SUBJECT [めたん]: Match input_file_2",
 		"COMPOSITION_GUIDE: Recreate the composition, posing, background, and character appearance from input_file_3",
 		// コマ画像がある側が正解。立ち絵は細部の補助に降りる。
@@ -315,5 +315,45 @@ func TestPagePromptPrefersPanelOverCharacterSheet(t *testing.T) {
 	}
 	if !strings.Contains(withoutGuide, "MUST match input_file_1 exactly") {
 		t.Errorf("コマ画像が無いのに立ち絵を使う指示が出ていない:\n%s", withoutGuide)
+	}
+}
+
+// コマ画像に写っているキャラは、そのコマが手本です。
+// 立ち絵の一覧を重ねて出すと、コマ単位の指示と競合します（説明文も700字近くあります）。
+func TestPagePromptOmitsMasterListWhenPanelsCoverEveryone(t *testing.T) {
+	t.Parallel()
+
+	panel := comic.Panel{
+		ID: "ch01-p01", Page: 1, VisualAnchor: "bridge",
+		Characters: []comic.PanelCharacter{{CharacterID: "zundamon", Prominence: comic.ProminencePrimary}},
+	}
+
+	_, covered, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{panel}, Characters: testCharacters(t),
+		CharacterFile: map[string]int{"zundamon": 1},
+		PanelFile:     map[string]int{"ch01-p01": 2},
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if strings.Contains(covered, "CHARACTER MASTER REFERENCES") {
+		t.Errorf("コマ画像があるのに立ち絵の一覧が出ている:\n%s", covered)
+	}
+	if strings.Contains(covered, "green hair") {
+		t.Error("立ち絵の説明文がページのプロンプトに残っている")
+	}
+
+	// コマ画像が無いキャラは、立ち絵が唯一の手本なので残す。
+	_, uncovered, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{panel}, Characters: testCharacters(t),
+		CharacterFile: map[string]int{"zundamon": 1},
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	for _, want := range []string{"CHARACTER MASTER REFERENCES", "no panel guide", "green hair"} {
+		if !strings.Contains(uncovered, want) {
+			t.Errorf("コマ画像が無いのに %q が出ていない", want)
+		}
 	}
 }
