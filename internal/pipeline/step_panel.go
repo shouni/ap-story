@@ -24,8 +24,10 @@ func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 	}
 
 	manga, err := pc.Ops.Panel.GenerateAllPanels(ctx, pc.Manga, ports.BatchOptions{
-		Seed:      pc.Task.Seed,
-		OutputDir: pc.OutputDir,
+		Seed:          pc.Task.Seed,
+		ModelOverride: pc.imageModel(),
+		StyleMode:     pc.styleMode(),
+		OutputDir:     pc.OutputDir,
 		// 章の指定があればその章だけを生成する。画像はいちばん高価な工程なので、
 		// 確認の単位を台本（章単位）と揃えられるようにしている。
 		ChapterID:     pc.Task.ChapterID,
@@ -56,6 +58,8 @@ func (SinglePanelStep) Execute(ctx context.Context, pc *Context) error {
 		Seed:           pc.Task.Seed,
 		EditPrompt:     pc.Task.EditPrompt,
 		PromptOverride: pc.Task.PromptOverride,
+		ModelOverride:  pc.imageModel(),
+		StyleMode:      pc.styleMode(),
 		OutputDir:      pc.OutputDir,
 	}
 	manga, err := pc.Ops.Panel.GeneratePanel(ctx, pc.Manga, pc.Task.PanelID, opts)

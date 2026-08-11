@@ -10,9 +10,8 @@ import (
 func TestDesignPromptBuildsSingleSubject(t *testing.T) {
 	t.Parallel()
 
-	system, user, negative, err := DesignPrompt{}.BuildDesignSheet(&ports.DesignSheetPromptData{
+	system, user, negative, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{
 		Descriptions: []string{"Zundamon (green hair)"},
-		StyleSuffix:  "anime style",
 	})
 	if err != nil {
 		t.Fatalf("BuildDesignSheet failed: %v", err)
@@ -47,7 +46,7 @@ func TestDesignPromptBuildsSingleSubject(t *testing.T) {
 func TestDesignPromptMultiSubject(t *testing.T) {
 	t.Parallel()
 
-	_, user, _, err := DesignPrompt{}.BuildDesignSheet(&ports.DesignSheetPromptData{
+	_, user, _, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{
 		Descriptions: []string{"Zundamon", "Metan"},
 	})
 	if err != nil {
@@ -67,7 +66,7 @@ func TestDesignPromptMultiSubject(t *testing.T) {
 func TestDesignPromptSingleViewLayout(t *testing.T) {
 	t.Parallel()
 
-	_, user, _, err := DesignPrompt{}.BuildDesignSheet(&ports.DesignSheetPromptData{
+	_, user, _, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{
 		Descriptions: []string{"Zundamon"},
 		Layout:       ports.DesignLayoutSingleView,
 	})
@@ -85,7 +84,7 @@ func TestDesignPromptSingleViewLayout(t *testing.T) {
 func TestDesignPromptSingleViewMultiSubject(t *testing.T) {
 	t.Parallel()
 
-	_, user, _, err := DesignPrompt{}.BuildDesignSheet(&ports.DesignSheetPromptData{
+	_, user, _, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{
 		Descriptions: []string{"Zundamon", "Metan"},
 		Layout:       ports.DesignLayoutSingleView,
 	})
@@ -106,10 +105,10 @@ func TestDesignPromptSingleViewMultiSubject(t *testing.T) {
 func TestDesignPromptRejectsEmptyDescriptions(t *testing.T) {
 	t.Parallel()
 
-	if _, _, _, err := (DesignPrompt{}).BuildDesignSheet(&ports.DesignSheetPromptData{}); err == nil {
+	if _, _, _, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{}); err == nil {
 		t.Error("BuildDesignSheet with no descriptions succeeded, want error")
 	}
-	if _, _, _, err := (DesignPrompt{}).BuildDesignSheet(nil); err == nil {
+	if _, _, _, err := testDesignPrompt(t).BuildDesignSheet(nil); err == nil {
 		t.Error("BuildDesignSheet(nil) succeeded, want error")
 	}
 }

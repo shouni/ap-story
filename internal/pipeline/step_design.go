@@ -25,6 +25,7 @@ func (DesignSheetStep) Execute(ctx context.Context, pc *Context) error {
 		AspectRatio:   pc.Task.AspectRatio,
 		Layout:        pc.Task.Layout,
 		ModelOverride: pc.Task.ModelOverride,
+		StyleMode:     pc.Task.StyleMode,
 		// Seed はキット側も *int64 なので、nil のまま渡せば「解決はキットに任せる」意味になる。
 		Seed: pc.Task.Seed,
 	}

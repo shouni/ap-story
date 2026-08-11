@@ -109,8 +109,8 @@ func TestLoadConfigParsesAllowedTaskServiceAccounts(t *testing.T) {
 	}, cfg.Tasks.AllowedServiceAccounts)
 }
 
-// 画風指定はアプリが既定値を持ちますが、モデル名は持ちません。既定値へ黙って落ちると、
-// 古いモデルを使い続けたまま気付けないためです。
+// モデル名に既定値はありません。既定値へ黙って落ちると、古いモデルを使い続けたまま
+// 気付けないためです。画風は設定ではなく assets/prompts/styles.json が持ちます。
 func TestLoadConfigAppliesAIDefaults(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 
@@ -121,8 +121,6 @@ func TestLoadConfigAppliesAIDefaults(t *testing.T) {
 	require.Empty(t, cfg.AI.ImageModels)
 	require.Empty(t, cfg.AI.GeminiModel)
 	require.Empty(t, cfg.AI.ImageModel)
-	require.Equal(t, DefaultStyleSuffix, cfg.AI.StyleSuffix)
-	require.Equal(t, DefaultDesignStyleSuffix, cfg.AI.DesignStyleSuffix)
 }
 
 func TestLoadConfigProducesValidKitConfig(t *testing.T) {
@@ -136,6 +134,8 @@ func TestLoadConfigProducesValidKitConfig(t *testing.T) {
 	// モデル名さえ与えれば go-comic-kit の必須項目を満たすこと。キットが必須項目を
 	// 増やしたときに、本番の起動時ではなくここで落ちるようにするための番人。
 	// 順序は workflow.New と同じ（ApplyDefaults → Validate）にします。
+	//
+	// 画風はキットの必須項目ではありません（プリセットから呼び出しごとに渡します）。
 	kit := cfg.AI.KitConfig()
 	kit.ApplyDefaults()
 	require.NoError(t, kit.Validate())
@@ -146,7 +146,6 @@ func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 	t.Setenv("GEMINI_MODELS", " gemini-explicit , gemini-alt ")
 	t.Setenv("IMAGE_MODELS", "image-explicit,image-alt")
-	t.Setenv("STYLE_SUFFIX", "watercolor")
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
@@ -155,16 +154,12 @@ func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 	require.Equal(t, []string{"image-explicit", "image-alt"}, cfg.AI.ImageModels)
 	require.Equal(t, "gemini-explicit", cfg.AI.GeminiModel)
 	require.Equal(t, "image-explicit", cfg.AI.ImageModel)
-	require.Equal(t, "watercolor", cfg.AI.StyleSuffix)
-	require.Equal(t, DefaultDesignStyleSuffix, cfg.AI.DesignStyleSuffix)
 }
 
 func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	ai := AIConfig{
 		GeminiModel:         "gemini-x",
 		ImageModel:          "image-x",
-		StyleSuffix:         "style",
-		DesignStyleSuffix:   "design-style",
 		MaxConcurrency:      3,
 		MaxChapters:         5,
 		MaxPanelsPerChapter: 6,
@@ -174,8 +169,6 @@ func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	kit := ai.KitConfig()
 	require.Equal(t, "gemini-x", kit.GeminiModel)
 	require.Equal(t, "image-x", kit.ImageModel)
-	require.Equal(t, "style", kit.StyleSuffix)
-	require.Equal(t, "design-style", kit.DesignStyleSuffix)
 	require.Equal(t, 3, kit.MaxConcurrency)
 	require.Equal(t, 5, kit.MaxChapters)
 	require.Equal(t, 6, kit.MaxPanelsPerChapter)

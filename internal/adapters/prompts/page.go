@@ -14,9 +14,9 @@ const (
 	// パネル数・レイアウトの厳守と、参照画像とのキャラクター同一性を最優先させます。
 	pageSystemPrompt = `You are a master digital manga artist. You MUST follow the exact panel count and layout rules. Character identity MUST match the character master reference files.
 
-### FORMAT RULES: FULL COLOR ANIME MANGA ###
-- STYLE: Vibrant Full Color Digital Anime Style. High saturation, cinematic lighting.
-- RENDERING: Sharp clean lineart with professional digital coloring. NO screentones.
+### FORMAT RULES ###
+- STYLE: Follow the ARTISTIC STYLE section below exactly. It decides colour and rendering.
+- RENDERING: Sharp clean lineart with a professional finish.
 - LAYOUT: Strict multi-panel composition. Use ONLY the specified number of panels.
 - NO FILLER: Do not add extra panels or decorative small frames. Fill the page with the given count.
 - BORDERS: Deep black, crisp frame borders for EVERY panel.
@@ -24,8 +24,11 @@ const (
 - READING FLOW: Right-to-Left, Top-to-Bottom.`
 
 	// pageNegativePrompt はページ画像に含めたくない要素を指定する負のプロンプトです。
-	// モノクロ・スクリーントーンの排除（フルカラー強制）と、パネル数の暴走・手の崩れ対策を含みます。
-	pageNegativePrompt = "monochrome, black and white, greyscale, screentone, hatching, dot shades, ink sketch, line art only, realistic photos, 3d render, watermark, signature, deformed faces, bad anatomy, disfigured, poorly drawn hands, extra fingers, missing fingers, extra panels, unexpected panels, more than specified panels, split panels"
+	// パネル数の暴走・手の崩れ・透かしなど、画風によらないものだけを並べます。
+	//
+	// 彩色の指定（monochrome / screentone 等の排除）はスタイルプリセットの negative が
+	// 持ちます。ここでフルカラーを強制すると、モノクロのスタイルを選べなくなります。
+	pageNegativePrompt = "watermark, signature, deformed faces, bad anatomy, disfigured, poorly drawn hands, extra fingers, missing fingers, extra panels, unexpected panels, more than specified panels, split panels"
 
 	// pageEditInstruction は編集モードでレイアウトの維持を指示する共通プレフィックスです。
 	pageEditInstruction = "Edit the attached manga page image. Keep the panel layout, compositions, dialogue balloons, and art style unchanged. Apply ONLY this change: "
@@ -33,7 +36,10 @@ const (
 
 // PagePrompt は ap-story のページ合成プロンプトです。
 // コマ割り・フキダシ・写植の指示を含む、作品固有の作り込みを持ちます。
-type PagePrompt struct{}
+type PagePrompt struct {
+	// Styles は画風プリセットです（PanelPrompt.Styles と同じ役割）。
+	Styles *Styles
+}
 
 var _ ports.PagePrompt = PagePrompt{}
 
@@ -43,19 +49,26 @@ func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, strin
 		return "", "", "", fmt.Errorf("page prompt data is required")
 	}
 
+	styleSuffix, negative, err := resolveStyle(p.Styles, data.StyleMode, pageNegativePrompt, imageSuffix)
+	if err != nil {
+		return "", "", "", err
+	}
+
 	var sb strings.Builder
 	numPanels := len(data.Panels)
 
-	sb.WriteString("# FULL COLOR PAGE PRODUCTION REQUEST\n")
+	sb.WriteString("# PAGE PRODUCTION REQUEST\n")
 	sb.WriteString("- OUTPUT: ONE single portrait manga page image.\n")
-	sb.WriteString("- COLOR: STRICTLY VIBRANT FULL COLOR. NO monochrome, NO screentones.\n")
+	// 彩色はスタイルプリセットの指定（ART STYLE として後置される）に従わせます。
+	// ここでフルカラーを言い切ると、モノクロのスタイルと真逆の指示になります。
+	sb.WriteString("- COLOR: Follow the ARTISTIC STYLE instruction exactly.\n")
 	fmt.Fprintf(&sb, "- PANEL COUNT: [ %d ] (STRICTLY ONLY %d PANELS. DO NOT ADD ANY MORE).\n\n", numPanels, numPanels)
 
 	writeLayoutStructure(&sb, numPanels)
 	writeCharacterReferences(&sb, data)
 	writePanelBreakdown(&sb, data)
 
-	return p.systemPrompt(data.StyleSuffix), strings.TrimRight(sb.String(), "\n"), pageNegativePrompt, nil
+	return p.systemPrompt(styleSuffix), strings.TrimRight(sb.String(), "\n"), negative, nil
 }
 
 // BuildPageEdit は既存ページ画像への編集指示を構築します。

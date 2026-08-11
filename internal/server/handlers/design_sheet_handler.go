@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -27,17 +25,15 @@ type designSheetCharacterOption struct {
 	Checked bool
 }
 
-// designSheetModelOption は design_sheet_form.html に渡す1モデル分の選択肢です。
-type designSheetModelOption struct {
-	Value string
-	Label string
-}
-
 // designSheetFormData は design_sheet_form.html テンプレートに渡すデータです。
 // エラー時は入力値（選択済みキャラクター等）を保持したままフォームを再表示します。
 type designSheetFormData struct {
 	Characters []designSheetCharacterOption
-	Models     []designSheetModelOption
+	Models     []selectOption
+	// StyleModes は画風の選択肢です。シートはパネル用ではなくシート用の画風指定
+	// （styles.json の design_style）で生成されます。
+	StyleModes []selectOption
+	StyleMode  string
 	// ModelOverride は選択されたモデル名です（空文字なら既定モデル）。
 	ModelOverride string
 	AspectRatio   string
@@ -67,28 +63,23 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 			})
 		}
 	}
-	// 先頭が既定モデル。用途ごとの使い分けは持たないので、一覧をそのまま選択肢にします。
-	for i, model := range h.imageModels {
-		label := model
-		if i == 0 {
-			label = "既定: " + model
-		}
-		data.Models = append(data.Models, designSheetModelOption{Value: model, Label: label})
-	}
+	data.Models = modelOptions(h.imageModels, "")
+	data.StyleModes = modeOptions(h.styleModes, "")
 	return data
 }
 
 // validateModelOverride は、指定された画像モデルが IMAGE_MODELS に含まれるかを確かめます。
 // 空文字は「既定モデル（worker 側の IMAGE_MODELS 先頭）を使う」意味なので常に有効です。
-//
-// domain.Task の検証ではなくここに置くのは、許可リストが env 由来でドメイン層が知らないためです。
-// ブラウザは <select> の選択肢に縛られますが、JSON API は任意の文字列を送れます。
 func (h *Handler) validateModelOverride(model string) error {
-	model = strings.TrimSpace(model)
-	if model == "" || slices.Contains(h.imageModels, model) {
-		return nil
+	return validateAllowed("画像モデル", model, h.imageModels)
+}
+
+// validateDesignSheetChoices は、デザインシート生成の選択が許可リストに収まるかを確かめます。
+func (h *Handler) validateDesignSheetChoices(task domain.Task) error {
+	if err := validateAllowed("スタイルモード", task.StyleMode, modeNames(h.styleModes)); err != nil {
+		return err
 	}
-	return fmt.Errorf("不正な画像モデルです: %s", model)
+	return h.validateModelOverride(task.ModelOverride)
 }
 
 // splitVisualCues は、改行またはカンマ区切りの入力を見た目特徴のリストへ分割します。
@@ -124,6 +115,7 @@ type designSheetTaskParams struct {
 	CharacterIDs         []string
 	AspectRatio          string
 	Layout               string
+	StyleMode            string
 	ModelOverride        string
 	ReferenceURLOverride string
 	VisualCuesOverride   []string
@@ -151,6 +143,7 @@ func newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
 		CharacterIDs:         p.CharacterIDs,
 		AspectRatio:          aspectRatio,
 		Layout:               p.Layout,
+		StyleMode:            p.StyleMode,
 		ModelOverride:        p.ModelOverride,
 		ReferenceURLOverride: p.ReferenceURLOverride,
 		VisualCuesOverride:   p.VisualCuesOverride,
@@ -187,12 +180,15 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 	characterIDs := r.PostForm["character_ids"]
 	aspectRatio := strings.TrimSpace(r.PostFormValue("aspect_ratio"))
 	layout := strings.TrimSpace(r.PostFormValue("layout"))
+	styleMode := strings.TrimSpace(r.PostFormValue("style_mode"))
 	modelOverride := strings.TrimSpace(r.PostFormValue("model_override"))
 	referenceURLOverride := strings.TrimSpace(r.PostFormValue("reference_url_override"))
 	visualCuesOverrideRaw := strings.TrimSpace(r.PostFormValue("visual_cues_override"))
 	formData := h.buildDesignSheetFormData(characterIDs)
 	formData.AspectRatio = aspectRatio
 	formData.Layout = layout
+	formData.StyleMode = styleMode
+	formData.StyleModes = modeOptions(h.styleModes, styleMode)
 	formData.ModelOverride = modelOverride
 	formData.ReferenceURLOverride = referenceURLOverride
 	formData.VisualCuesOverride = visualCuesOverrideRaw
@@ -201,6 +197,7 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 		CharacterIDs:         characterIDs,
 		AspectRatio:          aspectRatio,
 		Layout:               layout,
+		StyleMode:            styleMode,
 		ModelOverride:        modelOverride,
 		ReferenceURLOverride: referenceURLOverride,
 		VisualCuesOverride:   splitVisualCues(visualCuesOverrideRaw),
@@ -219,7 +216,7 @@ func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.validateModelOverride(task.ModelOverride); err != nil {
+	if err := h.validateDesignSheetChoices(task); err != nil {
 		formData.ErrorMessage = err.Error()
 		h.render(w, r, http.StatusBadRequest, "design_sheet_form.html", "デザインシートを生成", formData)
 		return

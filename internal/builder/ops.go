@@ -35,6 +35,11 @@ func buildOperations(
 		return nil, fmt.Errorf("failed to initialize ap-story script prompts: %w", err)
 	}
 
+	styles, err := prompts.NewStyles()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize ap-story styles: %w", err)
+	}
+
 	ops, err := workflow.New(workflow.Args{
 		Config:              cfg.AI.KitConfig(),
 		HTTPClient:          httpClient,
@@ -44,9 +49,9 @@ func buildOperations(
 		Characters:          characters,
 		OutlinePrompt:       scriptPrompts,
 		ChapterScriptPrompt: scriptPrompts,
-		DesignSheetPrompt:   prompts.DesignPrompt{},
-		PanelPrompt:         prompts.PanelPrompt{},
-		PagePrompt:          prompts.PagePrompt{},
+		DesignSheetPrompt:   prompts.DesignPrompt{Styles: styles},
+		PanelPrompt:         prompts.PanelPrompt{Styles: styles},
+		PagePrompt:          prompts.PagePrompt{Styles: styles},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", err)

@@ -36,6 +36,45 @@ type Services struct {
 	Writer remoteio.Writer
 }
 
+// textModel は、この実行で台本生成に使うテキストモデルを返します。
+// Task の指定を優先し、無ければ state の記録（この作品を書いたモデル）を引き継ぎます。
+// どちらも空なら空文字を返し、worker の設定（GEMINI_MODELS 先頭）が使われます。
+//
+// 引き継ぐのは、章の台本を後から作り直したときに他の章と違うモデルが書くのを防ぐためです。
+func (pc *Context) textModel() string {
+	if pc.Task != nil && pc.Task.TextModel != "" {
+		return pc.Task.TextModel
+	}
+	if pc.Manga != nil {
+		return pc.Manga.TextModel
+	}
+	return ""
+}
+
+// imageModel は、この実行で画像生成に使うモデルを返します（解決規則は textModel と同じ）。
+func (pc *Context) imageModel() string {
+	if pc.Task != nil && pc.Task.ModelOverride != "" {
+		return pc.Task.ModelOverride
+	}
+	if pc.Manga != nil {
+		return pc.Manga.ImageModel
+	}
+	return ""
+}
+
+// styleMode は、この実行で使う画風モードを返します。
+// 画風は作品単位の絵作りなので、Task ではなく state（章立て時に決めた値）を見ます。
+// これで「台本まで生成 → 後から画像生成」でも同じ画風が使われます。
+//
+// 画風指定とネガティブプロンプトへの解決は、プロンプト実装
+// （internal/adapters/prompts の Styles）が行います。パイプラインは名前を運ぶだけです。
+func (pc *Context) styleMode() string {
+	if pc.Manga == nil {
+		return ""
+	}
+	return pc.Manga.StyleMode
+}
+
 // Context は、パイプライン各ステップ間で引き継がれる実行コンテキストです。
 // 埋め込みによるフィールド昇格で pc.Task / pc.Manga のようにフラットに参照できます。
 type Context struct {

@@ -56,6 +56,21 @@
             </div>
         </div>
 
+        {{if .Data.StyleModes}}
+        <div class="mb-3">
+            <label for="style_mode" class="form-label fw-bold">スタイルモード</label>
+            <select class="form-select" id="style_mode" name="style_mode">
+                {{range .Data.StyleModes}}
+                <option value="{{.Value}}"{{if .Selected}} selected{{end}}{{with .Hint}} title="{{.}}"{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
+            <div class="form-text">
+                シート用の画風（演出照明を含まない指定）で生成します。参照アンカーにするなら、
+                その作品のスタイルモードと揃えてください。
+            </div>
+        </div>
+        {{end}}
+
         {{if .Data.Models}}
         <div class="mb-3">
             <label for="model_override" class="form-label fw-bold">画像モデル</label>

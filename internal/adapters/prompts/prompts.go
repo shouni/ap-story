@@ -6,9 +6,11 @@ package prompts
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/shouni/go-comic-kit/ports"
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
+	"github.com/shouni/go-prompt-kit/resource"
 
 	"github.com/shouni/ap-story/assets"
 )
@@ -20,6 +22,9 @@ const ModeDefault = "default"
 type ScriptPrompts struct {
 	outline *promptkit.Builder
 	chapter *promptkit.Builder
+	// infos は章立てテンプレートの front matter です。台本モードの説明は
+	// 章立て側に書きます（1つのモードの説明が2ファイルに割れないようにするため）。
+	infos map[string]ModeInfo
 }
 
 var (
@@ -28,16 +33,34 @@ var (
 )
 
 // NewScriptPrompts は埋め込みテンプレートを読み込んで ScriptPrompts を構築します。
+//
+// 台本モードは章立てと章台本の両方でそのモード名のテンプレートを引くため、
+// 片方にしか無いモードは構築時に弾きます。選択肢に出したモードが章の生成に入って
+// から「テンプレートが無い」と落ちるのを、起動時に前倒しするためです。
 func NewScriptPrompts() (*ScriptPrompts, error) {
-	outline, err := loadPrompts(assets.OutlinePromptDir)
+	outline, infos, err := loadPrompts(assets.OutlinePromptDir)
 	if err != nil {
 		return nil, fmt.Errorf("章立てテンプレートの読み込みに失敗しました: %w", err)
 	}
-	chapter, err := loadPrompts(assets.ChapterPromptDir)
+	chapter, _, err := loadPrompts(assets.ChapterPromptDir)
 	if err != nil {
 		return nil, fmt.Errorf("章台本テンプレートの読み込みに失敗しました: %w", err)
 	}
-	return &ScriptPrompts{outline: outline, chapter: chapter}, nil
+	outlineModes, chapterModes := sortedModes(outline), sortedModes(chapter)
+	if !slices.Equal(outlineModes, chapterModes) {
+		return nil, fmt.Errorf("台本モードが章立てと章台本で一致しません: outline=%v chapter=%v", outlineModes, chapterModes)
+	}
+	return &ScriptPrompts{outline: outline, chapter: chapter, infos: infos}, nil
+}
+
+// Modes は選択できる台本モード名を名前順で返します。フォームの検証に使います。
+func (p *ScriptPrompts) Modes() []string {
+	return sortedModes(p.outline)
+}
+
+// ModeInfos は選択できる台本モードの説明を名前順で返します。フォームの選択肢に使います。
+func (p *ScriptPrompts) ModeInfos() []ModeInfo {
+	return sortedInfos(p.outline, p.infos)
 }
 
 // BuildOutline は章立て生成プロンプトを構築します。
@@ -50,10 +73,57 @@ func (p *ScriptPrompts) BuildChapterScript(mode string, data *ports.ChapterPromp
 	return execute(p.chapter, mode, data)
 }
 
-// loadPrompts は、埋め込みディレクトリ配下の .md をモード名（拡張子を除いたファイル名）で読み込みます。
-// 該当ファイルが無い場合は go-prompt-kit 側がエラーを返します。
-func loadPrompts(dir string) (*promptkit.Builder, error) {
-	return promptkit.LoadFS(assets.Prompts, dir, "", promptkit.WithExtensions(".md"))
+// loadPrompts は、埋め込みディレクトリ配下の .md をモード名（拡張子を除いたファイル名）で
+// 読み込み、front matter を本文から切り離してテンプレートとモード説明を返します。
+//
+// promptkit.LoadFS ではなく resource.Load を直接呼ぶのは、front matter がプロンプト本文へ
+// 紛れ込まないよう、テンプレート化の前に切り落とす必要があるためです。
+func loadPrompts(dir string) (*promptkit.Builder, map[string]ModeInfo, error) {
+	files, err := resource.Load(assets.Prompts, dir, "", resource.WithExtensions(".md"))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bodies := make(map[string]string, len(files))
+	infos := make(map[string]ModeInfo, len(files))
+	for mode, content := range files {
+		front, body := splitFrontMatter(content)
+		info, err := parseModeInfo(mode, front)
+		if err != nil {
+			return nil, nil, err
+		}
+		bodies[mode] = body
+		infos[mode] = info
+	}
+
+	builder, err := promptkit.NewBuilder(bodies)
+	if err != nil {
+		return nil, nil, err
+	}
+	return builder, infos, nil
+}
+
+// sortedModes は、読み込み済みテンプレートのモード名を名前順で返します。
+// go-prompt-kit の Modes() は登録順なので、画面の並びが埋め込みの走査順に
+// 左右されないようここで固定します。
+func sortedModes(builder *promptkit.Builder) []string {
+	modes := builder.Modes()
+	slices.Sort(modes)
+	return modes
+}
+
+// sortedInfos は、読み込み済みテンプレートのモード説明を名前順で返します。
+func sortedInfos(builder *promptkit.Builder, infos map[string]ModeInfo) []ModeInfo {
+	modes := sortedModes(builder)
+	out := make([]ModeInfo, 0, len(modes))
+	for _, mode := range modes {
+		info, ok := infos[mode]
+		if !ok {
+			info = ModeInfo{Name: mode}
+		}
+		out = append(out, info)
+	}
+	return out
 }
 
 // execute はモード未指定を既定モードへ寄せたうえでプロンプトを構築します。

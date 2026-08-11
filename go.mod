@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/shouni/gcp-kit v1.9.0
 	github.com/shouni/go-character-kit v1.1.0
-	github.com/shouni/go-comic-kit v1.4.2
+	github.com/shouni/go-comic-kit v1.4.4
 	github.com/shouni/go-gemini-client v1.17.0
 	github.com/shouni/go-http-kit v1.8.0
 	github.com/shouni/go-job-kit v1.0.5
@@ -17,6 +17,7 @@ require (
 	github.com/shouni/go-utils v1.5.0
 	github.com/shouni/netarmor v1.2.0
 	github.com/stretchr/testify v1.11.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -81,5 +82,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

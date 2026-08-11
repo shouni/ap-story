@@ -21,21 +21,32 @@ import (
 
 // --- Fakes ---
 
-type fakeOutline struct{ called int }
+type fakeOutline struct {
+	called    int
+	lastModel string
+}
 
 func (f *fakeOutline) GenerateOutline(_ context.Context, req ports.OutlineRequest) (*comic.MangaState, error) {
 	f.called++
+	f.lastModel = req.ModelOverride
+	// 本物と同じく、指定されたモードを state に写して返す（以降の工程はここを見る）。
 	return &comic.MangaState{
-		Version:  comic.StateSchemaVersion,
-		Title:    "title from " + req.SourceText,
-		Chapters: []comic.Chapter{{ID: "ch01", Title: "第一章"}, {ID: "ch02", Title: "第二章"}},
+		Version:    comic.StateSchemaVersion,
+		Title:      "title from " + req.SourceText,
+		ScriptMode: req.Mode,
+		StyleMode:  req.StyleMode,
+		Chapters:   []comic.Chapter{{ID: "ch01", Title: "第一章"}, {ID: "ch02", Title: "第二章"}},
 	}, nil
 }
 
-type fakeChapterScript struct{ calledChapters []string }
+type fakeChapterScript struct {
+	calledChapters []string
+	lastModel      string
+}
 
-func (f *fakeChapterScript) GenerateChapterScript(_ context.Context, state *comic.MangaState, chapterID string) (*comic.MangaState, error) {
+func (f *fakeChapterScript) GenerateChapterScript(_ context.Context, state *comic.MangaState, chapterID string, opts ports.ChapterScriptOptions) (*comic.MangaState, error) {
 	f.calledChapters = append(f.calledChapters, chapterID)
+	f.lastModel = opts.ModelOverride
 	state.Panels = append(state.Panels, comic.Panel{ID: chapterID + "-p01", ChapterID: chapterID, Page: len(f.calledChapters)})
 	return state, nil
 }
@@ -799,5 +810,114 @@ func TestRunnerComposeComicFreshJobRunsFullPipeline(t *testing.T) {
 	}
 	if len(panel.calledPanels) == 0 {
 		t.Error("コマが1つも生成されていない")
+	}
+}
+
+// フォームで選んだモデルと画風が、台本・コマ・ページのすべてに届くこと。
+// 章ごと・工程ごとに違うモデルが混ざると、1つの作品の中で文体も絵柄も揃いません。
+func TestRunnerComposeComicPassesModelAndStyleChoices(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	outline := &fakeOutline{}
+	chapter := &fakeChapterScript{}
+	panel := &fakePanel{}
+	page := &fakePage{}
+	r := newTestRunner(t, store, fullOps(outline, chapter, &fakeDesignSheet{}, panel, page))
+
+	task := &domain.Task{
+		Command:       domain.TaskCommandComposeComic,
+		JobID:         "job-models",
+		SourceText:    "元文章",
+		TextModel:     "gemini-selected",
+		ModelOverride: "image-selected",
+		StyleMode:     "watercolor",
+	}
+	if err := r.Run(context.Background(), task); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if outline.lastModel != "gemini-selected" {
+		t.Errorf("outline model = %q, want gemini-selected", outline.lastModel)
+	}
+	if chapter.lastModel != "gemini-selected" {
+		t.Errorf("chapter script model = %q, want gemini-selected", chapter.lastModel)
+	}
+	if panel.lastBatchOpts.ModelOverride != "image-selected" {
+		t.Errorf("panel model = %q, want image-selected", panel.lastBatchOpts.ModelOverride)
+	}
+	if page.lastBatchOpts.ModelOverride != "image-selected" {
+		t.Errorf("page model = %q, want image-selected", page.lastBatchOpts.ModelOverride)
+	}
+	if panel.lastBatchOpts.StyleMode != "watercolor" {
+		t.Errorf("panel style mode = %q, want watercolor", panel.lastBatchOpts.StyleMode)
+	}
+	if page.lastBatchOpts.StyleMode != "watercolor" {
+		t.Errorf("page style mode = %q, want watercolor", page.lastBatchOpts.StyleMode)
+	}
+
+	// 選択は state にも残す。後続の render_comic / 章の作り直しがここから引き継ぐ。
+	saved := string(store.files["gs://test-bucket/comics/job-models/comic_state.json"])
+	for _, want := range []string{`"text_model": "gemini-selected"`, `"image_model": "image-selected"`, `"style_mode": "watercolor"`} {
+		if !strings.Contains(saved, want) {
+			t.Errorf("saved state missing %s; got: %s", want, saved)
+		}
+	}
+}
+
+// 台本まで作った作品を後から画像生成するときは、Task にモデルの指定が無くても
+// state に記録された選択を引き継ぐこと。引き継がないと、続きだけ別のモデルで描かれます。
+func TestRunnerRenderComicInheritsRecordedChoices(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	store.files["gs://test-bucket/comics/job-resume/comic_state.json"] = []byte(`{
+		"version": 1,
+		"id": "job-resume",
+		"style_mode": "watercolor",
+		"text_model": "gemini-recorded",
+		"image_model": "image-recorded",
+		"chapters": [{"id": "ch01", "title": "第一章"}],
+		"panels": [{"id": "ch01-p01", "chapter_id": "ch01", "page": 1, "visual_anchor": "a", "characters": [], "dialogues": []}]
+	}`)
+	panel := &fakePanel{}
+	page := &fakePage{}
+	r := newTestRunner(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, page))
+
+	task := &domain.Task{Command: domain.TaskCommandRenderComic, JobID: "job-resume"}
+	if err := r.Run(context.Background(), task); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if panel.lastBatchOpts.ModelOverride != "image-recorded" {
+		t.Errorf("panel model = %q, want image-recorded", panel.lastBatchOpts.ModelOverride)
+	}
+	if panel.lastBatchOpts.StyleMode != "watercolor" {
+		t.Errorf("panel style mode = %q, want watercolor", panel.lastBatchOpts.StyleMode)
+	}
+	if page.lastBatchOpts.StyleMode != "watercolor" {
+		t.Errorf("page style mode = %q, want watercolor", page.lastBatchOpts.StyleMode)
+	}
+}
+
+// 章の台本を作り直すときも、その作品を書いたモデルを引き継ぐこと。
+func TestRunnerRegenerateChapterScriptInheritsRecordedTextModel(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	store.files["gs://test-bucket/comics/job-chap/comic_state.json"] = []byte(`{
+		"version": 1,
+		"id": "job-chap",
+		"text_model": "gemini-recorded",
+		"chapters": [{"id": "ch01", "title": "第一章"}],
+		"panels": []
+	}`)
+	chapter := &fakeChapterScript{}
+	r := newTestRunner(t, store, fullOps(&fakeOutline{}, chapter, &fakeDesignSheet{}, &fakePanel{}, &fakePage{}))
+
+	task := &domain.Task{Command: domain.TaskCommandRegenerateChapterScript, JobID: "job-chap", ChapterID: "ch01"}
+	if err := r.Run(context.Background(), task); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if chapter.lastModel != "gemini-recorded" {
+		t.Errorf("chapter script model = %q, want gemini-recorded", chapter.lastModel)
 	}
 }

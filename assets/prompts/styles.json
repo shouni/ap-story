@@ -1,0 +1,42 @@
+[
+  {
+    "name": "default",
+    "direction": "アニメ調カラー。official art 風のセル画仕上げ",
+    "use_when": "既定。技術学習漫画をカラーで読ませたいとき",
+    "avoids": "写実・3D 調",
+    "category": "カラー",
+    "style": "Japanese anime style, official art, cel-shaded, clean line art, high-quality manga coloring, expressive eyes, vibrant colors, cinematic lighting, masterpiece, ultra-detailed, flat shading, clear character features, no 3D effect, high resolution",
+    "design_style": "Japanese anime style, official character reference art, cel-shaded, clean line art, vibrant colors, clear character features, no 3D effect, high resolution",
+    "negative": "monochrome, black and white, greyscale, screentone, hatching, dot shades, ink sketch, line art only, realistic photo, 3d render, oil painting texture"
+  },
+  {
+    "name": "retro_anime",
+    "direction": "90年代セル画調。粒状感と暖色のアナログ発色",
+    "use_when": "往年のロボットアニメのオマージュを効かせたいとき",
+    "avoids": "現代的なクリーンなデジタル塗り",
+    "category": "カラー",
+    "style": "1990s retro anime style, hand-painted cel animation look, limited color palette, slightly grainy film texture, warm analog color grading, thick confident line art, dramatic rim lighting, expressive eyes, no 3D effect, high resolution",
+    "design_style": "1990s retro anime style character reference art, hand-painted cel look, limited but clear color palette, thick confident line art, clear character features, no 3D effect, high resolution",
+    "negative": "monochrome, black and white, greyscale, screentone, hatching, dot shades, ink sketch, line art only, realistic photo, 3d render, modern flat vector art, oversaturated neon colors"
+  },
+  {
+    "name": "watercolor",
+    "direction": "水彩イラスト。にじみと紙の質感、淡いパステル",
+    "use_when": "やわらかい絵本調で、穏やかな話を語らせたいとき",
+    "avoids": "強いコントラストの劇画的な演出",
+    "category": "カラー",
+    "style": "Japanese watercolor illustration style, soft washed gradients, visible paper texture, delicate ink outlines, muted pastel palette, gentle natural lighting, hand-painted picture book finish, expressive eyes, no 3D effect, high resolution",
+    "design_style": "Japanese watercolor illustration style character reference art, delicate ink outlines, muted pastel palette, visible paper texture, clear character features, no 3D effect, high resolution",
+    "negative": "monochrome, black and white, greyscale, screentone, hatching, dot shades, ink sketch, line art only, realistic photo, 3d render, harsh contrast, heavy black shadows, neon colors"
+  },
+  {
+    "name": "manga_mono",
+    "direction": "モノクロ漫画。スクリーントーンとGペンの線",
+    "use_when": "誌面の漫画らしさを出したい、印刷を想定するとき",
+    "avoids": "彩色。色で情報を伝える演出には向かない",
+    "category": "モノクロ",
+    "style": "monochrome Japanese manga style, black and white ink drawing, screentone shading, sharp G-pen line art, strong contrast, hatching and speed lines, expressive eyes, high-quality print manga finish, no color, no 3D effect, high resolution",
+    "design_style": "monochrome Japanese manga style character reference art, black and white ink drawing, sharp G-pen line art, light screentone shading, clear character features, no color, no 3D effect, high resolution",
+    "negative": "color, colored illustration, vibrant colors, color grading, realistic photo, 3d render"
+  }
+]

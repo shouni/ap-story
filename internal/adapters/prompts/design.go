@@ -53,15 +53,24 @@ This sheet is the canonical identity reference that every downstream panel, page
 // DesignPrompt は、ap-story 独自のデザインシートプロンプト実装です。
 // go-comic-kit 内蔵の prompts.DefaultDesignPrompt と同等の技術的厳密さ（キャラクター同一性・
 // 指の解剖学的正確さ・フラット照明）を保ちつつ、ap-story の作品世界向けに文言を独自管理します。
-type DesignPrompt struct{}
+type DesignPrompt struct {
+	// Styles は画風プリセットです。シートはパネル用の画風ではなく、
+	// 演出を落としたシート用の指定（Style.DesignSuffix）を使います。
+	Styles *Styles
+}
 
 var _ ports.DesignSheetPrompt = DesignPrompt{}
 
 // BuildDesignSheet はキャラクターデザインシート生成用のシステム/ユーザー/ネガティブプロンプトを
 // 構築します。data.Layout に ports.DesignLayoutSingleView を渡すと単一ポーズレイアウトになります。
-func (DesignPrompt) BuildDesignSheet(data *ports.DesignSheetPromptData) (systemPrompt, userPrompt, negativePrompt string, err error) {
+func (p DesignPrompt) BuildDesignSheet(data *ports.DesignSheetPromptData) (systemPrompt, userPrompt, negativePrompt string, err error) {
 	if data == nil || len(data.Descriptions) == 0 {
 		return "", "", "", fmt.Errorf("description is required to build a design sheet prompt")
+	}
+
+	styleSuffix, negative, err := resolveStyle(p.Styles, data.StyleMode, designNegativePrompt, designSuffix)
+	if err != nil {
+		return "", "", "", err
 	}
 
 	numChars := len(data.Descriptions)
@@ -80,10 +89,10 @@ func (DesignPrompt) BuildDesignSheet(data *ports.DesignSheetPromptData) (systemP
 	layoutPrompt := fmt.Sprintf(designLayoutPromptFormat, designLayout(numChars, data.Layout))
 
 	promptParts := []string{base, layoutPrompt}
-	if data.StyleSuffix != "" {
-		promptParts = append(promptParts, data.StyleSuffix)
+	if styleSuffix != "" {
+		promptParts = append(promptParts, styleSuffix)
 	}
-	// StyleSuffix に演出用の指定が紛れ込んでも、参照アンカーとしての制約
+	// 画風指定に演出用の語が紛れ込んでも、参照アンカーとしての制約
 	// （フラットな照明・白背景・手の正確さ）を後置して優先させる。
 	promptParts = append(promptParts,
 		"plain uniform white studio background",
@@ -93,7 +102,7 @@ func (DesignPrompt) BuildDesignSheet(data *ports.DesignSheetPromptData) (systemP
 	)
 
 	userPrompt = strings.Join(promptParts, ", ")
-	return designSystemPrompt, userPrompt, designNegativePrompt, nil
+	return designSystemPrompt, userPrompt, negative, nil
 }
 
 // designLayout は被写体数とレイアウト指定に応じたレイアウト文を返します。

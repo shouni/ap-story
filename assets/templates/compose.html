@@ -31,14 +31,49 @@
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-6">
                 <label for="script_mode" class="form-label fw-bold">台本モード</label>
-                <input type="text" class="form-control" id="script_mode" name="script_mode"
-                       placeholder="default（省略可）" value="{{.Data.ScriptMode}}">
+                <select class="form-select" id="script_mode" name="script_mode">
+                    {{range .Data.ScriptModes}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}{{with .Hint}} title="{{.}}"{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+                <div class="form-text">章立てとネームの語り口を決めるプロンプトです。</div>
             </div>
             <div class="col-12 col-md-6">
                 <label for="style_mode" class="form-label fw-bold">スタイルモード</label>
-                <input type="text" class="form-control" id="style_mode" name="style_mode"
-                       placeholder="省略可" value="{{.Data.StyleMode}}">
+                <select class="form-select" id="style_mode" name="style_mode">
+                    {{range .Data.StyleModes}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}{{with .Hint}} title="{{.}}"{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+                <div class="form-text">コマ・ページ画像の画風です。選択は作品に記録され、あとからの画像生成にも引き継がれます。</div>
             </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            {{if .Data.TextModels}}
+            <div class="col-12 col-md-6">
+                <label for="text_model" class="form-label fw-bold">テキストモデル</label>
+                <select class="form-select" id="text_model" name="text_model">
+                    <option value=""{{if not .Data.TextModel}} selected{{end}}>既定モデルを使用</option>
+                    {{range .Data.TextModels}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+                <div class="form-text">章立てとネームを書く Gemini モデルです。</div>
+            </div>
+            {{end}}
+            {{if .Data.ImageModels}}
+            <div class="col-12 col-md-6">
+                <label for="image_model" class="form-label fw-bold">画像モデル</label>
+                <select class="form-select" id="image_model" name="image_model">
+                    <option value=""{{if not .Data.ImageModel}} selected{{end}}>既定モデルを使用</option>
+                    {{range .Data.ImageModels}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+                <div class="form-text">コマ・ページを描くモデルです。デザインシートは別画面で選びます。</div>
+            </div>
+            {{end}}
         </div>
 
         <div class="form-check mb-3">

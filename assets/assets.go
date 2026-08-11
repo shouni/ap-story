@@ -14,6 +14,10 @@ const (
 	OutlinePromptDir = "prompts/outline"
 	// ChapterPromptDir は章台本生成プロンプトの埋め込みパスです。
 	ChapterPromptDir = "prompts/chapter"
+	// StylesJSONPath は画風プリセット（スタイルモード）の埋め込みパスです。
+	// 台本プロンプトと違い、1件が画風指定とネガティブプロンプトの対で決まる
+	// 構造データなので、テンプレートではなく JSON で持ちます。
+	StylesJSONPath = "prompts/styles.json"
 )
 
 var (
@@ -25,8 +29,8 @@ var (
 	//go:embed static
 	StaticFiles embed.FS
 
-	// Prompts は、台本生成プロンプトのテンプレート一式を保持します。
-	// ディレクトリ名が生成工程、ファイル名（拡張子を除く）がモード名になります。
-	//go:embed prompts/outline/*.md prompts/chapter/*.md
+	// Prompts は、台本生成プロンプトのテンプレートと画風プリセットを保持します。
+	// テンプレートはディレクトリ名が生成工程、ファイル名（拡張子を除く）がモード名です。
+	//go:embed prompts/outline/*.md prompts/chapter/*.md prompts/styles.json
 	Prompts embed.FS
 )

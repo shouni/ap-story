@@ -126,4 +126,54 @@ func TestComposeFormRendersStopAfterScriptCheckbox(t *testing.T) {
 	}
 }
 
-// scriptOnlyState は stop_after_script 直後の state（台本のみ、画像なし）を返します。
+// フォームには台本モード・スタイルモード・テキストモデル・画像モデルの選択欄が出ること。
+// 選択肢が消えると、既定でしか生成できないことに気付けないまま運用が続きます。
+func TestComposeFormRendersChoiceSelects(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler(t, &fakeTaskQueue{})
+
+	req := httptest.NewRequest(http.MethodGet, "/compose", nil)
+	rec := httptest.NewRecorder()
+	h.ComposeForm(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`name="script_mode"`, `name="style_mode"`, `name="text_model"`, `name="image_model"`,
+		`value="watercolor"`, `value="gemini-alt"`, `value="image-alt"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("compose form is missing %q", want)
+		}
+	}
+}
+
+// 送信した選択はフォーム入力からタスクへ運ばれること。
+func TestEnqueueComicFormCarriesChoices(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeTaskQueue{}
+	h := newTestHandler(t, q)
+
+	rec := postComposeForm(t, h, url.Values{
+		"source_text": {"元文章"},
+		"script_mode": {"alt"},
+		"style_mode":  {"watercolor"},
+		"text_model":  {"gemini-alt"},
+		"image_model": {"image-alt"},
+	})
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	task := q.lastTask
+	if task.ScriptMode != "alt" || task.StyleMode != "watercolor" {
+		t.Errorf("modes = %q/%q, want alt/watercolor", task.ScriptMode, task.StyleMode)
+	}
+	if task.TextModel != "gemini-alt" || task.ModelOverride != "image-alt" {
+		t.Errorf("models = %q/%q, want gemini-alt/image-alt", task.TextModel, task.ModelOverride)
+	}
+}
