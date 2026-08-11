@@ -1004,3 +1004,39 @@ func TestRunnerRenderComicStopsAfterPanels(t *testing.T) {
 		t.Errorf("pages = %v, want 1 composed", page.calledPages)
 	}
 }
+
+// seed は同じコマンドの中でコマとページの両方に効くこと。
+// 片方だけ効くと、指定したつもりの条件で再現できません。
+func TestRunnerRenderComicPassesSeedToBothStages(t *testing.T) {
+	t.Parallel()
+	store := newMemStore()
+	store.files["gs://test-bucket/comics/job-seed/comic_state.json"] = []byte(`{
+		"version": 1,
+		"id": "job-seed",
+		"image_model": "image-model",
+		"chapters": [{"id": "ch01", "title": "第一章"}],
+		"panels": [{"id": "ch01-p01", "chapter_id": "ch01", "page": 1, "visual_anchor": "a", "characters": [], "dialogues": []}]
+	}`)
+	panel := &fakePanel{}
+	page := &fakePage{}
+	r := newTestRunner(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, page))
+
+	seed := int64(4242)
+	if err := r.Run(context.Background(), &domain.Task{
+		Command: domain.TaskCommandRenderComic, JobID: "job-seed", Seed: &seed,
+	}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	for _, got := range []struct {
+		name string
+		seed *int64
+	}{
+		{"panels", panel.lastBatchOpts.Seed},
+		{"pages", page.lastBatchOpts.Seed},
+	} {
+		if got.seed == nil || *got.seed != seed {
+			t.Errorf("%s seed = %v, want %d", got.name, got.seed, seed)
+		}
+	}
+}
