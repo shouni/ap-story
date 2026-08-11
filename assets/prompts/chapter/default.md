@@ -45,7 +45,7 @@ avoids: "章をまたぐ文脈の断絶"
 - `emotion` / `action` / `position` は画像生成AIへの演出指示として具体的に書くこと。`action` には他キャラクターへの働きかけ（例:「めたんの肩を掴んで揺さぶる」）も表現すること。
 - `dialogues[].kind` は `speech` / `thought` / `shout` / `narration` / `sfx` のいずれか。ナレーションは `speaker_id` を空文字にすること。
 - `visual_anchor` はコマ全体の構図・背景・カメラワークの自由記述（英語）。往年の名作ロボットアニメのオマージュ（dramatic rim lighting, ambient glow from monitors, cinematic dutch angle 等）を短く鋭く織り交ぜること。**文字やフキダシに触れないこと。** コマ生成では専用のネガティブプロンプトが担当し、ページ合成ではフキダシを描くのが仕事なので、"no speech bubbles" のような指定を入れると「描くな」と「描け」を同時に渡すことになる。
-- `shot` は `close-up` / `medium` / `wide` / `bird's-eye` などから選ぶこと。
+- `shot` は `close-up` / `medium` / `wide` / `bird's-eye` から選ぶこと。**章の最初のコマは `wide` か `bird's-eye`** にして、どこで何が起きているのかを見せること。以降も3〜4コマに1回は引きの画を挟み、寄り（`close-up` / `medium`）だけが続かないようにすること。寄りばかりだと会話は読めても場所が伝わらない。
 - 章の最終パネルは、理解・決意・オチ・次章への引きのいずれかで締めること。
 
 ### 出力形式
@@ -56,7 +56,7 @@ avoids: "章をまたぐ文脈の断絶"
 {
   "panels": [
     {
-      "shot": "close-up",
+      "shot": "wide",
       "setting": "（場所・時間帯）",
       "visual_anchor": "(English description of composition, background, camera, lighting, no speech bubbles, no text)",
       "characters": [

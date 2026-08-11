@@ -111,13 +111,24 @@ func writeLayoutStructure(sb *strings.Builder, numPanels int) {
 
 // writeCharacterReferences はキャラクターマスター参照の一覧を出力します。
 // input_file の番号は CharacterFile（実際の添付順）に従います。
+// writeCharacterReferences は、コマ画像に写っていないキャラクターだけマスター参照を並べます。
+//
+// コマ画像に写っているキャラは、そのコマが正解です（各コマの CHARACTER_IDENTITY 参照）。
+// ここで「立ち絵に合わせろ」と重ねて言うと、コマ単位の指示と competing になります。
+// 説明文（visual_cues）はデザインシート用に書かれていて、ピンの配置まで並ぶ長さです。
+// ページの中で数百ピクセルに縮むキャラに当てる粒度ではなく、出すだけ雑音になります。
 func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 	if len(data.CharacterFile) == 0 {
 		return
 	}
-	sb.WriteString("## CHARACTER MASTER REFERENCES\n")
+
+	var lines []string
 	seen := make(map[string]struct{})
 	for _, panel := range data.Panels {
+		if _, hasGuide := data.PanelFile[panel.ID]; hasGuide {
+			// このコマの絵はある。ここに出るキャラは、そのコマが手本になる。
+			continue
+		}
 		for _, id := range panel.ReferencedCharacterIDs() {
 			if _, ok := seen[id]; ok {
 				continue
@@ -135,8 +146,17 @@ func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 			if len(char.VisualCues) > 0 {
 				cues = strings.Join(char.VisualCues, ", ")
 			}
-			fmt.Fprintf(sb, "- SUBJECT [%s]: Match input_file_%d. Traits: {%s}.\n", char.Name, idx, cues)
+			lines = append(lines, fmt.Sprintf("- SUBJECT [%s]: Match input_file_%d. Traits: {%s}.\n", char.Name, idx, cues))
 		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+
+	sb.WriteString("## CHARACTER MASTER REFERENCES\n")
+	sb.WriteString("These characters have no panel guide on this page; draw them from the sheet.\n")
+	for _, line := range lines {
+		sb.WriteString(line)
 	}
 	sb.WriteString("\n")
 }
