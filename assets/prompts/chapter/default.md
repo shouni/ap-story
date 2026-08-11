@@ -44,7 +44,7 @@ avoids: "章をまたぐ文脈の断絶"
 - `characters` には**そのコマに登場する全キャラクター**を入れること（セリフの有無と無関係）。主役は `prominence: "primary"`、同席・リアクション役は `"secondary"`、群衆やモブは `"background"`。primary と secondary は合計3人まで。
 - `emotion` / `action` / `position` は画像生成AIへの演出指示として具体的に書くこと。`action` には他キャラクターへの働きかけ（例:「めたんの肩を掴んで揺さぶる」）も表現すること。
 - `dialogues[].kind` は `speech` / `thought` / `shout` / `narration` / `sfx` のいずれか。ナレーションは `speaker_id` を空文字にすること。
-- `visual_anchor` はコマ全体の構図・背景・カメラワークの自由記述（英語）。往年の名作ロボットアニメのオマージュ（dramatic rim lighting, ambient glow from monitors, cinematic dutch angle 等）を短く鋭く織り交ぜること。文字やフキダシを描かせないこと（"no speech bubbles, no text" を含める）。
+- `visual_anchor` はコマ全体の構図・背景・カメラワークの自由記述（英語）。往年の名作ロボットアニメのオマージュ（dramatic rim lighting, ambient glow from monitors, cinematic dutch angle 等）を短く鋭く織り交ぜること。**文字やフキダシに触れないこと。** コマ生成では専用のネガティブプロンプトが担当し、ページ合成ではフキダシを描くのが仕事なので、"no speech bubbles" のような指定を入れると「描くな」と「描け」を同時に渡すことになる。
 - `shot` は `close-up` / `medium` / `wide` / `bird's-eye` などから選ぶこと。
 - 章の最終パネルは、理解・決意・オチ・次章への引きのいずれかで締めること。
 

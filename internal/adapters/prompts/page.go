@@ -181,12 +181,37 @@ func writePanelScene(sb *strings.Builder, panel *comic.Panel, data *ports.PagePr
 	if panel.Setting != "" {
 		fmt.Fprintf(sb, "- SETTING: %s\n", panel.Setting)
 	}
-	if anchor := strings.TrimSpace(panel.VisualAnchor); anchor != "" {
+	if anchor := stripTextExclusions(panel.VisualAnchor); anchor != "" {
 		fmt.Fprintf(sb, "- SCENE: %s\n", anchor)
 	}
 	if idx, ok := data.PanelFile[panel.ID]; ok {
 		fmt.Fprintf(sb, "- COMPOSITION_GUIDE: Recreate the composition, posing, and background from input_file_%d inside this panel.\n", idx)
 	}
+}
+
+// stripTextExclusions は、構図メモに紛れ込んだ「文字やフキダシを描くな」の指定を落とします。
+//
+// コマ生成では正しい指定ですが、ページ合成はフキダシを描くのが仕事です。そのまま渡すと
+// 同じプロンプトの中で「描くな」と「この文字を描け」を同時に指示することになります。
+// 台本側でも書かせないようにしましたが、それ以前に作られた state のために here でも落とします。
+func stripTextExclusions(anchor string) string {
+	parts := strings.Split(anchor, ",")
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "no ") &&
+			(strings.Contains(lower, "text") || strings.Contains(lower, "speech") ||
+				strings.Contains(lower, "bubble") || strings.Contains(lower, "balloon") ||
+				strings.Contains(lower, "letter") || strings.Contains(lower, "caption")) {
+			continue
+		}
+		kept = append(kept, trimmed)
+	}
+	return strings.Join(kept, ", ")
 }
 
 // writePanelCharacters は登場キャラクターの同一性・演出指示を出力します。
@@ -202,7 +227,7 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 			continue
 		}
 		if idx, ok := data.CharacterFile[pc.CharacterID]; ok {
-			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly).\n", char.Name, idx, idx)
+			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly. The master reference wins over the panel guide whenever they differ).\n", char.Name, idx, idx)
 		} else {
 			fmt.Fprintf(sb, "- SUBJECT: %s\n", char.Name)
 		}

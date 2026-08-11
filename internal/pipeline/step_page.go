@@ -24,12 +24,12 @@ func (s AllPagesStep) Execute(ctx context.Context, pc *Context) error {
 	}
 
 	manga, err := pc.Ops.Page.ComposeAllPages(ctx, pc.Manga, ports.BatchOptions{
-		Seed:        pc.Task.Seed,
-		Model:       pc.imageModel(),
-		AspectRatio: pc.Layout.AspectRatio,
-		ImageSize:   pc.Layout.PageImageSize,
-		StyleMode:   pc.styleMode(),
-		OutputDir:   pc.OutputDir,
+		Seed:          pc.Task.Seed,
+		Model:         pc.imageModel(),
+		AspectRatio:   pc.Layout.AspectRatio,
+		ImageSize:     pc.Layout.PageImageSize,
+		StyleMode:     pc.styleMode(),
+		OutputDir:     pc.OutputDir,
 		ChapterID:     pc.Task.ChapterID,
 		SkipGenerated: s.SkipGenerated,
 	})
