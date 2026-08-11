@@ -77,42 +77,29 @@ func TestEnqueueComicFormRejectsMissingSource(t *testing.T) {
 	}
 }
 
-func TestEnqueueComicFormPassesStopAfterScript(t *testing.T) {
+// このフォームは台本までしか作りません。押した時点では章立てが未実行で、
+// 何コマになるか誰も知らないためです。画像は作品詳細から始めます。
+func TestEnqueueComicFormAlwaysStopsAfterScript(t *testing.T) {
 	t.Parallel()
 
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
+	// 画像まで走らせようとする細工（フォームには無い項目）を送っても効かないこと。
 	rec := postComposeForm(t, h, url.Values{
 		"source_text":       {"元文章"},
-		"stop_after_script": {"1"},
+		"stop_after_script": {""},
 	})
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
 	}
 	if !q.lastTask.StopAfterScript {
-		t.Error("チェックボックスを入れたのに StopAfterScript が false")
+		t.Error("フォームからの投入なのに画像生成まで走る指定になっている")
 	}
 }
 
-func TestEnqueueComicFormWithoutStopAfterScript(t *testing.T) {
-	t.Parallel()
-
-	q := &fakeTaskQueue{}
-	h := newTestHandler(t, q)
-
-	rec := postComposeForm(t, h, url.Values{"source_text": {"元文章"}})
-
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
-	}
-	if q.lastTask.StopAfterScript {
-		t.Error("チェックボックス未指定なのに StopAfterScript が true")
-	}
-}
-
-func TestComposeFormRendersStopAfterScriptCheckbox(t *testing.T) {
+func TestComposeFormHasNoWholeRunControl(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler(t, &fakeTaskQueue{})
@@ -121,8 +108,8 @@ func TestComposeFormRendersStopAfterScriptCheckbox(t *testing.T) {
 
 	h.ComposeForm(rec, req)
 
-	if !strings.Contains(rec.Body.String(), `name="stop_after_script"`) {
-		t.Error("台本ゲートのチェックボックスがフォームに無い")
+	if strings.Contains(rec.Body.String(), `name="stop_after_script"`) {
+		t.Error("台本までか画像までかを選ばせる操作が残っている（このフォームは台本専用）")
 	}
 }
 

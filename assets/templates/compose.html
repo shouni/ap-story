@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="mb-4">
-    <h1 class="h3 mb-1"><i class="bi bi-magic me-2"></i>漫画を生成</h1>
-    <div class="text-muted small">原稿（URL またはテキスト）から章立て・ネーム・パネル・ページを一括生成します。</div>
+    <h1 class="h3 mb-1"><i class="bi bi-magic me-2"></i>台本を生成</h1>
+    <div class="text-muted small">原稿（URL またはテキスト）から章立てとネームを生成します。画像は台本を確認してから、作品詳細で開始します。</div>
 </div>
 
 {{if .Data.ErrorMessage}}
@@ -74,21 +74,16 @@
             {{end}}
         </div>
 
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" id="stop_after_script"
-                   name="stop_after_script" value="1"{{if .Data.StopAfterScript}} checked{{end}}>
-            <label class="form-check-label" for="stop_after_script">
-                <span class="fw-bold">台本まで生成して確認する</span>
-                <span class="d-block text-body-secondary small">
-                    章立てとネームだけを先に作ります。内容を確かめてから、作品詳細の
-                    「画像生成へ進む」で画像生成を開始できます。
-                </span>
-            </label>
+        <div class="alert alert-light border small mb-3" role="note">
+            <i class="bi bi-info-circle me-1"></i>
+            ここで作るのは<strong>章立てとネームまで</strong>です。画像は作品詳細から、
+            作品全体または章ごとに開始できます。コマ数が分かってから始められるようにするためで、
+            画像はこの工程でいちばん高価です。
         </div>
 
         <div class="d-grid d-sm-flex justify-content-sm-end gap-2">
             <button type="submit" class="btn btn-primary px-4">
-                <i class="bi bi-send me-1"></i>生成を開始
+                <i class="bi bi-send me-1"></i>台本を生成
             </button>
         </div>
     </div>

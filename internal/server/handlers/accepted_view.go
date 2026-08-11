@@ -23,10 +23,10 @@ func newComposeAcceptedData(jobID string) acceptedData {
 		JobID:         jobID,
 		Command:       string(domain.TaskCommandComposeComic),
 		Icon:          "bi-book-half",
-		Heading:       "漫画生成を開始しました",
-		Message:       "現在、章立て・ネーム・パネル・ページの生成処理を行っています。完了までしばらくお待ちください（数分〜十数分かかります）。",
+		Heading:       "台本の生成を開始しました",
+		Message:       "章立てとネームを作っています（数分かかります）。できあがった台本を確認してから、作品詳細で画像生成へ進んでください。",
 		ProgressURL:   "/history/" + jobID,
-		ProgressLabel: "進捗を確認",
+		ProgressLabel: "台本を確認",
 	}
 }
 
