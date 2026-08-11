@@ -113,10 +113,29 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `regenerate_panel` | GeneratePanel | job_id, panel_id, seed / edit_prompt / prompt_override |
 | `regenerate_page` | ComposePage | job_id, page, seed / edit_prompt |
 
+## 🎨 モードとモデルの選択
+
+生成ジョブには4つの選択が乗ります。フォームの `<select>` と JSON API で同じ一覧を使い、
+一覧に無い値は投入時に弾かれます（`GET /api/comic-options` で取得できます）。
+
+| 選択 | 出どころ | 内容 |
+|---|---|---|
+| 台本モード | `assets/prompts/outline`・`chapter` の `.md` | 章立てとネームの語り口。ファイル名がモード名 |
+| 画風モード | `assets/prompts/styles.json` | コマ・ページの画風（`style`）、デザインシート用の画風（`design_style`）、その画風で避けたいもの（`negative`）の3点セット |
+| テキストモデル | `GEMINI_MODELS` | 台本を書くモデル |
+| 画像モデル | `IMAGE_MODELS` | コマ・ページを描くモデル |
+
+選択は `comic_state.json` に記録され、**あとから走らせるジョブが引き継ぎます**。台本確認後の
+`render_comic`、章の台本の作り直し、コマ・ページの再生成はいずれも記録された選択を使うため、
+1つの作品が途中から別のモデル・別の画風になることはありません。
+
+画風とネガティブプロンプトを1件にまとめてあるのは、対で決まるからです。モノクロの画風を
+選んだときに共通側が `monochrome` を禁止していると、指定同士が正面から衝突します。
+
 ## ✍️ 生成フロー（Web UI）
 
-1. `/compose` で原稿を投入する。**「台本まで生成して確認する」**にチェックを入れると、
-   章立てとネームだけが作られる（画像生成のコストを払う前に内容を確認できる）。
+1. `/compose` で原稿を投入する。台本モード・画風モード・モデルを選び、**「台本まで生成して確認する」**に
+   チェックを入れると、章立てとネームだけが作られる（画像生成のコストを払う前に内容を確認できる）。
 2. `/history/{jobID}` で台本を確認する。問題なければ**「画像生成へ進む」**で `render_comic`
    を投入する。途中で失敗した場合も同じボタンが**「続きを生成」**になり、未生成分だけを埋める。
 3. 気に入らないコマ・ページは詳細画面から個別に直す。
@@ -136,20 +155,21 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 |---|---|---|
 | `GET /auth/login`, `GET /auth/callback` | Google OAuth | ログインフロー（gcp-kit auth.Handler） |
 | `GET /` | セッション or M2M | Home 画面（直近の作品を数件表示。未認証時は `/auth/login` へリダイレクト） |
-| `GET /compose`, `POST /compose` | セッション | 漫画生成フォームの表示・投入（受付画面を返す） |
-| `GET /design-sheets`, `POST /design-sheets` | セッション | デザインシート単体生成フォームの表示・投入（job_id は自動採番。`?character_id=`で事前選択可、画像モデル・参照画像URL・見た目特徴の上書きに対応） |
+| `GET /compose`, `POST /compose` | セッション | 漫画生成フォームの表示・投入（受付画面を返す。台本モード・画風モード・テキストモデル・画像モデルを選択できる） |
+| `GET /design-sheets`, `POST /design-sheets` | セッション | デザインシート単体生成フォームの表示・投入（job_id は自動採番。`?character_id=`で事前選択可、画風モード・画像モデル・参照画像URL・見た目特徴の上書きに対応） |
 | `GET /characters` | セッション | キャラクター一覧（マスター参照画像のサムネイル付き） |
 | `GET /characters/{characterID}` | セッション | キャラクター詳細（上段: サイズ/アスペクト比ごとのマスター参照画像、下段: デザインシート生成履歴の最新12件+削除ボタン。新しい順、合成生成は対象外） |
 | `GET /characters/{characterID}/history` | セッション | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
 | `GET /history` | セッション | 作品一覧画面（ナビ表記は Works。ページング・削除ボタン） |
 | `GET /history/{jobID}` | セッション | 作品詳細画面（章・パネル・ページ・デザインシートの閲覧） |
 | `GET /static/*` | なし | CSS/JS 静的アセット |
-| `POST /api/comics` | セッション or M2M | compose_comic ジョブの投入（jobID を返す） |
+| `GET /api/comic-options` | セッション or M2M | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
+| `POST /api/comics` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
 | `GET /api/comics` | セッション or M2M | 履歴一覧（state の列挙、ページング） |
 | `GET /api/comics/{jobID}` | セッション or M2M | 詳細（comic_state.json の内容） |
 | `POST /api/comics/{jobID}/regenerate` | セッション or M2M | 再生成ジョブの投入（command + パラメータ） |
 | `GET /api/comics/{jobID}/images/*` | セッション or M2M | パネル・ページ画像への署名 URL リダイレクト |
-| `POST /api/design-sheets` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・model_override・reference_url_override・visual_cues_override は任意） |
+| `POST /api/design-sheets` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・style_mode・model_override・reference_url_override・visual_cues_override は任意） |
 | `GET /api/characters` | セッション or M2M | キャラクター一覧（id・name・reference_url を返す。画像 URL は gs:// のまま） |
 | `GET /api/characters/{characterID}` | セッション or M2M | キャラクター詳細（マスター参照画像 + 生成履歴全件、新しい順） |
 | `GET /api/characters/images/*` | セッション or M2M | デザインシート生成履歴の画像への署名 URL リダイレクト（作品非依存） |
@@ -169,11 +189,10 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `WORKER_URL` | Cloud Tasks が呼び出す Worker エンドポイント（省略時は SERVICE_URL 由来）。web 面のみ使用 |
 | `STORY_BUCKET` | 成果物・state の GCS バケット |
 | `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
-| `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定。**worker で必須**（web は台本を作りません） |
-| `IMAGE_MODELS` | 画像生成（デザインシート・パネル・ページ）のモデル。カンマ区切りで先頭が既定、残りはデザインシート生成フォームの選択肢。**どの役割でも必須** |
-| `IMAGE_ASPECT_RATIO` | パネル・ページ・デザインシート既定の共通比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。**3つで1つの設定**なのは、揃っていないと参照画像によるブレ抑制が黙って無効になるためです |
+| `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定、全体がフォームの選択肢と投入時の許可リスト。**web で必須**（worker は読みません。ジョブが自分のモデル名を運びます） |
+| `IMAGE_MODELS` | 画像生成（デザインシート・パネル・ページ）のモデル。扱いは `GEMINI_MODELS` と同じで、**web で必須** |
+| `IMAGE_ASPECT_RATIO` | パネル・ページ・デザインシート共通の比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。**3つで1つの設定**なのは、揃っていないと参照画像によるブレ抑制が黙って無効になるためです |
 | `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | 生成画像の解像度（`1K` / `2K`）。未設定ならパネル 1K・ページ/シート 2K。1コマごとに費用が効くのでデプロイ側で選べます |
-| `STYLE_SUFFIX` / `DESIGN_STYLE_SUFFIX` | 画風指定。省略時は `internal/config` の既定値。go-comic-kit は既定値を持たないため、画風指定の既定値はこのアプリが持ちます（モデル名は誰も既定値を持たず、未設定なら起動時エラー） |
 | `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | go-comic-kit Config の台本・ページ割り制御 |
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
