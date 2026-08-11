@@ -181,12 +181,37 @@ func writePanelScene(sb *strings.Builder, panel *comic.Panel, data *ports.PagePr
 	if panel.Setting != "" {
 		fmt.Fprintf(sb, "- SETTING: %s\n", panel.Setting)
 	}
-	if anchor := strings.TrimSpace(panel.VisualAnchor); anchor != "" {
+	if anchor := stripTextExclusions(panel.VisualAnchor); anchor != "" {
 		fmt.Fprintf(sb, "- SCENE: %s\n", anchor)
 	}
 	if idx, ok := data.PanelFile[panel.ID]; ok {
 		fmt.Fprintf(sb, "- COMPOSITION_GUIDE: Recreate the composition, posing, and background from input_file_%d inside this panel.\n", idx)
 	}
+}
+
+// stripTextExclusions は、構図メモに紛れ込んだ「文字やフキダシを描くな」の指定を落とします。
+//
+// コマ生成では正しい指定ですが、ページ合成はフキダシを描くのが仕事です。そのまま渡すと
+// 同じプロンプトの中で「描くな」と「この文字を描け」を同時に指示することになります。
+// 台本側でも書かせないようにしましたが、それ以前に作られた state のために here でも落とします。
+func stripTextExclusions(anchor string) string {
+	parts := strings.Split(anchor, ",")
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "no ") &&
+			(strings.Contains(lower, "text") || strings.Contains(lower, "speech") ||
+				strings.Contains(lower, "bubble") || strings.Contains(lower, "balloon") ||
+				strings.Contains(lower, "letter") || strings.Contains(lower, "caption")) {
+			continue
+		}
+		kept = append(kept, trimmed)
+	}
+	return strings.Join(kept, ", ")
 }
 
 // writePanelCharacters は登場キャラクターの同一性・演出指示を出力します。
@@ -202,7 +227,7 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 			continue
 		}
 		if idx, ok := data.CharacterFile[pc.CharacterID]; ok {
-			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly).\n", char.Name, idx, idx)
+			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly. The master reference wins over the panel guide whenever they differ).\n", char.Name, idx, idx)
 		} else {
 			fmt.Fprintf(sb, "- SUBJECT: %s\n", char.Name)
 		}
@@ -223,7 +248,13 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 }
 
 // writePanelDialogues はセリフ・ナレーション・SFX の描画指示を kind 別に出力します。
+//
+// 同じコマに複数の発話があるときは読む順序を明示します。順序を言わないと吹き出しの
+// 配置が絵の都合で決まり、掛け合いが逆順に読めてしまいます。
 func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters) {
+	if countSpokenLines(panel) > 1 {
+		sb.WriteString("- BALLOON ORDER: Place the balloons below in the listed order, read right-to-left then top-to-bottom within this panel.\n")
+	}
 	for _, line := range panel.Dialogues {
 		text := strings.TrimSpace(line.Text)
 		if text == "" {
@@ -259,6 +290,17 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 		fmt.Fprintf(sb, "  - TYPOGRAPHY: Use professional Japanese manga font (Gothic/Mincho). %s.\n", layoutDesc)
 		sb.WriteString("  - LANGUAGE: Japanese characters. Ensure accurate rendering of Kanji/Kana.\n")
 	}
+}
+
+// countSpokenLines は、そのコマの空でない発話の数を返します。
+func countSpokenLines(panel *comic.Panel) int {
+	n := 0
+	for _, line := range panel.Dialogues {
+		if strings.TrimSpace(line.Text) != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // speakerName は話者IDから表示名を引きます。未知IDは空文字列です。

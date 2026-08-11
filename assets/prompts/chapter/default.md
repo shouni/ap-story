@@ -38,12 +38,13 @@ avoids: "章をまたぐ文脈の断絶"
 ### ネームのルール
 
 - パネル数は {{.MaxPanels}} 以下。**1パネル1メッセージ**を守ること。
-- セリフ（`dialogues[].text`）は1つ40文字以内。重要な技術語の説明のみ最大50文字まで許容。長い説明は複数パネルに分割すること。
+- セリフ（`dialogues[].text`）は**1つ25文字以内**。重要な技術語の説明のみ35文字まで許容。長い説明は複数パネルに分割すること。吹き出しはコマの絵を隠すので、長い一文より短い掛け合いにすること。
+- **掛け合いのコマは、話者の違う吹き出しを2つ入れること。** `dialogues` は配列で、1コマに複数の発話を入れられる。ツッコミ・返事・かぶせは1コマにまとめるほうが漫画として読める。1コマの吹き出しは最大3つ。配列の順序がそのまま読む順序（右上→左下）になるので、会話の順に並べること。
 - 説明セリフを3コマ以上連続させないこと。3〜5パネルに1回は、説明ではなく表情・沈黙・驚き・決意を見せるリアクションのコマを入れること。
 - `characters` には**そのコマに登場する全キャラクター**を入れること（セリフの有無と無関係）。主役は `prominence: "primary"`、同席・リアクション役は `"secondary"`、群衆やモブは `"background"`。primary と secondary は合計3人まで。
 - `emotion` / `action` / `position` は画像生成AIへの演出指示として具体的に書くこと。`action` には他キャラクターへの働きかけ（例:「めたんの肩を掴んで揺さぶる」）も表現すること。
 - `dialogues[].kind` は `speech` / `thought` / `shout` / `narration` / `sfx` のいずれか。ナレーションは `speaker_id` を空文字にすること。
-- `visual_anchor` はコマ全体の構図・背景・カメラワークの自由記述（英語）。往年の名作ロボットアニメのオマージュ（dramatic rim lighting, ambient glow from monitors, cinematic dutch angle 等）を短く鋭く織り交ぜること。文字やフキダシを描かせないこと（"no speech bubbles, no text" を含める）。
+- `visual_anchor` はコマ全体の構図・背景・カメラワークの自由記述（英語）。往年の名作ロボットアニメのオマージュ（dramatic rim lighting, ambient glow from monitors, cinematic dutch angle 等）を短く鋭く織り交ぜること。**文字やフキダシに触れないこと。** コマ生成では専用のネガティブプロンプトが担当し、ページ合成ではフキダシを描くのが仕事なので、"no speech bubbles" のような指定を入れると「描くな」と「描け」を同時に渡すことになる。
 - `shot` は `close-up` / `medium` / `wide` / `bird's-eye` などから選ぶこと。
 - 章の最終パネルは、理解・決意・オチ・次章への引きのいずれかで締めること。
 
@@ -68,7 +69,8 @@ avoids: "章をまたぐ文脈の断絶"
         }
       ],
       "dialogues": [
-        { "speaker_id": "zundamon", "text": "（40文字以内のセリフ）", "kind": "speech" }
+        { "speaker_id": "zundamon", "text": "（25文字以内のセリフ）", "kind": "speech" },
+        { "speaker_id": "metan", "text": "（返し。配列の順に読ませる）", "kind": "speech" }
       ]
     }
   ]

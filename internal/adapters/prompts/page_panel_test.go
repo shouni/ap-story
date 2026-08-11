@@ -178,3 +178,101 @@ func testStyles(t *testing.T) *Styles {
 func testPanelPrompt(t *testing.T) PanelPrompt   { return PanelPrompt{Styles: testStyles(t)} }
 func testPagePrompt(t *testing.T) PagePrompt     { return PagePrompt{Styles: testStyles(t)} }
 func testDesignPrompt(t *testing.T) DesignPrompt { return DesignPrompt{Styles: testStyles(t)} }
+
+// 1コマに複数の発話があるときは読む順序を指示すること。
+// 順序を言わないと吹き出しの配置が絵の都合で決まり、掛け合いが逆順に読めます。
+func TestPagePromptOrdersMultipleBalloons(t *testing.T) {
+	t.Parallel()
+
+	chars := testCharacters(t)
+	multi := comic.Panel{
+		ID: "ch01-p01", Page: 1, VisualAnchor: "bridge",
+		Characters: []comic.PanelCharacter{
+			{CharacterID: "zundamon", Prominence: comic.ProminencePrimary},
+			{CharacterID: "metan", Prominence: comic.ProminenceSecondary},
+		},
+		Dialogues: []comic.DialogueLine{
+			{SpeakerID: "zundamon", Text: "全自動なのだ！", Kind: comic.DialogueKindShout},
+			{SpeakerID: "metan", Text: "勘違いよ。", Kind: comic.DialogueKindSpeech},
+		},
+	}
+
+	_, user, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{multi}, Characters: chars,
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if !strings.Contains(user, "BALLOON ORDER") {
+		t.Errorf("複数の吹き出しがあるのに読み順の指示が無い:\n%s", user)
+	}
+	// 話者ごとに誰の吹き出しかが伝わること
+	for _, want := range []string{"ずんだもん", "めたん", `"全自動なのだ！"`, `"勘違いよ。"`} {
+		if !strings.Contains(user, want) {
+			t.Errorf("prompt missing %q", want)
+		}
+	}
+
+	// 1つだけのときは余計な指示を出さない
+	single := multi
+	single.Dialogues = multi.Dialogues[:1]
+	_, user, _, err = testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{single}, Characters: chars,
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if strings.Contains(user, "BALLOON ORDER") {
+		t.Error("吹き出しが1つなのに読み順の指示が出ている")
+	}
+}
+
+// ページはフキダシを描くのが仕事なので、構図メモに紛れた「文字を描くな」を渡してはいけません。
+// 同じプロンプトで「描くな」と「この文字を描け」を同時に指示することになります。
+func TestPagePromptDropsTextExclusionsFromScene(t *testing.T) {
+	t.Parallel()
+
+	panel := comic.Panel{
+		ID: "ch01-p01", Page: 1,
+		VisualAnchor: "Cinematic dutch angle, dramatic rim lighting, no speech bubbles, no text",
+		Characters:   []comic.PanelCharacter{{CharacterID: "zundamon", Prominence: comic.ProminencePrimary}},
+		Dialogues:    []comic.DialogueLine{{SpeakerID: "zundamon", Text: "起動なのだ！", Kind: comic.DialogueKindShout}},
+	}
+
+	_, user, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: []comic.Panel{panel}, Characters: testCharacters(t),
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	for _, unwanted := range []string{"no speech bubbles", "no text"} {
+		if strings.Contains(user, unwanted) {
+			t.Errorf("ページのプロンプトに %q が残っている:\n%s", unwanted, user)
+		}
+	}
+	// 構図そのものは残すこと
+	if !strings.Contains(user, "dramatic rim lighting") {
+		t.Error("構図の記述まで落としている")
+	}
+	if !strings.Contains(user, "TEXT_TO_RENDER") {
+		t.Error("描くべき文字の指示が消えている")
+	}
+}
+
+// コマ側は逆で、フキダシを描かせない指定が要ります（専用のネガティブプロンプトが担当）。
+func TestPanelNegativePromptStillExcludesText(t *testing.T) {
+	t.Parallel()
+
+	_, _, negative, err := testPanelPrompt(t).BuildPanel(&ports.PanelPromptData{
+		Panel:      comic.Panel{ID: "ch01-p01", VisualAnchor: "a"},
+		Characters: testCharacters(t),
+	})
+	if err != nil {
+		t.Fatalf("BuildPanel() error = %v", err)
+	}
+	for _, want := range []string{"speech bubble", "text"} {
+		if !strings.Contains(negative, want) {
+			t.Errorf("コマのネガティブプロンプトに %q が無い", want)
+		}
+	}
+}
