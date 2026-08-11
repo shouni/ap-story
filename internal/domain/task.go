@@ -45,10 +45,17 @@ type Task struct {
 	// SourceURL / SourceText は compose_comic の入力（いずれか必須、排他）です。
 	SourceURL  string `json:"source_url,omitempty"`
 	SourceText string `json:"source_text,omitempty"`
-	// ScriptMode は台本プロンプトのモード（省略時はキット既定）です。
+	// ScriptMode は台本プロンプトのモード（assets/prompts/outline・chapter の
+	// テンプレート名）です。空文字なら既定モードを使います。
 	ScriptMode string `json:"script_mode,omitempty"`
-	// StyleMode は画像生成スタイルの選択です。
+	// StyleMode は画風指定の選択（assets/prompts/style のテンプレート名）です。
+	// 空文字なら既定モードを使います。選択した値は state に記録され、
+	// 後続の画像生成ジョブ（render_comic・regenerate 系）が引き継ぎます。
 	StyleMode string `json:"style_mode,omitempty"`
+	// TextModel は台本生成（章立て・章台本）に使う Gemini テキストモデルです。
+	// 空文字なら worker 側の GEMINI_MODELS 先頭を使います。画像側の ModelOverride と対で、
+	// 検証は Web 面が GEMINI_MODELS の許可リストに対して行います。
+	TextModel string `json:"text_model,omitempty"`
 	// ChapterID は regenerate_chapter_script の対象章です。
 	ChapterID string `json:"chapter_id,omitempty"`
 	// StopAfterScript を指定すると、compose_comic は章立てと台本の生成までで止まります。
@@ -63,8 +70,14 @@ type Task struct {
 	// その場限りの上書きです（go-comic-kit の DesignOverride に対応）。
 	ReferenceURLOverride string   `json:"reference_url_override,omitempty"`
 	VisualCuesOverride   []string `json:"visual_cues_override,omitempty"`
-	// ModelOverride は、設定済みの画像生成モデル（既定は品質重視モデル）を差し替えます。
+
+	// --- 画像生成系すべて（compose_comic / render_comic / generate_design_sheet / regenerate 系） ---
+	// ModelOverride は、設定済みの画像生成モデル（IMAGE_MODELS 先頭）を差し替えます。
 	// 空文字なら既定のモデルを使います。
+	//
+	// デザインシート単体生成だけでなく compose_comic でも使い、そのときはコマ・ページの
+	// 生成モデルになります。選択した値は state に記録され、後続の画像生成ジョブ
+	// （render_comic・regenerate 系）が引き継ぎます。
 	ModelOverride string `json:"model_override,omitempty"`
 
 	// --- regenerate_panel ---

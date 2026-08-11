@@ -79,12 +79,6 @@ func (c *Config) ValidateEssentialConfig() error {
 	// CHARACTERS_JSON_PATH は任意。未設定時は go-character-kit の埋め込みデフォルト
 	// キャラクター定義にフォールバックする（internal/adapters.LoadCharacters）。
 
-	// 画像モデルは両ロールに要ります。worker は生成に、web はデザインシート生成
-	// フォームの選択肢に使うためで、片方だけ検証するともう一方が空のまま起動します。
-	if len(c.AI.ImageModels) == 0 {
-		return fmt.Errorf("IMAGE_MODELS が設定されていません（カンマ区切りで複数指定すると、先頭が既定でフォームの選択肢になります）")
-	}
-
 	if c.Server.Role.ServesWeb() {
 		if err := c.validateWebConfig(); err != nil {
 			return err
@@ -92,11 +86,6 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 
 	if c.Server.Role.ServesWorker() {
-		// 台本生成は worker だけが行うため、テキストモデルは worker の要件です
-		// （web は画像モデルしか使いません）。
-		if len(c.AI.GeminiModels) == 0 {
-			return fmt.Errorf("GEMINI_MODELS が設定されていません（台本生成に必須）")
-		}
 		if c.Tasks.TaskAudienceURL == "" {
 			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
 		}
@@ -119,6 +108,24 @@ func (c *Config) TaskCallerServiceAccount() string {
 // Worker 面だけを提供するプロセスに OAuth 関連の設定を要求すると、
 // 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
 func (c *Config) validateWebConfig() error {
+	// モデル一覧は Web 面だけの要件です。フォームの選択肢と、投入時の許可リストに使います。
+	// worker は読みません——ジョブが必ず自分のモデル名を運ぶようになったためです
+	// （go-comic-kit も設定としてのモデル既定を持ちません）。
+	//
+	// 空のまま起動すると選択欄が消え、JSON API のモデル指定が全部 400 になります。
+	// 起動自体は成功してしまうので、「選べないこと」に気付くのが使ってみた後になります。
+	for _, models := range []struct {
+		name string
+		list []string
+	}{
+		{"IMAGE_MODELS", c.AI.ImageModels},
+		{"GEMINI_MODELS", c.AI.GeminiModels},
+	} {
+		if len(models.list) == 0 {
+			return fmt.Errorf("%s が設定されていません（カンマ区切りで複数指定すると、先頭が既定でフォームの選択肢になります）", models.name)
+		}
+	}
+
 	// タスクを投入するのは Web 面だけなので、キュー名も Web 面の要件です。
 	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")

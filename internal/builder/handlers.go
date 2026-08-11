@@ -8,6 +8,7 @@ import (
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
 
+	"github.com/shouni/ap-story/internal/adapters/prompts"
 	"github.com/shouni/ap-story/internal/app"
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
@@ -88,14 +89,29 @@ func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 	}
 
 	// 2. Web/API 用Handlerの初期化
+	// 台本モード・スタイルモードの選択肢は、生成時と同じテンプレート（assets/prompts）
+	// から取ります。Web 面が別の一覧を持つと、画面に出したモードが worker に無い、
+	// という食い違いが起こり得ます。
+	scriptPrompts, err := prompts.NewScriptPrompts()
+	if err != nil {
+		return fmt.Errorf("台本プロンプトの読み込みに失敗しました: %w", err)
+	}
+	styles, err := prompts.NewStyles()
+	if err != nil {
+		return fmt.Errorf("画風プリセットの読み込みに失敗しました: %w", err)
+	}
+
 	webHandler, err := handlers.NewHandler(handlers.HandlerOptions{
-		TaskQueue:   appCtx.TaskQueue,
-		Repository:  appCtx.Repository,
-		JobStatus:   appCtx.JobStatus,
-		Signer:      appCtx.RemoteIO.Signer,
-		Bucket:      appCtx.Config.Storage.GCSBucket,
-		Characters:  appCtx.Characters,
-		ImageModels: appCtx.Config.AI.ImageModels,
+		TaskQueue:    appCtx.TaskQueue,
+		Repository:   appCtx.Repository,
+		JobStatus:    appCtx.JobStatus,
+		Signer:       appCtx.RemoteIO.Signer,
+		Bucket:       appCtx.Config.Storage.GCSBucket,
+		Characters:   appCtx.Characters,
+		ImageModels:  appCtx.Config.AI.ImageModels,
+		GeminiModels: appCtx.Config.AI.GeminiModels,
+		ScriptModes:  scriptPrompts.ModeInfos(),
+		StyleModes:   styles.ModeInfos(),
 	})
 	if err != nil {
 		return fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)

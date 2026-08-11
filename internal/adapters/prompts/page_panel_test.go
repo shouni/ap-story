@@ -29,7 +29,7 @@ func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 	t.Parallel()
 	cm := testCharacters(t)
 
-	system, user, negative, err := PanelPrompt{}.BuildPanel(&ports.PanelPromptData{
+	system, user, negative, err := testPanelPrompt(t).BuildPanel(&ports.PanelPromptData{
 		Panel: comic.Panel{
 			ID:      "ch01-p01",
 			Shot:    "wide",
@@ -40,9 +40,8 @@ func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 				{CharacterID: "students", Prominence: comic.ProminenceBackground, Action: "ざわめく"},
 			},
 		},
-		Characters:  cm,
-		SubjectIDs:  []string{"zundamon", "metan"},
-		StyleSuffix: "cinematic style",
+		Characters: cm,
+		SubjectIDs: []string{"zundamon", "metan"},
 	})
 	if err != nil {
 		t.Fatalf("BuildPanel() error = %v", err)
@@ -52,7 +51,7 @@ func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 		"[Subject 1: ずんだもん (green hair)] emotion: 驚き.",
 		"[Subject 2: めたん (purple hair)]",
 		"Background extras (no reference, generic): students (ざわめく)",
-		"Style: cinematic style",
+		"Style: Japanese anime style", // 既定プリセットの画風指定が後置される
 		"No speech bubbles, no text.",
 	} {
 		if !strings.Contains(user, want) {
@@ -92,10 +91,9 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 		Characters:    cm,
 		CharacterFile: map[string]int{"zundamon": 1, "metan": 2},
 		PanelFile:     map[string]int{"ch01-p01": 3},
-		StyleSuffix:   "cinematic style",
 	}
 
-	system, user, _, err := PagePrompt{}.BuildPage(data)
+	system, user, _, err := testPagePrompt(t).BuildPage(data)
 	if err != nil {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
@@ -118,8 +116,8 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 			t.Errorf("prompt does not contain %q\nprompt: %s", want, user)
 		}
 	}
-	if !strings.Contains(system, "READING FLOW: Right-to-Left") || !strings.Contains(system, "cinematic style") {
-		t.Error("system prompt missing the format rules or the style suffix")
+	if !strings.Contains(system, "READING FLOW: Right-to-Left") || !strings.Contains(system, "### ARTISTIC STYLE ###") {
+		t.Error("system prompt missing the format rules or the style section")
 	}
 }
 
@@ -129,7 +127,7 @@ func TestPagePromptFullWidthImpactForOddCount(t *testing.T) {
 	t.Parallel()
 	cm := testCharacters(t)
 
-	_, user, _, err := PagePrompt{}.BuildPage(&ports.PagePromptData{
+	_, user, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
 		Panels:     []comic.Panel{{ID: "p1"}, {ID: "p2"}, {ID: "p3"}},
 		Characters: cm,
 	})
@@ -164,3 +162,19 @@ func TestPromptEditModePreservesComposition(t *testing.T) {
 		t.Errorf("page edit prompt = %q", pageUser)
 	}
 }
+
+// testStyles は埋め込みの画風プリセットを読み込みます。
+// プロンプト実装は画風の解決をプリセットに委ねるため、テストでも本物を使います
+// （文言そのものの検証は style_test.go 側で行います）。
+func testStyles(t *testing.T) *Styles {
+	t.Helper()
+	styles, err := NewStyles()
+	if err != nil {
+		t.Fatalf("NewStyles failed: %v", err)
+	}
+	return styles
+}
+
+func testPanelPrompt(t *testing.T) PanelPrompt   { return PanelPrompt{Styles: testStyles(t)} }
+func testPagePrompt(t *testing.T) PagePrompt     { return PagePrompt{Styles: testStyles(t)} }
+func testDesignPrompt(t *testing.T) DesignPrompt { return DesignPrompt{Styles: testStyles(t)} }

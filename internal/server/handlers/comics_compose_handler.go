@@ -13,14 +13,42 @@ type composeFormData struct {
 	SourceText string
 	ScriptMode string
 	StyleMode  string
+	TextModel  string
+	ImageModel string
+	// ScriptModes / StyleModes は台本モード・スタイルモードの選択肢
+	// （assets/prompts 配下のテンプレート）です。
+	ScriptModes []selectOption
+	StyleModes  []selectOption
+	// TextModels / ImageModels はモデルの選択肢です（先頭が既定）。
+	// 空なら選択欄そのものを出しません。
+	TextModels  []selectOption
+	ImageModels []selectOption
 	// StopAfterScript はチェックボックスの状態です（エラーで再表示するときに保つため）。
 	StopAfterScript bool
 	ErrorMessage    string
 }
 
+// buildComposeFormData は入力値を反映したフォーム表示用データを構築します。
+// 初回表示（ゼロ値の req）とエラー再表示で同じ組み立てを通します。
+func (h *Handler) buildComposeFormData(req composeComicRequest) composeFormData {
+	return composeFormData{
+		SourceURL:       req.SourceURL,
+		SourceText:      req.SourceText,
+		ScriptMode:      req.ScriptMode,
+		StyleMode:       req.StyleMode,
+		TextModel:       req.TextModel,
+		ImageModel:      req.ImageModel,
+		ScriptModes:     modeOptions(h.scriptModes, req.ScriptMode),
+		StyleModes:      modeOptions(h.styleModes, req.StyleMode),
+		TextModels:      modelOptions(h.geminiModels, req.TextModel),
+		ImageModels:     modelOptions(h.imageModels, req.ImageModel),
+		StopAfterScript: req.StopAfterScript,
+	}
+}
+
 // ComposeForm は GET /compose を処理し、漫画生成フォームを表示します。
 func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, http.StatusOK, "compose.html", "漫画を生成", composeFormData{})
+	h.render(w, r, http.StatusOK, "compose.html", "漫画を生成", h.buildComposeFormData(composeComicRequest{}))
 }
 
 // EnqueueComicForm は POST /compose を処理し、フォーム入力から compose_comic ジョブを
@@ -37,17 +65,13 @@ func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
 		SourceText:      strings.TrimSpace(r.PostFormValue("source_text")),
 		ScriptMode:      strings.TrimSpace(r.PostFormValue("script_mode")),
 		StyleMode:       strings.TrimSpace(r.PostFormValue("style_mode")),
+		TextModel:       strings.TrimSpace(r.PostFormValue("text_model")),
+		ImageModel:      strings.TrimSpace(r.PostFormValue("image_model")),
 		StopAfterScript: r.PostFormValue("stop_after_script") != "",
 	}
-	formData := composeFormData{
-		SourceURL:       req.SourceURL,
-		SourceText:      req.SourceText,
-		ScriptMode:      req.ScriptMode,
-		StyleMode:       req.StyleMode,
-		StopAfterScript: req.StopAfterScript,
-	}
+	formData := h.buildComposeFormData(req)
 
-	task, err := newComposeTask(req)
+	task, err := h.newComposeTask(req)
 	if err != nil {
 		slog.Error("failed to generate job id", "error", err)
 		formData.ErrorMessage = "ジョブIDの採番に失敗しました。時間をおいて再度お試しください。"
@@ -56,6 +80,12 @@ func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := task.ValidateSubmission(); err != nil {
+		formData.ErrorMessage = err.Error()
+		h.render(w, r, http.StatusBadRequest, "compose.html", "漫画を生成", formData)
+		return
+	}
+
+	if err := h.validateChoices(task); err != nil {
 		formData.ErrorMessage = err.Error()
 		h.render(w, r, http.StatusBadRequest, "compose.html", "漫画を生成", formData)
 		return

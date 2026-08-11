@@ -28,12 +28,64 @@ type State struct {
 	CharacterOutputDir string
 }
 
+// ImageLayout は生成画像の比率と解像度です。
+// go-comic-kit は設定として持たず、生成のたびに受け取ります。
+type ImageLayout struct {
+	// AspectRatio はコマ・ページ・デザインシートに共通の比率です。
+	// 揃っていないと参照画像によるブレ抑制が黙って無効になるため、1つの値で持ちます。
+	AspectRatio string
+	// PanelImageSize / PageImageSize は解像度です。1コマごとに費用が効くので分けています。
+	PanelImageSize string
+	PageImageSize  string
+}
+
 // Services は、パイプライン実行中は固定の外部依存です。ステップは参照するだけで
 // 書き換えません。
 type Services struct {
 	Ops    *ports.Operations
 	Reader ports.ContentReader
 	Writer remoteio.Writer
+	// Layout は生成画像の比率と解像度です。
+	Layout ImageLayout
+}
+
+// textModel は、この実行で台本生成に使うテキストモデルを返します。
+// Task の指定を優先し、無ければ state の記録（この作品を書いたモデル）を引き継ぎます。
+// どちらも空なら空文字を返し、worker の設定（GEMINI_MODELS 先頭）が使われます。
+//
+// 引き継ぐのは、章の台本を後から作り直したときに他の章と違うモデルが書くのを防ぐためです。
+func (pc *Context) textModel() string {
+	if pc.Task != nil && pc.Task.TextModel != "" {
+		return pc.Task.TextModel
+	}
+	if pc.Manga != nil {
+		return pc.Manga.TextModel
+	}
+	return ""
+}
+
+// imageModel は、この実行で画像生成に使うモデルを返します（解決規則は textModel と同じ）。
+func (pc *Context) imageModel() string {
+	if pc.Task != nil && pc.Task.ModelOverride != "" {
+		return pc.Task.ModelOverride
+	}
+	if pc.Manga != nil {
+		return pc.Manga.ImageModel
+	}
+	return ""
+}
+
+// styleMode は、この実行で使う画風モードを返します。
+// 画風は作品単位の絵作りなので、Task ではなく state（章立て時に決めた値）を見ます。
+// これで「台本まで生成 → 後から画像生成」でも同じ画風が使われます。
+//
+// 画風指定とネガティブプロンプトへの解決は、プロンプト実装
+// （internal/adapters/prompts の Styles）が行います。パイプラインは名前を運ぶだけです。
+func (pc *Context) styleMode() string {
+	if pc.Manga == nil {
+		return ""
+	}
+	return pc.Manga.StyleMode
 }
 
 // Context は、パイプライン各ステップ間で引き継がれる実行コンテキストです。

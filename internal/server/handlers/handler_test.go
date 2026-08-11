@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	characterkit "github.com/shouni/go-character-kit/character"
 
+	"github.com/shouni/ap-story/internal/adapters/prompts"
 	"github.com/shouni/ap-story/internal/domain"
 )
 
@@ -152,12 +153,17 @@ func newTestHandlerWithRepo(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepos
 func newTestHandlerFull(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepository, signer *fakeSigner) *Handler {
 	t.Helper()
 	h, err := NewHandler(HandlerOptions{
-		TaskQueue:   q,
-		Repository:  repo,
-		Signer:      signer,
-		Bucket:      "test-bucket",
-		Characters:  testCharacters(t),
-		ImageModels: []string{"image-model", "image-alt"},
+		TaskQueue:    q,
+		Repository:   repo,
+		Signer:       signer,
+		Bucket:       "test-bucket",
+		Characters:   testCharacters(t),
+		ImageModels:  []string{"image-model", "image-alt"},
+		GeminiModels: []string{"gemini-model", "gemini-alt"},
+		// 本番は assets/prompts 配下のテンプレート名が入ります。ここは選択肢の
+		// 検証だけが目的なので、既定モードと追加モードを1つずつ持たせます。
+		ScriptModes: []prompts.ModeInfo{{Name: prompts.ModeDefault}, {Name: "alt"}},
+		StyleModes:  []prompts.ModeInfo{{Name: prompts.ModeDefault}, {Name: "watercolor"}},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler failed: %v", err)

@@ -21,7 +21,11 @@ Draw a single manga panel following the scene direction, with these rules:
 
 	// panelNegativePrompt はパネル画像に含めたくない要素を指定する負のプロンプトです。
 	// フキダシ・文字の排除に加え、手・指の崩れ対策を含みます。
-	panelNegativePrompt = "speech bubble, dialogue balloon, text, alphabet, letters, words, signatures, watermark, username, malformed hands, fused fingers, extra fingers, missing fingers, extra limbs, deformed anatomy, low quality, distorted, bad anatomy, monochrome, black and white, greyscale"
+	//
+	// 画風に依る語（monochrome 等）はここに書きません。スタイルプリセット側が
+	// negative として持ち、選ばれた画風のものだけが足されます。ここに書くと、
+	// モノクロを選べるスタイルと真っ向から衝突します。
+	panelNegativePrompt = "speech bubble, dialogue balloon, text, alphabet, letters, words, signatures, watermark, username, malformed hands, fused fingers, extra fingers, missing fingers, extra limbs, deformed anatomy, low quality, distorted, bad anatomy"
 
 	// panelEditInstruction は編集モードで構図の維持を指示する共通プレフィックスです。
 	panelEditInstruction = "Edit the attached manga panel image. Keep the composition, character poses, background, and art style unchanged. Apply ONLY this change: "
@@ -31,14 +35,22 @@ Draw a single manga panel following the scene direction, with these rules:
 //
 // go-comic-kit の既定は形式を守らせる最小限の指示しか持たないため、演出語彙や
 // 画風の作り込みはこちら側で持ちます。
-type PanelPrompt struct{}
+type PanelPrompt struct {
+	// Styles は画風プリセットです。キットが運ぶのはモード名だけなので、
+	// 画風指定とネガティブプロンプトの解決はここで行います。
+	Styles *Styles
+}
 
 var _ ports.PanelPrompt = PanelPrompt{}
 
 // BuildPanel はパネル画像生成のプロンプトを構築します。
-func (PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, string, error) {
+func (p PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, string, error) {
 	if data == nil {
 		return "", "", "", fmt.Errorf("panel prompt data is required")
+	}
+	styleSuffix, negative, err := resolveStyle(p.Styles, data.StyleMode, panelNegativePrompt, imageSuffix)
+	if err != nil {
+		return "", "", "", err
 	}
 
 	var sb strings.Builder
@@ -69,17 +81,19 @@ func (PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, stri
 		sb.WriteString("\nBackground extras (no reference, generic): ")
 		sb.WriteString(extras)
 	}
-	if data.StyleSuffix != "" {
+	if styleSuffix != "" {
 		sb.WriteString("\nStyle: ")
-		sb.WriteString(data.StyleSuffix)
+		sb.WriteString(styleSuffix)
 	}
 	sb.WriteString("\nNo speech bubbles, no text.")
 
-	return panelSystemPrompt, sb.String(), panelNegativePrompt, nil
+	return panelSystemPrompt, sb.String(), negative, nil
 }
 
 // BuildPanelEdit は既存パネル画像への編集指示を構築します。
 // 構図・ポーズ・背景を保ったまま、指示された箇所だけを変更させます。
+//
+// 編集は既存画像の画風を引き継ぐため、画風プリセットのネガティブは足しません。
 func (PanelPrompt) BuildPanelEdit(editPrompt string) (string, string, string, error) {
 	return panelSystemPrompt, panelEditInstruction + editPrompt, panelNegativePrompt, nil
 }

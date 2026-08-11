@@ -148,3 +148,86 @@ func TestNewHandlerRequiresBucket(t *testing.T) {
 		t.Error("NewHandler without Bucket succeeded, want error")
 	}
 }
+
+// モデルと画風の選択は Task へ運ばれること。画像モデルは既存の ModelOverride を使います
+// （デザインシートと同じ欄なので、Task 側に2つ目の画像モデルは作りません）。
+func TestEnqueueComicCarriesModelAndModeChoices(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeTaskQueue{}
+	h := newTestHandler(t, q)
+
+	body := `{"source_text": "元文章", "script_mode": "alt", "style_mode": "watercolor",
+		"text_model": "gemini-alt", "image_model": "image-alt"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	h.EnqueueComic(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	task := q.lastTask
+	if task.ScriptMode != "alt" || task.StyleMode != "watercolor" {
+		t.Errorf("modes = %q/%q, want alt/watercolor", task.ScriptMode, task.StyleMode)
+	}
+	if task.TextModel != "gemini-alt" || task.ModelOverride != "image-alt" {
+		t.Errorf("models = %q/%q, want gemini-alt/image-alt", task.TextModel, task.ModelOverride)
+	}
+}
+
+// 許可リスト外の選択は投入前に弾くこと。ブラウザは <select> に縛られますが、
+// JSON API は任意の文字列を送れます。
+func TestEnqueueComicRejectsUnknownChoices(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"台本モード":   `{"source_text": "x", "script_mode": "no-such-mode"}`,
+		"スタイルモード": `{"source_text": "x", "style_mode": "no-such-style"}`,
+		"テキストモデル": `{"source_text": "x", "text_model": "no-such-model"}`,
+		"画像モデル":   `{"source_text": "x", "image_model": "no-such-model"}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			q := &fakeTaskQueue{}
+			h := newTestHandler(t, q)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(body))
+			rec := httptest.NewRecorder()
+
+			h.EnqueueComic(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			if q.called != 0 {
+				t.Errorf("Enqueue called %d times, want 0", q.called)
+			}
+		})
+	}
+}
+
+// モデル未指定の JSON 呼び出し（MCP 等）も、既定モデルで埋めた Task になること。
+// worker 側の設定へ落とすと、その作品だけ出自が state に残りません。
+func TestEnqueueComicFillsInDefaultModels(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeTaskQueue{}
+	h := newTestHandler(t, q)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{"source_text": "元文章"}`))
+	rec := httptest.NewRecorder()
+
+	h.EnqueueComic(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if q.lastTask.TextModel != "gemini-model" {
+		t.Errorf("TextModel = %q, want gemini-model (the head of GEMINI_MODELS)", q.lastTask.TextModel)
+	}
+	if q.lastTask.ModelOverride != "image-model" {
+		t.Errorf("ModelOverride = %q, want image-model (the head of IMAGE_MODELS)", q.lastTask.ModelOverride)
+	}
+}
