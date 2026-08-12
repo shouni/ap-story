@@ -4,6 +4,7 @@
     --app-primary-blue: #0d6efd;
     --app-border-color: #dee2e6;
     --app-muted-text: #536471;
+    --comic-reader-width: 72rem;
 }
 
 body {
@@ -130,10 +131,9 @@ footer hr {
     overflow-y: auto;
 }
 
-/* 通し読みは1ページずつ縦に積みます。幅を制限するのは、広い画面で全幅に
-   引き伸ばすと1ページが画面に収まらず、めくる感覚が失われるためです。 */
+/* 通し読みは1ページずつ縦に積みます。幅は --comic-reader-width の1か所で調整します。 */
 .comic-reader {
-    max-width: 46rem;
+    max-width: var(--comic-reader-width);
 }
 
 .comic-reader img {
