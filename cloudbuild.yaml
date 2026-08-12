@@ -32,6 +32,7 @@ steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Worker to Cloud Run'
     entrypoint: 'gcloud'
+    waitFor: ['Build with BuildKit']
     args:
       - 'run'
       - 'deploy'
@@ -44,6 +45,7 @@ steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy Web to Cloud Run'
     entrypoint: 'gcloud'
+    waitFor: ['Build with BuildKit']
     args:
       - 'run'
       - 'deploy'
