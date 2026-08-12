@@ -172,32 +172,44 @@ func validateReferenceURLOverride(url string) error {
 	return nil
 }
 
-// TaskName は Cloud Tasks の決定的なタスク名（重複 enqueue 排除キー）を返します。
-// 同じジョブ・同じコマンド・同じ対象への短時間の重複投入（Cloud Tasks の at-least-once
-// 配信や呼び出し元の再試行によるもの）を1つのタスクにまとめます。意図的に同一対象へ
-// 続けて再生成をリクエストした場合は、Cloud Tasks 側のタスク名衝突（ALREADY_EXISTS）に
-// より一時的に弾かれることがありますが、これは仕様（同一内容の連投を抑止する）です。
+// TaskName は Cloud Tasks のタスク名（重複 enqueue 排除キー）を返します。
+// 作り直し系のコマンドでは投入時刻を名前に含めるため、重複排除が効く範囲は
+// 「同じジョブ・同じコマンド・同じ対象へ同じ秒に届いた投入」— つまり Cloud Tasks の
+// at-least-once 配信や呼び出し元の再試行のような、1つにまとめてよい重複だけです。
+//
+// 対象だけで名前を決めてしまうと、人が結果を見て「気に入らないからもう一度」と
+// 投げ直す再生成が黙って捨てられます。Cloud Tasks は実行済みタスクの名前を公称1時間、
+// 実際にはそれよりずっと長く予約し続け、その間の ALREADY_EXISTS は成功として扱われる
+// （gcp-kit の EnqueueWithName）ため、呼び出し元には 202 が返り、ジョブ状態は
+// 誰も処理しないまま queued で残ります。再生成は納得するまで繰り返す操作なので、
+// 重複を弾くことより取りこぼさないことを優先します。
+//
 // ジョブIDは英数字とハイフンのみ（ValidateJobID で検証済み）、ChapterID/PanelID は
 // システム側で "ch01" / "ch01-p03" 形式に採番されるため、追加のサニタイズなしで
 // Cloud Tasks のタスク名文字制約（英数字・ハイフン・アンダースコア）を満たします。
 func (t Task) TaskName() string {
-	target := t.taskTarget()
-	if target == "" {
-		return fmt.Sprintf("%s-%s", t.JobID, t.Command)
+	parts := []string{t.JobID, string(t.Command)}
+	if target := t.taskTarget(); target != "" {
+		parts = append(parts, target)
 	}
-	return fmt.Sprintf("%s-%s-%s", t.JobID, t.Command, target)
+	if t.repeatable() {
+		parts = append(parts, fmt.Sprintf("t%d", t.CreatedAt.UTC().Unix()))
+	}
+	return strings.Join(parts, "-")
+}
+
+// repeatable は、同じ対象へ何度でも投げ直す前提のコマンドかを返します。
+//
+// compose_comic だけが該当しません。投入のたびに新しいジョブIDを採番する
+// （handlers.EnqueueComic）ので名前はもともと投入ごとに変わり、決定的な名前が
+// 排除できるのは同一リクエストの再送だけだからです。逆に言えば、これ以降に
+// 追加するコマンドは既定でこちら側 — 取りこぼすより重複するほうが安全です。
+func (t Task) repeatable() bool {
+	return t.Command != TaskCommandComposeComic
 }
 
 func (t Task) taskTarget() string {
 	switch t.Command {
-	case TaskCommandRenderComic:
-		// render_comic は「失敗したところから再開する」ためのコマンドなので、
-		// 決定的な名前で重複排除すると、正当な再開リクエストが
-		// ALREADY_EXISTS として黙って捨てられてしまう（Cloud Tasks の重複排除は
-		// 完了後もしばらく効くため、45分のジョブが失敗した直後の再実行がまさに該当する）。
-		// 生成済みのコマ・ページは飛ばすので重ねて実行しても無駄にはならない。
-		// 取りこぼしを避けるほうを優先して、投入時刻で名前を分ける。
-		return fmt.Sprintf("t%d", t.CreatedAt.UTC().Unix())
 	case TaskCommandRegenerateChapterScript:
 		return t.ChapterID
 	case TaskCommandGenerateDesignSheet:
