@@ -113,6 +113,8 @@ type fakeComicRepository struct {
 	characterHistoryErr error
 	deletedDesigns      []string
 	deleteDesignErr     error
+	saved               []*kitcomic.MangaState
+	saveErr             error
 }
 
 func (f *fakeComicRepository) ListCharacterDesignHistory(_ context.Context, characterID string) ([]domain.CharacterDesignHistoryItem, error) {
@@ -143,6 +145,18 @@ func (f *fakeComicRepository) GetState(_ context.Context, jobID string) (*kitcom
 		return nil, fmt.Errorf("comic history not found for job %q", jobID)
 	}
 	return state, nil
+}
+
+func (f *fakeComicRepository) SaveState(_ context.Context, jobID string, state *kitcomic.MangaState) error {
+	if f.saveErr != nil {
+		return f.saveErr
+	}
+	f.saved = append(f.saved, state)
+	if f.states == nil {
+		f.states = map[string]*kitcomic.MangaState{}
+	}
+	f.states[jobID] = state
+	return nil
 }
 
 func (f *fakeComicRepository) DeleteHistory(_ context.Context, jobID string) error {

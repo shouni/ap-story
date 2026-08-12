@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/shouni/gcp-kit/auth"
 
 	"github.com/shouni/ap-story/internal/builder"
@@ -186,5 +187,42 @@ func TestNewRouterKeepsHealthzForWorkerRole(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+// TestNewRouterRegistersTheScriptRoutes は、台本の取得と保存の口が両方とも
+// 生えていることを確認します。片方だけ生えていても画面は静かに壊れるだけで、
+// ビルドもテストも通ってしまうため、経路そのものを固定します。
+func TestNewRouterRegistersTheScriptRoutes(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(&builder.AppHandlers{
+		Auth: testAuthHandler(t),
+		Web:  &handlers.Handler{},
+	}, "")
+
+	want := map[string]string{
+		http.MethodGet: "/api/comics/{jobID}/script",
+		http.MethodPut: "/api/comics/{jobID}/script",
+	}
+	found := map[string]bool{}
+	walk := func(method string, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if want[method] == route {
+			found[method] = true
+		}
+		return nil
+	}
+	routes, ok := router.(chi.Routes)
+	if !ok {
+		t.Fatalf("router が chi.Routes ではありません: %T", router)
+	}
+	if err := chi.Walk(routes, walk); err != nil {
+		t.Fatalf("chi.Walk failed: %v", err)
+	}
+
+	for method := range want {
+		if !found[method] {
+			t.Errorf("%s %s が登録されていません", method, want[method])
+		}
 	}
 }
