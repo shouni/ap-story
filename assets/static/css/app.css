@@ -21,12 +21,15 @@ body {
     background-color: var(--zunda-green);
 }
 
-.nav-link {
+/* ナビバーは緑地なので文字を白で抜きます。セレクタを .navbar で絞るのは、
+   これを素の .nav-link に当てるとページ本文のタブまで白文字になり、
+   白背景の上で見えなくなるためです（実際そうなっていました）。 */
+.navbar .nav-link {
     color: rgba(255, 255, 255, 0.85) !important;
     transition: all 0.2s;
 }
 
-.nav-link:hover {
+.navbar .nav-link:hover {
     color: white !important;
     transform: translateY(-1px);
 }
@@ -41,10 +44,63 @@ body {
     border-color: var(--zunda-dark);
 }
 
-.nav-link.active {
+.navbar .nav-link.active {
     color: white !important;
     font-weight: bold;
     border-bottom: 2px solid white;
+}
+
+/* ページ本文のタブ。ap-comp の .app-tabs と同じ見た目に揃えています
+   （下線が伸びて現在地を示す形）。差し色だけは、この画面の基調である
+   ずんだ色を使います。 */
+.app-tabs {
+    border-bottom: 2px solid var(--app-border-color);
+    background-color: transparent;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.app-tabs .nav-link {
+    color: var(--app-muted-text) !important;
+    border: none !important;
+    background-color: transparent !important;
+    font-weight: 500;
+    padding: 0.75rem 1.25rem;
+    position: relative;
+    transition: all 0.2s ease;
+    border-radius: 6px 6px 0 0;
+    opacity: 0.8;
+    min-width: 100px;
+    text-align: center;
+}
+
+.app-tabs .nav-link:hover {
+    color: var(--zunda-dark) !important;
+    background-color: rgba(118, 188, 33, 0.08) !important;
+    opacity: 1;
+}
+
+.app-tabs .nav-link.active {
+    color: var(--zunda-dark) !important;
+    font-weight: 800;
+    opacity: 1;
+}
+
+.app-tabs .nav-link::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background-color: var(--zunda-green);
+    border-radius: 2px 2px 0 0;
+    transform: scaleX(0);
+    transition: transform 0.2s ease;
+}
+
+.app-tabs .nav-link.active::after {
+    transform: scaleX(1);
 }
 
 footer hr {
