@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const titleSuffix = " - AP Comic"
+const titleSuffix = " - AP Story"
 
 // activeNav はリクエストパスから、ナビゲーションでハイライトすべき項目のキーを返します。
 // layout.html の `{{if eq .ActiveNav "..."}}` と対応します。
