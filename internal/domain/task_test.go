@@ -78,35 +78,42 @@ func TestValidateSubmissionPerCommandRequiredFields(t *testing.T) {
 func TestTaskNameIsDeterministicAndTargetsAreDistinct(t *testing.T) {
 	t.Parallel()
 
+	submittedAt := time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC) // t1785492000
+
 	cases := []struct {
 		name string
 		task Task
 		want string
 	}{
 		{
-			"compose_comic has no target",
-			Task{Command: TaskCommandComposeComic, JobID: "job-1"},
+			"compose_comic has no target and no submission suffix",
+			Task{Command: TaskCommandComposeComic, JobID: "job-1", CreatedAt: submittedAt},
 			"job-1-compose_comic",
 		},
 		{
 			"chapter script includes chapter id",
-			Task{Command: TaskCommandRegenerateChapterScript, JobID: "job-1", ChapterID: "ch01"},
-			"job-1-regenerate_chapter_script-ch01",
+			Task{Command: TaskCommandRegenerateChapterScript, JobID: "job-1", ChapterID: "ch01", CreatedAt: submittedAt},
+			"job-1-regenerate_chapter_script-ch01-t1785492000",
 		},
 		{
 			"design sheet includes joined character ids",
-			Task{Command: TaskCommandGenerateDesignSheet, JobID: "job-1", CharacterIDs: []string{"zundamon", "metan"}},
-			"job-1-generate_design_sheet-zundamon_metan",
+			Task{Command: TaskCommandGenerateDesignSheet, JobID: "job-1", CharacterIDs: []string{"zundamon", "metan"}, CreatedAt: submittedAt},
+			"job-1-generate_design_sheet-zundamon_metan-t1785492000",
 		},
 		{
 			"panel includes panel id",
-			Task{Command: TaskCommandRegeneratePanel, JobID: "job-1", PanelID: "ch01-p03"},
-			"job-1-regenerate_panel-ch01-p03",
+			Task{Command: TaskCommandRegeneratePanel, JobID: "job-1", PanelID: "ch01-p03", CreatedAt: submittedAt},
+			"job-1-regenerate_panel-ch01-p03-t1785492000",
 		},
 		{
 			"page includes page number",
-			Task{Command: TaskCommandRegeneratePage, JobID: "job-1", Page: 2},
-			"job-1-regenerate_page-p2",
+			Task{Command: TaskCommandRegeneratePage, JobID: "job-1", Page: 2, CreatedAt: submittedAt},
+			"job-1-regenerate_page-p2-t1785492000",
+		},
+		{
+			"render_comic has no target beyond the submission",
+			Task{Command: TaskCommandRenderComic, JobID: "job-1", CreatedAt: submittedAt},
+			"job-1-render_comic-t1785492000",
 		},
 	}
 	for _, tt := range cases {
@@ -141,23 +148,52 @@ func TestRenderComicValidation(t *testing.T) {
 	}
 }
 
-func TestRenderComicTaskNameDiffersPerSubmission(t *testing.T) {
-	// 再開のための再投入が Cloud Tasks の重複排除で黙って捨てられないこと。
-	base := Task{Command: TaskCommandRenderComic, JobID: "job-abc"}
+func TestTaskNameDiffersPerSubmissionForRepeatableCommands(t *testing.T) {
+	t.Parallel()
+
+	// 同じ対象への投げ直し（再開、および「気に入らないからもう一度」）が
+	// Cloud Tasks の重複排除で黙って捨てられないこと。
+	bases := []Task{
+		{Command: TaskCommandRenderComic, JobID: "job-abc"},
+		{Command: TaskCommandRegenerateChapterScript, JobID: "job-abc", ChapterID: "ch02"},
+		{Command: TaskCommandRegeneratePanel, JobID: "job-abc", PanelID: "ch02-p07"},
+		{Command: TaskCommandRegeneratePage, JobID: "job-abc", Page: 3},
+		{Command: TaskCommandGenerateDesignSheet, JobID: "job-abc", CharacterIDs: []string{"zundamon"}},
+	}
+	for _, base := range bases {
+		t.Run(string(base.Command), func(t *testing.T) {
+			first := base
+			first.CreatedAt = time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC)
+			second := base
+			second.CreatedAt = time.Date(2026, 7, 31, 10, 5, 0, 0, time.UTC)
+
+			if first.TaskName() == second.TaskName() {
+				t.Errorf("投入時刻が違うのに同じタスク名になっている: %q", first.TaskName())
+			}
+
+			// 同一投入（同じ時刻）は従来どおり1つにまとめられる
+			same := base
+			same.CreatedAt = first.CreatedAt
+			if first.TaskName() != same.TaskName() {
+				t.Errorf("同一投入で名前が変わっている: %q vs %q", first.TaskName(), same.TaskName())
+			}
+		})
+	}
+}
+
+func TestComposeComicTaskNameIgnoresSubmissionTime(t *testing.T) {
+	t.Parallel()
+
+	// compose_comic は投入のたびに新しいジョブIDを採番するので名前はもともと
+	// 投入ごとに変わる。時刻まで混ぜると、同一リクエストの再送すら排除できなくなる。
+	base := Task{Command: TaskCommandComposeComic, JobID: "job-abc"}
 
 	first := base
 	first.CreatedAt = time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC)
-	second := base
-	second.CreatedAt = time.Date(2026, 7, 31, 10, 5, 0, 0, time.UTC)
+	retried := base
+	retried.CreatedAt = time.Date(2026, 7, 31, 10, 5, 0, 0, time.UTC)
 
-	if first.TaskName() == second.TaskName() {
-		t.Errorf("投入時刻が違うのに同じタスク名になっている: %q", first.TaskName())
-	}
-
-	// 同一投入（同じ時刻）は従来どおり1つにまとめられる
-	same := base
-	same.CreatedAt = first.CreatedAt
-	if first.TaskName() != same.TaskName() {
-		t.Errorf("同一投入で名前が変わっている: %q vs %q", first.TaskName(), same.TaskName())
+	if first.TaskName() != retried.TaskName() {
+		t.Errorf("同じジョブの再送が別タスクになっている: %q vs %q", first.TaskName(), retried.TaskName())
 	}
 }
