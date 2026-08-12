@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -324,5 +325,51 @@ func TestServeDetailsHidesImageModelWhenComplete(t *testing.T) {
 
 	if body := renderDetail(t, state); strings.Contains(body, "js-image-model") {
 		t.Error("生成が済んでいるのに画像モデルの選択が出ている")
+	}
+}
+
+// TestServeDetailsOrdersPagesByNumber は、ページが読む順に並ぶことを確認します。
+//
+// state.Pages は合成した順に並びます（go-comic-kit の SetPageArtifact は新規ページを
+// 末尾に足すだけ）。ページ3だけ先に作り直すと state 上は 3, 1, 2 の順になり、
+// 通し読みでは順序が狂っていること自体に気づけません。
+func TestServeDetailsOrdersPagesByNumber(t *testing.T) {
+	t.Parallel()
+
+	page := func(n int) kitcomic.PageArtifact {
+		return kitcomic.PageArtifact{
+			PageNumber: n,
+			Generation: &kitcomic.GenerationRecord{
+				ImageURL: fmt.Sprintf("gs://test-bucket/comics/job-1/images/comic_page_%d.png", n),
+			},
+		}
+	}
+	state := &kitcomic.MangaState{
+		Title: "テスト作品",
+		// ページ3を先に作り直した状態
+		Pages: []kitcomic.PageArtifact{page(3), page(1), page(2)},
+	}
+	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
+	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
+
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
+	rec := httptest.NewRecorder()
+	h.ServeDetails(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+
+	last := -1
+	for n := 1; n <= 3; n++ {
+		at := strings.Index(body, fmt.Sprintf("comic_page_%d.png", n))
+		if at < 0 {
+			t.Fatalf("ページ %d が出力されていません", n)
+		}
+		if at < last {
+			t.Errorf("ページ %d が前のページより先に出ています（読む順に並んでいません）", n)
+		}
+		last = at
 	}
 }

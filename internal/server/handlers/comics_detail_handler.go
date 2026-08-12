@@ -3,6 +3,7 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"slices"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 
@@ -152,6 +153,11 @@ func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) hist
 		}
 		data.Pages = append(data.Pages, dp)
 	}
+	// state.Pages は合成した順に並びます（go-comic-kit の SetPageArtifact は
+	// 新規ページを末尾に足すだけ）。ページ3だけ先に作り直せば state 上は 3, 1, 2 に
+	// なるので、読む順に直します。サムネイル一覧なら番号ラベルで気づけますが、
+	// 通し読みでは順序が狂っていること自体に気づけません。
+	slices.SortFunc(data.Pages, func(a, b detailPage) int { return a.Number - b.Number })
 
 	for _, ds := range state.DesignSheets {
 		data.DesignSheets = append(data.DesignSheets, detailDesignSheet{

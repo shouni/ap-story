@@ -56,6 +56,14 @@
             <i class="bi bi-images me-1"></i>作品
         </button>
     </li>
+    {{if .Data.Pages}}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-read"
+                type="button" role="tab">
+            <i class="bi bi-book me-1"></i>通し読み
+        </button>
+    </li>
+    {{end}}
     <li class="nav-item" role="presentation">
         <button class="nav-link js-script-tab" data-bs-toggle="tab" data-bs-target="#tab-script"
                 type="button" role="tab">
@@ -227,6 +235,34 @@
 {{end}}
 
 </div>{{/* /tab-work */}}
+
+{{if .Data.Pages}}
+{{/*
+  通し読みは完成品を頭から確かめるための面なので、再生成ボタンを置きません
+  （読んでいる最中に押すものではなく、直すのは「作品」タブの役目です）。
+  ページ画像は1枚あたり数MBあるため、遅延読み込みは外さないでください。
+  スクロールした分だけ払う形にしないと、開くだけで作品まるごとの転送になります。
+*/}}
+<div class="tab-pane fade" id="tab-read" role="tabpanel">
+    <div class="comic-reader mx-auto">
+        {{range .Data.Pages}}
+        <figure class="mb-4">
+            {{if .ImageURL}}
+            <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                <img src="{{.ImageURL}}" class="img-fluid w-100 rounded shadow-sm"
+                     alt="ページ {{.Number}}" loading="lazy" decoding="async">
+            </a>
+            {{else}}
+            <div class="border rounded d-flex align-items-center justify-content-center text-muted py-5">
+                <i class="bi bi-hourglass-split me-1"></i>ページ {{.Number}} は未合成
+            </div>
+            {{end}}
+            <figcaption class="text-center text-muted small mt-2">{{.Number}}</figcaption>
+        </figure>
+        {{end}}
+    </div>
+</div>
+{{end}}
 
 <div class="tab-pane fade" id="tab-script" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">

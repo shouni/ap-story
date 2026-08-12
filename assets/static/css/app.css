@@ -73,3 +73,13 @@ footer hr {
     max-height: 8rem;
     overflow-y: auto;
 }
+
+/* 通し読みは1ページずつ縦に積みます。幅を制限するのは、広い画面で全幅に
+   引き伸ばすと1ページが画面に収まらず、めくる感覚が失われるためです。 */
+.comic-reader {
+    max-width: 46rem;
+}
+
+.comic-reader img {
+    background-color: #f4f6f2;
+}
