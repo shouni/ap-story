@@ -84,6 +84,7 @@ func New(deps Dependencies) (*Runner, error) {
 }
 
 // Execute は gcp-kit/worker.TaskExecutor に適合するためのエントリーポイントです。
+// 終端状態（succeeded / failed）の記録と通知は recordOutcome が一手に行います。
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	// 以降このジョブから出るログすべてに job_id / command を載せ、
 	// 各ステップのログを 1 ジョブ単位で追えるようにする。
@@ -91,14 +92,6 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 		slog.String("job_id", task.JobID),
 		slog.String("command", string(task.Command)),
 	)
-
-	// 画像生成が応答しなくなった場合に Cloud Run のインスタンスを占有し続けないよう、
-	// タスク1件に上限を設ける。打ち切られたタスクは Cloud Tasks の再試行で作り直せる。
-	if r.deps.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, r.deps.Timeout)
-		defer cancel()
-	}
 
 	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
@@ -114,57 +107,52 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 		return nil
 	}
 
-	return r.run(ctx, &task, status)
+	// 入力検証より前に記録する。全試行が Attempts に載り、どのジョブも必ず
+	// running を経由して終端に至る。OutputDir は検証に依存しないので先に解決する。
+	outputDir, dirErr := domain.JobOutputDir(r.deps.Bucket, task.JobID)
+	if dirErr == nil {
+		status.markRunning(ctx, &task, outputDir)
+	}
+
+	title, err := r.run(ctx, &task)
+	return r.recordOutcome(ctx, &task, status, title, err)
 }
 
-// Run はタスクのコマンドに応じたステップ列を順に実行します。成功時は完了通知、
-// 失敗時はエラー通知を送ります（通知自体の失敗はログに残すのみでジョブの成否には影響しません）。
+// Run はタスクのコマンドに応じたステップ列を順に実行し、成果物だけを残します。
+//
+// 状態の記録・通知・再配信ガードは行いません。それらは Cloud Tasks worker の入口である
+// Execute の担当で、Run は生成そのものを同期実行して結果を確かめたい場合の本体メソッドです。
 func (r *Runner) Run(ctx context.Context, task *domain.Task) error {
-	return r.run(ctx, task, newStatusRecorder(r.deps.JobStatus))
+	_, err := r.run(ctx, task)
+	return err
 }
 
-// run はステップ列の実行本体です。status が有効なら各段階の状態を記録します。
-func (r *Runner) run(ctx context.Context, task *domain.Task, status statusRecorder) (err error) {
-	// 記録も通知も呼び出し元の context から切り離して行います。理由は
-	// savePartialResults と同じで、打ち切りこそが失敗理由である場面
-	// （PIPELINE_TIMEOUT の発火、Cloud Tasks の dispatch deadline 超過による
-	// リクエストのキャンセル）では ctx は既に期限切れだからです。そのまま使うと
-	// 状態は running のまま固着し、story-queue は max_attempts = 1 なので再試行も
-	// 来ません。記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように見えます。
-	defer func() {
-		if err != nil {
-			reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failureReportTimeout)
-			defer cancel()
+// run はステップ列の実行本体です。成功時は記録用のタイトルを返します。
+//
+// 実行時間の上限は、画像生成が応答しなくなった場合に Cloud Run のインスタンスを
+// 占有し続けないためのものです。締切はステップの実行にだけ被せ、呼び出し元の ctx には
+// 影響させません。ctx を上書きすると、打ち切られた直後の終端記録まで期限切れの
+// context で行うことになり、いちばん記録が要る場面で残りません。
+func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
+	runCtx := ctx
+	if r.deps.Timeout > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, r.deps.Timeout)
+		defer cancel()
+	}
 
-			status.markFailed(reportCtx, task, err)
-		}
-	}()
-	defer func() {
-		if err != nil {
-			reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failureReportTimeout)
-			defer cancel()
-
-			if notifyErr := r.deps.Notifier.NotifyError(reportCtx, *task, err); notifyErr != nil {
-				slog.ErrorContext(ctx, "failed to send error notification",
-					"job_id", task.JobID, "original_error", err, "notification_error", notifyErr)
-			}
-		}
-	}()
-
-	if err = task.ValidateSubmission(); err != nil {
-		return fmt.Errorf("invalid task: %w", err)
+	if err := task.ValidateSubmission(); err != nil {
+		return "", fmt.Errorf("invalid task: %w", err)
 	}
 
 	outputDir, err := domain.JobOutputDir(r.deps.Bucket, task.JobID)
 	if err != nil {
-		return fmt.Errorf("resolve output dir: %w", err)
+		return "", fmt.Errorf("resolve output dir: %w", err)
 	}
 	designJobOutputDir, err := domain.DesignJobOutputDir(r.deps.Bucket, task.JobID)
 	if err != nil {
-		return fmt.Errorf("resolve design job output dir: %w", err)
+		return "", fmt.Errorf("resolve design job output dir: %w", err)
 	}
-
-	status.markRunning(ctx, task, outputDir)
 
 	pc := &Context{
 		State: State{
@@ -181,27 +169,55 @@ func (r *Runner) run(ctx context.Context, task *domain.Task, status statusRecord
 		},
 	}
 
-	steps, planErr := r.deps.Planner.Plan(task)
-	if planErr != nil {
-		err = planErr
-		return err
+	steps, err := r.deps.Planner.Plan(task)
+	if err != nil {
+		return "", err
 	}
 	for _, step := range steps {
-		if stepErr := step.Execute(ctx, pc); stepErr != nil {
-			err = fmt.Errorf("step %s: %w", step.Name(), stepErr)
-			r.savePartialResults(ctx, pc)
-			return err
+		if stepErr := step.Execute(runCtx, pc); stepErr != nil {
+			r.savePartialResults(runCtx, pc)
+			return "", fmt.Errorf("step %s: %w", step.Name(), stepErr)
 		}
 	}
 
 	// 台本生成済みならタイトルが埋まっている。UI が一覧で表示するために記録する。
-	title := ""
 	if pc.Manga != nil {
-		title = pc.Manga.Title
+		return pc.Manga.Title, nil
 	}
-	status.markSucceeded(ctx, task, title)
+	return "", nil
+}
 
-	if notifyErr := r.deps.Notifier.NotifyComplete(ctx, *task); notifyErr != nil {
+// recordOutcome は終端状態の記録と通知を、成功・失敗の別なく同じ経路で行います。
+//
+// 記録も通知も呼び出し元の context から切り離して行います。理由は savePartialResults と
+// 同じで、打ち切りこそが終端の理由である場面（PIPELINE_TIMEOUT の発火、Cloud Tasks の
+// dispatch deadline 超過によるリクエストのキャンセル）では ctx は既に期限切れだからです。
+// そのまま使うと状態は running のまま固着し、story-queue は max_attempts = 1 なので
+// 再試行も来ません。記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように
+// 見えます。これは失敗だけでなく、期限や切断と前後して完了したジョブの「成功」の
+// 記録にもそのまま当てはまります。
+func (r *Runner) recordOutcome(
+	ctx context.Context,
+	task *domain.Task,
+	status statusRecorder,
+	title string,
+	cause error,
+) error {
+	outcomeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), outcomeReportTimeout)
+	defer cancel()
+
+	if cause != nil {
+		status.markFailed(outcomeCtx, task, cause)
+		if notifyErr := r.deps.Notifier.NotifyError(outcomeCtx, *task, cause); notifyErr != nil {
+			slog.ErrorContext(ctx, "failed to send error notification",
+				"job_id", task.JobID, "original_error", cause, "notification_error", notifyErr)
+		}
+		return cause
+	}
+
+	// 記録 → 通知の順。記録できていないジョブの成功を人に知らせない。
+	status.markSucceeded(outcomeCtx, task, title)
+	if notifyErr := r.deps.Notifier.NotifyComplete(outcomeCtx, *task); notifyErr != nil {
 		slog.WarnContext(ctx, "success notification failed", "job_id", task.JobID, "error", notifyErr)
 	}
 	return nil
@@ -211,9 +227,9 @@ func (r *Runner) run(ctx context.Context, task *domain.Task, status statusRecord
 // 呼び出し元の context から切り離して使うため、短く区切ります。
 const partialSaveTimeout = 30 * time.Second
 
-// failureReportTimeout は、失敗の記録と通知に許す時間です。
+// outcomeReportTimeout は、終端状態（succeeded / failed）の記録と通知に許す時間です。
 // partialSaveTimeout と同じく、呼び出し元の context から切り離して使います。
-const failureReportTimeout = 30 * time.Second
+const outcomeReportTimeout = 30 * time.Second
 
 // savePartialResults は、ステップが失敗した時点までの成果を保存します。
 //

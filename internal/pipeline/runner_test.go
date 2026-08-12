@@ -187,12 +187,21 @@ type fakeNotifier struct {
 	failedErr []error
 }
 
-func (f *fakeNotifier) NotifyComplete(_ context.Context, task domain.Task) error {
+// Slack への送信は HTTP なので context を尊重します（fakeJobStatusStore.Save と同じ理由）。
+// ここを無視すると、期限際に終わったジョブの通知が期限切れ context で送られていても
+// テストが通ってしまいます。
+func (f *fakeNotifier) NotifyComplete(ctx context.Context, task domain.Task) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f.completed = append(f.completed, task)
 	return nil
 }
 
-func (f *fakeNotifier) NotifyError(_ context.Context, task domain.Task, cause error) error {
+func (f *fakeNotifier) NotifyError(ctx context.Context, task domain.Task, cause error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f.failed = append(f.failed, task)
 	f.failedErr = append(f.failedErr, cause)
 	return nil
@@ -435,9 +444,10 @@ func TestRunnerNotifiesCompleteOnSuccess(t *testing.T) {
 	notifier := &fakeNotifier{}
 	r := newTestRunnerWithNotifier(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, &fakePanel{}, &fakePage{}), notifier)
 
-	task := &domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-notify", SourceText: "元文章"}
-	if err := r.Run(context.Background(), task); err != nil {
-		t.Fatalf("Run failed: %v", err)
+	// 通知は本番の入口である Execute からしか起きない（Run はステップ実行だけを行う）。
+	task := domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-notify", SourceText: "元文章"}
+	if err := r.Execute(context.Background(), task); err != nil {
+		t.Fatalf("Execute failed: %v", err)
 	}
 
 	if len(notifier.completed) != 1 || notifier.completed[0].JobID != "job-notify" {
@@ -462,9 +472,9 @@ func TestRunnerNotifiesErrorOnStepFailure(t *testing.T) {
 	}
 	r := newTestRunnerWithNotifier(t, store, ops, notifier)
 
-	task := &domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-fail", SourceText: "元文章"}
-	if err := r.Run(context.Background(), task); err == nil {
-		t.Fatal("Run succeeded, want error")
+	task := domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-fail", SourceText: "元文章"}
+	if err := r.Execute(context.Background(), task); err == nil {
+		t.Fatal("Execute succeeded, want error")
 	}
 
 	if len(notifier.failed) != 1 || notifier.failed[0].JobID != "job-fail" {

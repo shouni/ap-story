@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/shouni/ap-story/internal/domain"
 	"github.com/shouni/go-job-kit/jobstatus"
@@ -22,7 +23,14 @@ func newFakeJobStatusStore() *fakeJobStatusStore {
 	return &fakeJobStatusStore{statuses: map[string]domain.JobStatus{}}
 }
 
-func (s *fakeJobStatusStore) Save(_ context.Context, _ string, status domain.JobStatus) error {
+// 本物の GCS クライアントと同じく context を尊重します。ここを無視すると、
+// 打ち切られたジョブの終端記録がキャンセル済み context で行われていてもテストが
+// 通ってしまい、状態が running のまま固着するバグを見逃します。
+func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.JobStatus) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.statuses[status.JobID] = status
@@ -30,7 +38,11 @@ func (s *fakeJobStatusStore) Save(_ context.Context, _ string, status domain.Job
 	return nil
 }
 
-func (s *fakeJobStatusStore) Get(_ context.Context, jobID string) (domain.JobStatus, error) {
+func (s *fakeJobStatusStore) Get(ctx context.Context, jobID string) (domain.JobStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.JobStatus{}, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	status, ok := s.statuses[jobID]
@@ -134,6 +146,63 @@ func TestExecuteRetriesFailedJob(t *testing.T) {
 	}
 }
 
+// 期限（PIPELINE_TIMEOUT）の発火とほぼ同時に生成が完了したジョブも、succeeded として
+// 記録され通知されること。
+//
+// 締切はステップの実行にだけ被せる必要があります。ctx 全体を締切で上書きすると、
+// 期限と前後して完了したジョブの成功記録が DeadlineExceeded で失敗し、画像は GCS に
+// あるのに状態は running のまま固着します。story-queue は max_attempts = 1 なので
+// 再試行も来ず、手で直すしかありません。
+func TestExecuteRecordsSuccessCompletedAtDeadline(t *testing.T) {
+	store := newFakeJobStatusStore()
+	notifier := &fakeNotifier{}
+	runner := newOutcomeTestRunner(t, store, notifier, 50*time.Millisecond, deadlineStep{})
+
+	if err := runner.Execute(context.Background(), statusTestTask()); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateSucceeded)
+	if len(notifier.completed) != 1 {
+		t.Errorf("completed = %v, want one notification (期限際の完了が通知されていない)", notifier.completed)
+	}
+}
+
+// 呼び出し元の切断（Cloud Tasks の dispatch deadline 超過）とほぼ同時に生成が完了した
+// ジョブも、succeeded として記録され通知されること。PIPELINE_TIMEOUT と違い、こちらは
+// パイプラインが上限を設けていなくても起きます。
+func TestExecuteRecordsSuccessWhenCallerCancelsAtCompletion(t *testing.T) {
+	store := newFakeJobStatusStore()
+	notifier := &fakeNotifier{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runner := newOutcomeTestRunner(t, store, notifier, 0, cancelStep{cancel: cancel})
+
+	if err := runner.Execute(ctx, statusTestTask()); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateSucceeded)
+	if len(notifier.completed) != 1 {
+		t.Errorf("completed = %v, want one notification (切断と同時の完了が通知されていない)", notifier.completed)
+	}
+}
+
+// 入力検証で弾かれるジョブも running を経由して failed に至ること。
+// 記録が failed だけだと、投入されたのに一度も動かなかったジョブと区別が付きません。
+func TestExecuteRecordsRunningBeforeValidation(t *testing.T) {
+	store := newFakeJobStatusStore()
+	runner := newOutcomeTestRunner(t, store, nil, 0)
+
+	// SourceURL / SourceText 両方欠落で ValidateSubmission に落ちる。
+	invalid := domain.Task{Command: domain.TaskCommandComposeComic, JobID: statusTestJobID}
+	if err := runner.Execute(context.Background(), invalid); err == nil {
+		t.Fatal("Execute() error = nil, want error")
+	}
+
+	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateFailed)
+}
+
 // ストア未設定でもパイプラインは通常どおり動作すること。
 func TestExecuteWorksWithoutStatusStore(t *testing.T) {
 	counter := &countingStep{}
@@ -184,6 +253,55 @@ func newStatusTestRunner(t *testing.T, jobStatus domain.JobStatusStore, steps ..
 		t.Fatalf("New() error = %v", err)
 	}
 	return r
+}
+
+// newOutcomeTestRunner は、終端記録の検証用に Notifier と Timeout も差し替えた Runner を返します。
+func newOutcomeTestRunner(
+	t *testing.T,
+	jobStatus domain.JobStatusStore,
+	notifier domain.Notifier,
+	timeout time.Duration,
+	steps ...Step,
+) *Runner {
+	t.Helper()
+
+	store := newMemStore()
+	r, err := New(Dependencies{
+		Ops:       completeOps(),
+		Reader:    store,
+		Writer:    store,
+		Bucket:    "bucket",
+		Planner:   staticPlanner{steps: steps},
+		JobStatus: jobStatus,
+		Notifier:  notifier,
+		Timeout:   timeout,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	return r
+}
+
+// deadlineStep は context の期限まで待ってから成功します。
+// PIPELINE_TIMEOUT の発火とほぼ同時に生成が完了した状況を再現します。
+type deadlineStep struct{}
+
+func (deadlineStep) Name() string { return "deadline" }
+
+func (deadlineStep) Execute(ctx context.Context, _ *Context) error {
+	<-ctx.Done()
+	return nil
+}
+
+// cancelStep は成功を返す直前に cancel を呼びます。呼び出し元 context の切断
+// （Cloud Tasks の dispatch deadline 超過）と同時に生成が完了した状況を再現します。
+type cancelStep struct{ cancel context.CancelFunc }
+
+func (cancelStep) Name() string { return "cancel" }
+
+func (s cancelStep) Execute(context.Context, *Context) error {
+	s.cancel()
+	return nil
 }
 
 type countingStep struct{ calls int }
