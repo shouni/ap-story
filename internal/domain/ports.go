@@ -18,6 +18,9 @@ type TaskQueue interface {
 type ComicRepository interface {
 	ListHistoryPage(ctx context.Context, page int, perPage int) (ComicHistoryPage, error)
 	GetState(ctx context.Context, jobID string) (*kitcomic.MangaState, error)
+	// SaveState は state をまるごと書き戻します。台本の手直しのための口で、
+	// 生成パイプライン（worker）は go-comic-kit の store を直接使うためここは通りません。
+	SaveState(ctx context.Context, jobID string, state *kitcomic.MangaState) error
 	DeleteHistory(ctx context.Context, jobID string) error
 	// ListCharacterDesignHistory は、指定キャラクター単体のデザインシート生成履歴を
 	// 新しい順で返します。複数キャラクター合成生成のシートは対象外です

@@ -44,6 +44,43 @@
     </div>
 </div>
 
+{{/*
+  タブは「絵を見る」「台本を読んで直す」「JSON をまとめて差し替える」の3つです。
+  台本タブに画像を出さないのは、校正が絵ではなく文章を通して読む作業だからです
+  （コマ画像に挟まれると、話の流れとして読めません）。
+*/}}
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-work"
+                type="button" role="tab">
+            <i class="bi bi-images me-1"></i>作品
+        </button>
+    </li>
+    {{if .Data.Pages}}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-read"
+                type="button" role="tab">
+            <i class="bi bi-book me-1"></i>通し読み
+        </button>
+    </li>
+    {{end}}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link js-script-tab" data-bs-toggle="tab" data-bs-target="#tab-script"
+                type="button" role="tab">
+            <i class="bi bi-card-text me-1"></i>台本
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link js-script-tab" data-bs-toggle="tab" data-bs-target="#tab-json"
+                type="button" role="tab">
+            <i class="bi bi-braces me-1"></i>JSON
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="script-tabs" data-job-id="{{.Data.JobID}}">
+<div class="tab-pane fade show active" id="tab-work" role="tabpanel">
+
 {{if .Data.Pages}}
 <section class="mb-5">
     <h2 class="h4 mb-3"><i class="bi bi-file-earmark-image me-2"></i>ページ</h2>
@@ -196,4 +233,68 @@
     </div>
 </section>
 {{end}}
+
+</div>{{/* /tab-work */}}
+
+{{if .Data.Pages}}
+{{/*
+  通し読みは完成品を頭から確かめるための面なので、再生成ボタンを置きません
+  （読んでいる最中に押すものではなく、直すのは「作品」タブの役目です）。
+  ページ画像は1枚あたり数MBあるため、遅延読み込みは外さないでください。
+  スクロールした分だけ払う形にしないと、開くだけで作品まるごとの転送になります。
+*/}}
+<div class="tab-pane fade" id="tab-read" role="tabpanel">
+    <div class="comic-reader mx-auto">
+        {{range .Data.Pages}}
+        <figure class="mb-4">
+            {{if .ImageURL}}
+            <a href="{{.ImageURL}}" target="_blank" rel="noopener">
+                <img src="{{.ImageURL}}" class="img-fluid w-100 rounded shadow-sm"
+                     alt="ページ {{.Number}}" loading="lazy" decoding="async">
+            </a>
+            {{else}}
+            <div class="border rounded d-flex align-items-center justify-content-center text-muted py-5">
+                <i class="bi bi-hourglass-split me-1"></i>ページ {{.Number}} は未合成
+            </div>
+            {{end}}
+            <figcaption class="text-center text-muted small mt-2">{{.Number}}</figcaption>
+        </figure>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+<div class="tab-pane fade" id="tab-script" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="text-muted small">
+            セリフはページ合成のときに描き込まれます。保存しただけでは絵は変わりません。
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="js-script-status text-muted small"></span>
+            <button class="btn btn-primary btn-sm js-script-save" type="button" disabled>
+                <i class="bi bi-save me-1"></i>台本を保存
+            </button>
+        </div>
+    </div>
+    <div class="js-script-body">
+        <p class="text-muted"><i class="bi bi-hourglass-split me-1"></i>読み込み中…</p>
+    </div>
+</div>
+
+<div class="tab-pane fade" id="tab-json" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="text-muted small">
+            台本の JSON です。<code>panel_id</code> の並びは変更できません（コマ画像との対応が壊れるため）。
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="js-json-status text-muted small"></span>
+            <button class="btn btn-primary btn-sm js-script-save-json" type="button" disabled>
+                <i class="bi bi-save me-1"></i>JSON を保存
+            </button>
+        </div>
+    </div>
+    <textarea class="form-control font-monospace js-script-json" rows="28" spellcheck="false"></textarea>
+</div>
+
+</div>{{/* /tab-content */}}
 {{end}}

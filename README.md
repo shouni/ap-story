@@ -102,6 +102,29 @@ gs://{STORY_BUCKET}/
 `character/`（AI 生成履歴）とはディレクトリを分けています。こちらは `/api/characters/reference/*`
 経由で配信します。
 
+### 台本の校正
+
+セリフの手直しは `GET/PUT /api/comics/{jobID}/script` で行います（画面は作品詳細の「台本」タブ）。
+台本の再生成（`regenerate_chapter_script`）は章まるごと書き直すので1行の校正には使えず、
+コマの構成ごと変わって生成済みのコマ画像との対応が壊れます。
+
+やり取りするのは state 全体ではなく、章の見出しと各コマのセリフだけです。生成記録
+（`GenerationRecord`）やページ成果物は生成の結果であって入力ではないので、編集の経路に乗せません。
+差し替えられるのはセリフの文面・話者・種別だけで、**コマの追加・削除・並べ替えは拒否します**
+（`panel_id` の並びが生成済みのコマ画像との対応そのものだからです）。
+
+**保存はゴールではありません。** セリフはページ合成のときに画像モデルが描き込むので
+（`prompts/page.go` の `TEXT_TO_RENDER`）、保存しただけでは絵は古い文字のままです。直した文字を
+絵に載せるには対象ページを合成し直す必要があり、そのページ番号を `affected_pages` で返します。
+逆にコマ画像は作り直さずに済みます（コマは `No speech bubbles, no text` で生成されているため）。
+
+state の保存は「常に上書き・常に最新」で、go-comic-kit の store は条件付き書き込み
+（GCS の `ifGenerationMatch`）の口を持ちません。そのため生成ジョブと編集が重なると、
+後から書いたほうが勝って先の変更が痕跡なく消えます。防ぎようがないので、実行中
+（queued / running）のジョブがある間は編集を 409 で断ります。状態が記録されていない作品は
+素通しします（状態を追えないことを理由に止めると、状態記録より前に作られた作品が
+永久に直せなくなるためです）。
+
 ## 📋 パイプラインコマンド（Task.command）
 
 Worker が受けるタスクはコマンドで分岐します。各コマンドは「state をロード →
@@ -177,6 +200,8 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `POST /api/comics` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
 | `GET /api/comics` | セッション or M2M | 履歴一覧（state の列挙、ページング） |
 | `GET /api/comics/{jobID}` | セッション or M2M | 詳細（comic_state.json の内容） |
+| `GET /api/comics/{jobID}/script` | セッション or M2M | 台本の読み出し（章の見出しと各コマのセリフだけ。生成記録やプロンプトは含まない） |
+| `PUT /api/comics/{jobID}/script` | セッション or M2M | 台本の保存（セリフのみ差し替え。合成し直すべきページを `affected_pages` で返す） |
 | `POST /api/comics/{jobID}/regenerate` | セッション or M2M | 再生成ジョブの投入（command + パラメータ） |
 | `GET /api/comics/{jobID}/images/*` | セッション or M2M | パネル・ページ画像への署名 URL リダイレクト |
 | `POST /api/design-sheets` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・style_mode・model_override・reference_url_override・visual_cues_override は任意） |

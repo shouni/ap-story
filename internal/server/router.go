@@ -92,6 +92,8 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 				r.Get("/", h.Web.ListComics)
 				r.Get("/{jobID}", h.Web.GetComic)
 				r.Delete("/{jobID}", h.Web.DeleteComic)
+				r.Get("/{jobID}/script", h.Web.GetComicScript)
+				r.Put("/{jobID}/script", h.Web.UpdateComicScript)
 				r.Post("/{jobID}/regenerate", h.Web.RegenerateComic)
 				r.Get("/{jobID}/images/*", h.Web.RedirectComicImage)
 				r.Get("/{jobID}/status", h.Web.JobStatus)
