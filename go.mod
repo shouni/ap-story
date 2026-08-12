@@ -8,10 +8,10 @@ require (
 	github.com/shouni/gcp-kit v1.10.1
 	github.com/shouni/go-character-kit v1.1.2
 	github.com/shouni/go-comic-kit v1.4.5
-	github.com/shouni/go-gemini-client v1.17.1
-	github.com/shouni/go-http-kit v1.8.0
+	github.com/shouni/go-gemini-client v1.17.2
+	github.com/shouni/go-http-kit v1.8.1
 	github.com/shouni/go-job-kit v1.0.5
-	github.com/shouni/go-notify v1.2.2
+	github.com/shouni/go-notify v1.2.3
 	github.com/shouni/go-prompt-kit v1.4.2
 	github.com/shouni/go-remote-io v1.8.0
 	github.com/shouni/go-utils v1.5.1
