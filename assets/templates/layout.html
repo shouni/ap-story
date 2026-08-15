@@ -23,12 +23,12 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link{{if eq .ActiveNav "works"}} active{{end}}" href="/history">
+                    <a class="nav-link{{if eq .ActiveNav "works"}} active{{end}}" {{if eq .ActiveNav "works"}}aria-current="page" {{end}}href="/history">
                         <i class="bi bi-collection me-1"></i>Works
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link{{if eq .ActiveNav "characters"}} active{{end}}" href="/characters">
+                    <a class="nav-link{{if eq .ActiveNav "characters"}} active{{end}}" {{if eq .ActiveNav "characters"}}aria-current="page" {{end}}href="/characters">
                         <i class="bi bi-people me-1"></i>Characters
                     </a>
                 </li>
