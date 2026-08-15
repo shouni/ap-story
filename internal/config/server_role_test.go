@@ -1,7 +1,9 @@
 package config
 
 import (
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/shouni/gcp-kit/serverrole"
 
@@ -24,6 +26,9 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	// 画像モデルはどの役割でも必須。テキストモデルは台本を作る worker だけ。
 	cfg.AI.ImageModels = []string{"image-test"}
 	cfg.AI.GeminiModels = []string{"gemini-test"}
+	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
+	// 0 のままだと worker の検証が「無制限」を理由に落ちます。
+	cfg.AI.PipelineTimeout = 25 * time.Minute
 	return cfg
 }
 
@@ -191,4 +196,51 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 			require.Equal(t, tt.want, cfg.TaskCallerServiceAccount())
 		})
 	}
+}
+
+// TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline は、
+// worker が「Cloud Tasks より先に自分で諦める」設定でしか起動しないことを確認します。
+//
+// 等号・超過・無制限のいずれも、打ち切りが Cloud Tasks 側から来る点で同じです。その場合は
+// プロセスごと止められるため失敗ハンドラも Slack 通知も走らず、max_attempts = 1 で再試行も
+// 無いので、ジョブが running のまま残ります。既定値がこの関係を満たすことも併せて固定します。
+func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
+	// 既定値は envDefault タグにしか無いため、タグそのものを読んで検査します。
+	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
+	t.Run("既定値は打ち切りより短い", func(t *testing.T) {
+		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
+		require.True(t, ok)
+		got, err := time.ParseDuration(field.Tag.Get("envDefault"))
+		require.NoError(t, err)
+		require.Less(t, got, TaskDispatchDeadline)
+
+		require.NoError(t, newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig())
+	})
+
+	for _, tt := range []struct {
+		name    string
+		timeout time.Duration
+	}{
+		{name: "打ち切りと等しいと落ちる", timeout: TaskDispatchDeadline},
+		{name: "打ち切りより長いと落ちる", timeout: TaskDispatchDeadline + time.Minute},
+		{name: "無制限は落ちる", timeout: 0},
+		{name: "負の無制限も落ちる", timeout: -1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := newRoleTestConfig(serverrole.Worker)
+			cfg.AI.PipelineTimeout = tt.timeout
+
+			err := cfg.ValidateEssentialConfig()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "PIPELINE_TIMEOUT")
+		})
+	}
+
+	// web はパイプラインを組み立てないため、この検査の対象外です。
+	t.Run("web は無制限でも起動できる", func(t *testing.T) {
+		cfg := withWebConfig(newRoleTestConfig(serverrole.Web))
+		cfg.AI.PipelineTimeout = 0
+
+		require.NoError(t, cfg.ValidateEssentialConfig())
+	})
 }

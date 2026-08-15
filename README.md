@@ -232,7 +232,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
 | `REQUEST_TIMEOUT` | 外部 AI 呼び出し1回あたりの上限（既定 5m）。画像生成1枚に数十秒かかるため短くしすぎないこと |
-| `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限（既定 45m、0 以下で無制限）。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます |
+| `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限（既定 25m）。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます。**dispatch deadline（30m）以上の値と無制限は worker の起動時に拒否されます** |
 | `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトとリージョン |
 | `CLOUD_TASKS_QUEUE_ID` | Cloud Tasks キュー名。タスクを投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
 | `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。投入するのは web 面だけなので `SERVER_ROLE=worker` では不要。未設定時は旧 `SERVICE_ACCOUNT_EMAIL` にフォールバックします（移行用・Terraform 適用後に削除） |
@@ -268,14 +268,17 @@ PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
 
 実効上限を決めるのは**いちばん小さい値**です。dispatch deadline だけは未指定でも既定の
 10 分が効くため、指定を忘れると Cloud Run の timeout が何であれ 10 分でワーカーが
-打ち切られます（値は `internal/adapters/tasks.go` の `tasks.Config.DispatchDeadline`）。
+打ち切られます（値は `internal/config/config.go` の `TaskDispatchDeadline`）。
 
-`PIPELINE_TIMEOUT` を**いちばん短く**取るのが要点で、**アプリが自分で先に諦める**ことで
-ジョブ状態に `failed` を書き、途中までの成果を保存し、Slack に通知してから終われます。
-逆順にすると先に Cloud Tasks がリクエストを打ち切ります。`story-queue` は
-`max_attempts = 1` なので再試行も来ず、ジョブは `running` のまま残り続けます。
-記録・通知・部分保存はいずれも打ち切られた context から切り離して行っています
-（`internal/pipeline/runner.go` の `failureReportTimeout` と `partialSaveTimeout`）。
+**この大小関係は起動時に強制されます**（`config.validatePipelineTimeout`）。等号も無制限も
+拒否するのは、打ち切りが Cloud Tasks 側から来るとプロセスごと止められ、失敗の記録も部分保存も
+Slack 通知も走らないまま、`max_attempts = 1` の `story-queue` は再試行しないため、ジョブが
+`running` のまま残るためです。記録・通知・部分保存はいずれも打ち切られた context から
+切り離して行っています（`internal/pipeline/runner.go` の `failureReportTimeout` と
+`partialSaveTimeout`）。
+
+フリート全体の一覧（5 ワークロード分）と、tf の `precondition` による検査は `ap-infra` の
+README「タイムアウトの三段」にあります。
 
 `RATE_INTERVAL` を上げるときはこの 3 段に収まるかを先に確認してください。`compose_comic` は
 既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分です。dispatch deadline の上限が

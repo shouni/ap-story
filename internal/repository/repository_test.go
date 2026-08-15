@@ -5,30 +5,6 @@ import (
 	"time"
 )
 
-func TestJobIDFromStatePath(t *testing.T) {
-	t.Parallel()
-
-	prefix := "gs://bucket/comics"
-	cases := []struct {
-		name string
-		path string
-		want string
-	}{
-		{"valid state path", "gs://bucket/comics/job-1/comic_state.json", "job-1"},
-		{"non-state file ignored", "gs://bucket/comics/job-1/images/panel_1.png", ""},
-		{"nested too deep ignored", "gs://bucket/comics/job-1/sub/comic_state.json", ""},
-		{"outside prefix ignored", "gs://other-bucket/comics/job-1/comic_state.json", ""},
-		{"prefix itself ignored", "gs://bucket/comics/comic_state.json", ""},
-	}
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := jobIDFromStatePath(tt.path, prefix); got != tt.want {
-				t.Errorf("jobIDFromStatePath(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFormatTime(t *testing.T) {
 	t.Parallel()
 

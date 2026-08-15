@@ -18,6 +18,11 @@ const (
 	DefaultShutdownGrace = 15 * time.Second
 	// DefaultHTTPTimeout は外部 HTTP 通信のタイムアウトのデフォルト値です。
 	DefaultHTTPTimeout = 60 * time.Second
+	// TaskDispatchDeadline は Cloud Tasks がワーカーの応答を待つ上限です。
+	// HTTP ターゲットに指定できる最大値で、これ以上は伸ばせません。投入時にタスクへ
+	// 焼き込む値ですが、PIPELINE_TIMEOUT の上限としても効くため adapters ではなくここに
+	// 置いています（ValidateEssentialConfig が検査します）。
+	TaskDispatchDeadline = 30 * time.Minute
 )
 
 // 画風の文言はこのパッケージが持ちません。コマ・ページもデザインシートも
@@ -104,10 +109,14 @@ type AIConfig struct {
 	// （go-comic-kit の既定と揃えて 5 分）。
 	RequestTimeout time.Duration `env:"REQUEST_TIMEOUT" envDefault:"5m"`
 
-	// PipelineTimeout はワーカータスク1件の実行時間の上限です。0 以下は無制限を意味します。
+	// PipelineTimeout はワーカータスク1件の実行時間の上限です。
 	// REQUEST_TIMEOUT が外部 API 呼び出し1回あたりの上限であるのに対し、こちらは
 	// ステップ列全体（台本→パネル→ページ）を包む上限です。
-	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"45m"`
+	//
+	// TaskDispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
+	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
+	// （worker では validatePipelineTimeout が起動時に拒否します）。
+	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"25m"`
 }
 
 // applyDefaults はモデル一覧を正規化します。画風はプリセット（assets/prompts/styles.json）が

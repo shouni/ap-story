@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -38,9 +39,17 @@ func (m *memStore) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-func (m *memStore) List(_ context.Context, prefix string, callback func(path string) error, _ ...remoteio.ListOption) error {
+// List は GCS の一覧を模倣します。
+//
+// 区切り文字の扱いまで写しているのは、本番の一覧が WithDelimiter に乗っているためです。
+// フェイクが区切り文字を無視して全件返すと、疑似ディレクトリの組み立てが素通りしてしまい、
+// 一覧のテストが何も確かめないものになります。
+func (m *memStore) List(_ context.Context, prefix string, callback func(path string) error, opts ...remoteio.ListOption) error {
+	settings := remoteio.NewListSettings(opts...)
+
 	m.mu.Lock()
 	m.lists = append(m.lists, prefix)
+	prefix = remoteio.ListPrefix(prefix, settings)
 	paths := make([]string, 0, len(m.files))
 	for path := range m.files {
 		if strings.HasPrefix(path, prefix) {
@@ -49,8 +58,21 @@ func (m *memStore) List(_ context.Context, prefix string, callback func(path str
 	}
 	m.mu.Unlock()
 
+	seen := make(map[string]bool, len(paths))
 	for _, path := range paths {
-		if err := callback(path); err != nil {
+		entry := path
+		if settings.Delimiter != "" {
+			rest := strings.TrimPrefix(path, prefix)
+			if idx := strings.Index(rest, settings.Delimiter); idx >= 0 {
+				// 区切り文字より先は疑似ディレクトリへ畳まれます。
+				entry = prefix + rest[:idx] + settings.Delimiter
+			}
+		}
+		if seen[entry] {
+			continue
+		}
+		seen[entry] = true
+		if err := callback(entry); err != nil {
 			return err
 		}
 	}
@@ -100,7 +122,7 @@ func TestListHistoryPageBuildsSummariesFromState(t *testing.T) {
 
 	store := newMemStore()
 	putState(store, "job-1", `{"version":1,"id":"job-1","title":"夜明けのデプロイ","chapters":[{"id":"ch01"}],"panels":[{"id":"p1"},{"id":"p2"}]}`)
-	// comic_state.json 以外や、1階層深いファイルは無視される
+	// ジョブ配下の成果物は疑似ディレクトリへ畳まれ、ジョブが二重に数えられない
 	store.files["gs://test-bucket/comics/job-1/images/panel_1.png"] = []byte("binary")
 
 	repo := newTestRepository(store)
@@ -267,6 +289,33 @@ func (m *memStore) countLists(prefix string) int {
 		}
 	}
 	return n
+}
+
+// 一覧は区切り文字付きの List に乗るため、1 ジョブが成果物の数だけ重複して現れず、
+// ジョブの疑似ディレクトリ 1 件として集まること。1 作品でパネル・ページ画像が数十枚に
+// なるため、ここが崩れると一覧走査がその倍数で効きます。
+func TestListJobIDsFoldsJobArtifactsIntoOneEntry(t *testing.T) {
+	t.Parallel()
+
+	store := newMemStore()
+	putState(store, "job-1", `{"version":1,"id":"job-1","title":"作品","chapters":[{"id":"ch01"}],"panels":[]}`)
+	store.files["gs://test-bucket/comics/job-1/images/panel_1.png"] = []byte("binary")
+	store.files["gs://test-bucket/comics/job-1/images/comic_page_1.png"] = []byte("binary")
+	putState(store, "job-2", `{"version":1,"id":"job-2","title":"作品2","chapters":[{"id":"ch01"}],"panels":[]}`)
+	// comics/ 直下のオブジェクトはジョブディレクトリではない
+	store.files["gs://test-bucket/comics/stray.json"] = []byte("{}")
+
+	repo := newTestRepository(store)
+	jobIDs, err := repo.listJobIDs(context.Background())
+	if err != nil {
+		t.Fatalf("listJobIDs() error = %v", err)
+	}
+
+	slices.Sort(jobIDs)
+	want := []string{"job-1", "job-2"}
+	if !slices.Equal(jobIDs, want) {
+		t.Errorf("listJobIDs() = %v, want %v", jobIDs, want)
+	}
 }
 
 // 履歴一覧はバケット全体の走査になるため、ジョブ ID 一覧はキャッシュされ、

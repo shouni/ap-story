@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path"
 	"strings"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 
 	"github.com/shouni/go-comic-kit/store"
 	"github.com/shouni/go-job-kit/paging"
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-story/internal/domain"
@@ -61,19 +63,34 @@ func (r *ComicRepository) ListHistoryPage(ctx context.Context, page int, perPage
 // 一覧対象は comics/ 直下の 1 種類だけなので固定キーで足ります。
 const jobIDListCacheKey = "job-ids"
 
-// listJobIDs は comics/ 直下の comic_state.json からジョブ ID を集めます。
+// listJobIDs は comics/ 直下のジョブディレクトリからジョブ ID を集めます。
 // バケット全体の走査になるため、短い TTL のキャッシュを挟みます。
+//
+// 区切り文字を指定して、ジョブ 1 件を 1 エントリとして受け取ります。指定しないと
+// 配下の成果物（images/ のパネル・ページ画像）が全件返るため、1 ジョブにつき画像の
+// 枚数だけ結果を受け取ったうえで、呼び出し側でジョブ ID の重複を潰すことになります。
+// 同じ走査をサーバー側へ寄せています。
+//
+// 拾えるのはディレクトリ名だけなので、comic_state.json を持たないジョブ
+// （生成が state の保存前に落ちたもの）も ID としては現れます。それらは state を
+// 読めず ChapterCount == 0 のフォールバック値になるため、ListHistoryPage の
+// 章立てフィルタで表示から外れます。
 func (r *ComicRepository) listJobIDs(ctx context.Context) ([]string, error) {
 	return r.jobIDCache.Load(ctx, jobIDListCacheKey, func(ctx context.Context) ([]string, error) {
 		listURI := fmt.Sprintf("gs://%s/%s/", r.bucket, comicsPrefix)
 
 		var jobIDs []string
 		err := r.reader.List(ctx, listURI, func(gcsPath string) error {
-			if jobID := jobIDFromStatePath(gcsPath, strings.TrimSuffix(listURI, "/")); jobID != "" {
+			// 疑似ディレクトリだけを拾います。comics/ 直下に置かれたオブジェクトは
+			// ジョブではないため対象外です。
+			if !strings.HasSuffix(gcsPath, "/") {
+				return nil
+			}
+			if jobID := path.Base(strings.TrimSuffix(gcsPath, "/")); jobID != "" {
 				jobIDs = append(jobIDs, jobID)
 			}
 			return nil
-		})
+		}, remoteio.WithDelimiter("/"))
 		if err != nil {
 			return nil, err
 		}

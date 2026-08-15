@@ -3,7 +3,6 @@ package repository
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/shouni/go-comic-kit/asset"
@@ -88,18 +87,4 @@ func formatTime(t time.Time) string {
 
 func notFoundError(jobID string) error {
 	return fmt.Errorf("comic history not found for job %q", jobID)
-}
-
-// jobIDFromStatePath は "comics/{jobID}/comic_state.json" の GCS フルパスから jobID を抽出します。
-// prefix 配下でない、あるいは "{jobID}/comic_state.json" の1階層ちょうどでない場合は空文字を返します。
-func jobIDFromStatePath(gcsPath, prefix string) string {
-	if !strings.HasPrefix(gcsPath, prefix) {
-		return ""
-	}
-	rel := strings.TrimPrefix(strings.TrimPrefix(gcsPath, prefix), "/")
-	parts := strings.Split(rel, "/")
-	if len(parts) != 2 || !asset.IsStateFileName(parts[1]) {
-		return ""
-	}
-	return parts[0]
 }

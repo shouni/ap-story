@@ -3,17 +3,12 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/shouni/gcp-kit/tasks"
 
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
 )
-
-// taskDispatchDeadline は Cloud Tasks がワーカーの応答を待つ上限です。
-// HTTP ターゲットに指定できる最大値で、これ以上は伸ばせません。
-const taskDispatchDeadline = 30 * time.Minute
 
 // TaskEnqueuer は gcp-kit の Cloud Tasks Enqueuer をラップし、Task.TaskName() から
 // 導出した決定的な名前でタスクを投入する domain.TaskQueue の実装です。
@@ -44,7 +39,7 @@ func NewTaskEnqueuer(ctx context.Context, cfg *config.Config) (*TaskEnqueuer, er
 		// compose_comic は既定値で下限 14 分かかるため、既定のままでは足りません。
 		// PIPELINE_TIMEOUT をこれより短く（本番では 25m）設定して、アプリが自分で先に
 		// 諦められるようにしています。関係は README「web / worker の分離」を参照。
-		DispatchDeadline: taskDispatchDeadline,
+		DispatchDeadline: config.TaskDispatchDeadline,
 	}
 	enqueuer, err := tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
 	if err != nil {
