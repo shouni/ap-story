@@ -142,7 +142,9 @@ func (f *fakeComicRepository) GetState(_ context.Context, jobID string) (*kitcom
 	}
 	state, ok := f.states[jobID]
 	if !ok {
-		return nil, fmt.Errorf("comic history not found for job %q", jobID)
+		// 本物の GetState は未存在を ErrStateNotFound で返します。素のエラーにすると、
+		// 「まだ無い」と「読めない」を分けて扱うハンドラーの検証がすり抜けます。
+		return nil, fmt.Errorf("%w (job %q)", domain.ErrStateNotFound, jobID)
 	}
 	return state, nil
 }

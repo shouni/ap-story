@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
@@ -71,8 +72,13 @@ func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID strin
 
 	state, err := r.GetState(ctx, jobID)
 	if err != nil {
-		// state を持たない（または既に削除済みの）画像は画像削除だけで完了。
-		return nil
+		if errors.Is(err, domain.ErrStateNotFound) {
+			// state を持たない（または既に削除済みの）画像は画像削除だけで完了。
+			return nil
+		}
+		// 読めなかっただけの場合は成功にしません。state には削除済み画像への参照が
+		// 残っており、黙って完了にすると壊れた参照が残ったことに誰も気付けません。
+		return fmt.Errorf("ジョブ %q の state を読めないため参照の後始末ができません: %w", jobID, err)
 	}
 
 	// 旧形式: 単体生成ジョブの state が comics/ に保存されていた（章立てなしで判別）。

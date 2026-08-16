@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -137,5 +138,28 @@ func TestDeleteComicRejectsInvalidJobID(t *testing.T) {
 	}
 	if len(repo.deleted) != 0 {
 		t.Error("DeleteHistory was called despite invalid job id")
+	}
+}
+
+// 読めなかっただけのジョブを「ありません」と答えないこと。
+//
+// 権限不足や GCS 障害まで 404 にすると、障害の間ずっと全作品が消えたように見え、
+// 呼び出し側は待てば直るのか消えたのかを区別できません。
+func TestGetComicDoesNotReturn404WhenStateUnreadable(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeComicRepository{
+		getErr: fmt.Errorf("%w (job %q): permission denied", domain.ErrStateUnavailable, "job-x"),
+	}
+	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/job-x", "", "jobID", "job-x")
+	rec := httptest.NewRecorder()
+	h.GetComic(rec, req)
+
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("status = 404: 読めないだけの作品を「ありません」と答えている: %s", rec.Body.String())
+	}
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)
 	}
 }

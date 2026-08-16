@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
@@ -142,6 +144,14 @@ func historyFromState(jobID string, state *kitcomic.MangaState) domain.ComicHist
 }
 
 // GetState は指定ジョブの MangaState を取得します。
+//
+// state がまだ無い場合は domain.ErrStateNotFound、あるはずなのに読めなかった場合は
+// domain.ErrStateUnavailable を返します。切り分けには remoteio が未存在を
+// os.ErrNotExist に包んで返すことを使うので、ストレージへの往復は増えません。
+//
+// どちらにも原因のエラーを包んであります。以前はすべてを「見つかりません」に潰し、
+// 原因も捨てていたため、権限エラーも GCS 障害も画面には「作品がありません」と出て、
+// ログにも理由が残りませんでした。
 func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic.MangaState, error) {
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return nil, err
@@ -152,7 +162,10 @@ func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic
 	}
 	state, err := store.Load(ctx, r.reader, statePath)
 	if err != nil {
-		return nil, notFoundError(jobID)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%w (job %q): %w", domain.ErrStateNotFound, jobID, err)
+		}
+		return nil, fmt.Errorf("%w (job %q): %w", domain.ErrStateUnavailable, jobID, err)
 	}
 	return state, nil
 }
