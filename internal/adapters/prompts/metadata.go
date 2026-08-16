@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/shouni/go-prompt-kit/frontmatter"
+	"go.yaml.in/yaml/v3"
 )
 
 // ModeInfo は、プロンプトテンプレート先頭の front matter に書かれたモードの説明です。
@@ -49,35 +50,12 @@ func (m ModeInfo) Hint() string {
 	return strings.Join(parts, " / ")
 }
 
-// splitFrontMatter は、先頭の "---\nYAML\n---\n" ブロックを本文から分離します。
-// front matter が無い場合、front は空文字、body は content そのものになります。
-func splitFrontMatter(content string) (front, body string) {
-	const delim = "---"
-	// CRLF を LF へ寄せて、編集環境による改行コードの差を吸収します。
-	normalized := strings.ReplaceAll(content, "\r\n", "\n")
-	if !strings.HasPrefix(normalized, delim+"\n") {
-		return "", content
-	}
-
-	rest := normalized[len(delim)+1:]
-	end := strings.Index(rest, "\n"+delim)
-	if end < 0 {
-		// 閉じデリミタが無い。front matter のつもりの記述でも、本文として扱います。
-		return "", content
-	}
-	return rest[:end], strings.TrimPrefix(rest[end+len("\n"+delim):], "\n")
-}
-
 // parseModeInfo は front matter を ModeInfo へ読み取ります。
 // front matter が空なら名前だけの ModeInfo を返します。
 func parseModeInfo(name, front string) (ModeInfo, error) {
 	info := ModeInfo{Name: name}
-	if strings.TrimSpace(front) == "" {
-		return info, nil
-	}
-	if err := yaml.Unmarshal([]byte(front), &info); err != nil {
+	if err := frontmatter.Decode(front, &info, yaml.Unmarshal); err != nil {
 		return ModeInfo{}, fmt.Errorf("front matter の解析に失敗しました (mode: %s): %w", name, err)
 	}
-	info.Name = name
 	return info, nil
 }

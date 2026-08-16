@@ -12,12 +12,12 @@ require (
 	github.com/shouni/go-http-kit v1.8.1
 	github.com/shouni/go-job-kit v1.0.5
 	github.com/shouni/go-notify v1.2.3
-	github.com/shouni/go-prompt-kit v1.4.2
+	github.com/shouni/go-prompt-kit v1.5.0
 	github.com/shouni/go-remote-io v1.8.1
 	github.com/shouni/go-utils v1.5.1
 	github.com/shouni/netarmor v1.2.1
 	github.com/stretchr/testify v1.11.1
-	gopkg.in/yaml.v3 v3.0.1
+	go.yaml.in/yaml/v3 v3.0.5
 )
 
 require (
@@ -82,4 +82,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
