@@ -10,7 +10,6 @@ import (
 
 	"github.com/shouni/go-comic-kit/ports"
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
-	"github.com/shouni/go-prompt-kit/resource"
 
 	"github.com/shouni/ap-story/assets"
 )
@@ -76,30 +75,28 @@ func (p *ScriptPrompts) BuildChapterScript(mode string, data *ports.ChapterPromp
 // loadPrompts は、埋め込みディレクトリ配下の .md をモード名（拡張子を除いたファイル名）で
 // 読み込み、front matter を本文から切り離してテンプレートとモード説明を返します。
 //
-// promptkit.LoadFS ではなく resource.Load を直接呼ぶのは、front matter がプロンプト本文へ
-// 紛れ込まないよう、テンプレート化の前に切り落とす必要があるためです。
+// WithFrontMatter を付けるのは、front matter がプロンプト本文へ紛れ込まないよう
+// テンプレート化の前に切り落とす必要があるためです。切り離した内容は
+// Builder.FrontMatter から取り出せるので、読み込みは 1 回で済みます。
 func loadPrompts(dir string) (*promptkit.Builder, map[string]ModeInfo, error) {
-	files, err := resource.Load(assets.Prompts, dir, "", resource.WithExtensions(".md"))
+	builder, err := promptkit.LoadFS(assets.Prompts, dir,
+		promptkit.WithExtensions(".md"),
+		promptkit.WithFrontMatter(),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	bodies := make(map[string]string, len(files))
-	infos := make(map[string]ModeInfo, len(files))
-	for mode, content := range files {
-		front, body := splitFrontMatter(content)
-		info, err := parseModeInfo(mode, front)
+	modes := builder.Modes()
+	infos := make(map[string]ModeInfo, len(modes))
+	for _, mode := range modes {
+		info, err := parseModeInfo(mode, builder.FrontMatter(mode))
 		if err != nil {
 			return nil, nil, err
 		}
-		bodies[mode] = body
 		infos[mode] = info
 	}
 
-	builder, err := promptkit.NewBuilder(bodies)
-	if err != nil {
-		return nil, nil, err
-	}
 	return builder, infos, nil
 }
 

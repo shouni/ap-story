@@ -135,45 +135,6 @@ func TestPanelPromptRejectsUnknownStyleMode(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSplitFrontMatter(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]struct {
-		content   string
-		wantFront string
-		wantBody  string
-	}{
-		"front matter あり": {
-			content:   "---\ndirection: \"x\"\n---\nbody line\n",
-			wantFront: "direction: \"x\"",
-			wantBody:  "body line\n",
-		},
-		"front matter なし": {
-			content:   "body only\n",
-			wantFront: "",
-			wantBody:  "body only\n",
-		},
-		"閉じデリミタなしは本文扱い": {
-			content:   "---\ndirection: \"x\"\n",
-			wantFront: "",
-			wantBody:  "---\ndirection: \"x\"\n",
-		},
-		"本文中の区切り線は残す": {
-			content:   "---\ndirection: \"x\"\n---\nbefore\n\n---\n\nafter\n",
-			wantFront: "direction: \"x\"",
-			wantBody:  "before\n\n---\n\nafter\n",
-		},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			front, body := splitFrontMatter(tc.content)
-			require.Equal(t, tc.wantFront, front)
-			require.Equal(t, tc.wantBody, body)
-		})
-	}
-}
-
 // 台本モードの選択肢は front matter から説明を引きます。
 func TestScriptPromptsModeInfosCarryFrontMatter(t *testing.T) {
 	t.Parallel()

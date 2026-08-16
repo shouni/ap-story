@@ -7,17 +7,17 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/shouni/gcp-kit v1.10.1
 	github.com/shouni/go-character-kit v1.1.2
-	github.com/shouni/go-comic-kit v1.4.5
+	github.com/shouni/go-comic-kit v1.4.7
 	github.com/shouni/go-gemini-client v1.17.2
 	github.com/shouni/go-http-kit v1.8.1
 	github.com/shouni/go-job-kit v1.0.5
 	github.com/shouni/go-notify v1.2.3
-	github.com/shouni/go-prompt-kit v1.4.2
-	github.com/shouni/go-remote-io v1.8.0
+	github.com/shouni/go-prompt-kit v1.5.0
+	github.com/shouni/go-remote-io v1.8.1
 	github.com/shouni/go-utils v1.5.1
 	github.com/shouni/netarmor v1.2.1
 	github.com/stretchr/testify v1.11.1
-	gopkg.in/yaml.v3 v3.0.1
+	go.yaml.in/yaml/v3 v3.0.5
 )
 
 require (
@@ -56,7 +56,7 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/shouni/gemini-image-kit v1.13.1 // indirect
+	github.com/shouni/gemini-image-kit v1.14.1 // indirect
 	github.com/slack-go/slack v0.27.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -82,4 +82,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
