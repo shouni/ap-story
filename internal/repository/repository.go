@@ -2,7 +2,6 @@
 package repository
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/shouni/go-comic-kit/asset"
@@ -83,8 +82,4 @@ func formatTime(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
-}
-
-func notFoundError(jobID string) error {
-	return fmt.Errorf("comic history not found for job %q", jobID)
 }

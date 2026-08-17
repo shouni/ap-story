@@ -2,9 +2,24 @@ package domain
 
 import (
 	"context"
+	"errors"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 )
+
+// ErrStateNotFound は、そのジョブの state がまだ無いことを表します。
+//
+// 生成が始まる前や、state の保存前に落ちたジョブでも起こる正常な状態です。
+// ハンドラーはこれを 404（あるいは「処理中」の表示）へマップしてください。
+var ErrStateNotFound = errors.New("comic state not found")
+
+// ErrStateUnavailable は、state が「あるはずなのに読めなかった」ことを表します。
+//
+// ErrStateNotFound と分けているのは、両者で取るべき判断が正反対だからです。
+// 権限不足や GCS 障害まで「無い」とみなすと、障害の間ずっと全作品が
+// 「まだありません」と表示され、原因を追う手掛かりも残りません。
+// ハンドラーはこれを 502（または 500）へマップし、原因をログへ残してください。
+var ErrStateUnavailable = errors.New("comic state unavailable")
 
 // TaskQueue は非同期キューを抽象化します。
 type TaskQueue interface {

@@ -3,7 +3,10 @@ package repository
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -12,6 +15,7 @@ import (
 	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-story/internal/config"
+	"github.com/shouni/ap-story/internal/domain"
 )
 
 // memStore は remoteio.InputReader / remoteio.OutputWriter を満たすインメモリ fake です。
@@ -34,7 +38,9 @@ func (m *memStore) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	m.opens = append(m.opens, path)
 	data, ok := m.files[path]
 	if !ok {
-		return nil, io.ErrUnexpectedEOF
+		// remoteio は未存在を os.ErrNotExist に包んで返します。フェイクもそれに
+		// 合わせないと、「まだ無い」と「読めない」を分けて扱う側がすり抜けます。
+		return nil, fmt.Errorf("オブジェクトが見つかりません (%s): %w", path, os.ErrNotExist)
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
@@ -371,4 +377,48 @@ func TestDeleteHistoryInvalidatesJobIDList(t *testing.T) {
 	if got := store.countLists("gs://test-bucket/comics/"); got != 2 {
 		t.Errorf("comics/ への List 回数 = %d, want 2（削除後に再走査されていません）", got)
 	}
+}
+
+// state がまだ無いのか、あるのに読めないのかを区別して返すこと。
+//
+// 以前はどちらも「見つかりません」に潰し、原因のエラーも捨てていたため、
+// 権限エラーも GCS 障害も画面には「作品がありません」と出て、ログにも理由が
+// 残りませんでした。両者は取るべき判断が正反対（進んでよい／待つべき）です。
+func TestGetStateSeparatesMissingFromUnreadable(t *testing.T) {
+	t.Parallel()
+
+	const jobID = "c20260718-000000-aaaa1111"
+
+	t.Run("state がまだ無い", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := newTestRepository(newMemStore()).GetState(context.Background(), jobID)
+		if !errors.Is(err, domain.ErrStateNotFound) {
+			t.Fatalf("GetState() error = %v, want ErrStateNotFound", err)
+		}
+		if errors.Is(err, domain.ErrStateUnavailable) {
+			t.Error("未記録が「読めない」にも一致している")
+		}
+	})
+
+	t.Run("あるのに読めない", func(t *testing.T) {
+		t.Parallel()
+
+		store := newMemStore()
+		// 壊れた JSON は「存在するが読めない」側。未存在と同じ扱いにすると、
+		// 破損に気づかないまま生成が終わったものとして扱われます。
+		store.files["gs://test-bucket/comics/"+jobID+"/comic_state.json"] = []byte("{ broken")
+
+		_, err := newTestRepository(store).GetState(context.Background(), jobID)
+		if !errors.Is(err, domain.ErrStateUnavailable) {
+			t.Fatalf("GetState() error = %v, want ErrStateUnavailable", err)
+		}
+		if errors.Is(err, domain.ErrStateNotFound) {
+			t.Error("読めないだけの state が「無い」にも一致している")
+		}
+		// 原因を捨てないこと。捨てると、なぜ読めないのかがどこにも残りません。
+		if !strings.Contains(err.Error(), "パース") {
+			t.Errorf("原因が失われている: %v", err)
+		}
+	})
 }

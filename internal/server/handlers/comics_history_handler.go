@@ -36,7 +36,7 @@ func (h *Handler) GetComic(w http.ResponseWriter, r *http.Request) {
 
 	state, err := h.repository.GetState(r.Context(), jobID)
 	if err != nil {
-		writeErrorJSON(w, http.StatusNotFound, "comic not found")
+		writeStateError(w, r, jobID, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, state)

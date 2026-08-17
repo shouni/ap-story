@@ -5,18 +5,18 @@ go 1.26
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.1
-	github.com/shouni/gcp-kit v1.10.1
+	github.com/shouni/gcp-kit v1.10.2
 	github.com/shouni/go-character-kit v1.1.2
 	github.com/shouni/go-comic-kit v1.4.7
 	github.com/shouni/go-gemini-client v1.17.2
 	github.com/shouni/go-http-kit v1.8.1
-	github.com/shouni/go-job-kit v1.0.5
+	github.com/shouni/go-job-kit v1.1.0
 	github.com/shouni/go-notify v1.2.3
 	github.com/shouni/go-prompt-kit v1.5.0
 	github.com/shouni/go-remote-io v1.8.1
 	github.com/shouni/go-utils v1.5.1
 	github.com/shouni/netarmor v1.2.1
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	go.yaml.in/yaml/v3 v3.0.5
 )
 
@@ -36,7 +36,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
@@ -54,7 +53,6 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/shouni/gemini-image-kit v1.14.1 // indirect
 	github.com/slack-go/slack v0.27.0 // indirect

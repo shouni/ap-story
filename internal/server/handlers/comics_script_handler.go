@@ -26,7 +26,7 @@ func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
 
 	state, err := h.repository.GetState(r.Context(), jobID)
 	if err != nil {
-		writeErrorJSON(w, http.StatusNotFound, "comic not found")
+		writeStateError(w, r, jobID, err)
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *Handler) UpdateComicScript(w http.ResponseWriter, r *http.Request) {
 
 	state, err := h.repository.GetState(r.Context(), jobID)
 	if err != nil {
-		writeErrorJSON(w, http.StatusNotFound, "comic not found")
+		writeStateError(w, r, jobID, err)
 		return
 	}
 
