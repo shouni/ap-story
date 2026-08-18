@@ -12,7 +12,7 @@ func TestLoadCharactersFallsBackToDefaultWhenPathEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCharacters with empty path failed: %v", err)
 	}
-	if characters == nil || len(characters.List) == 0 {
+	if characters.Len() == 0 {
 		t.Fatal("LoadCharacters with empty path returned no characters, want embedded defaults")
 	}
 	if characters.GetCharacter("zundamon") == nil {

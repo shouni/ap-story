@@ -20,8 +20,8 @@ type characterSummaryResponse struct {
 
 // ListCharacters は GET /api/characters を処理し、characters.json の全キャラクターを返します。
 func (h *Handler) ListCharacters(w http.ResponseWriter, _ *http.Request) {
-	items := make([]characterSummaryResponse, 0, len(h.characters.List))
-	for _, c := range h.characters.List {
+	items := make([]characterSummaryResponse, 0, h.characters.Len())
+	for _, c := range h.characters.All() {
 		items = append(items, characterSummaryResponse{
 			ID:           c.ID,
 			Name:         c.Name,
