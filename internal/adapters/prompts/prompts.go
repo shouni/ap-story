@@ -1,7 +1,7 @@
 // Package prompts は、ap-story 独自の Outline/ChapterScript/DesignSheet プロンプトを
 // go-comic-kit の ports.OutlinePrompt / ports.ChapterScriptPrompt / ports.DesignSheetPrompt
 // として実装します。ずんだもん・めたん・つむぎの配役・世界観（SFメカアクション風・技術学習漫画）は
-// ap-comp の assets/prompts/prompt_dialogue.md を踏襲しています。
+// 姉妹プロジェクトの対話プロンプトの構成を踏襲しています。
 package prompts
 
 import (

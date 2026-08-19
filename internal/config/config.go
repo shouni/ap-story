@@ -46,7 +46,7 @@ type GCPConfig struct {
 
 // TasksConfig は Cloud Tasks キューへのエンキューと、受信時の OIDC 検証の設定です。
 // Cloud Tasks に閉じた設定であり、GCP 一般の設定でも HTTP サーバーの設定でもないため、
-// ap-mv・ap-comp と同じくここに集約します。
+// 姉妹プロジェクトと同じくここに集約します。
 type TasksConfig struct {
 	QueueID         string `env:"CLOUD_TASKS_QUEUE_ID"`
 	WorkerURL       string `env:"WORKER_URL"`
@@ -149,7 +149,7 @@ func (a AIConfig) KitConfig() ports.Config {
 
 // AuthConfig は認証と認可の設定です。
 // ブラウザ向け Web UI 用の Google OAuth と、サーバー間通信（M2M）向けの
-// サービスアカウント OIDC 検証の両方を扱います（ap-comp と同様の二本立て）。
+// サービスアカウント OIDC 検証の両方を扱います（姉妹プロジェクトと同様の二本立て）。
 type AuthConfig struct {
 	GoogleClientID     string `env:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `env:"GOOGLE_CLIENT_SECRET"`

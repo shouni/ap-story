@@ -15,8 +15,8 @@
 ページ」を非同期ジョブとして生成し、成果物と状態ドキュメント（`comic_state.json`）を
 GCS に永続化します。ブラウザは **Google OAuth セッション**、AI エージェント（Claude 等）は
 **サービスアカウントの OIDC**（M2M）のいずれかで同一の JSON API を呼び出せ、パネル単位の
-再生成（シード振り直し・編集指示）まで対応します。MCP ツールは ap-mcp に統合済みで、
-Claude などのエージェントから直接呼び出せます。
+再生成（シード振り直し・編集指示）まで対応します。この JSON API は MCP サーバー経由でも
+公開しており、Claude などのエージェントから直接呼び出せます。
 
 ## ✨ 特徴 (Features)
 
@@ -29,7 +29,7 @@ Claude などのエージェントから直接呼び出せます。
   `render_comic` は未生成のコマ・ページだけを埋めるため、失敗したジョブを最初から作り直しません。
 * **🔐 Google OAuth + M2M の二本立て**: 人間はブラウザから Google アカウントでログインして
   API を呼び出せ、AI エージェントはサービスアカウントの OIDC（M2M）で同じ API を呼び出せます
-  （[gcp-kit](https://github.com/shouni/gcp-kit) の認証基盤を利用、ap-comp で実証済み）。
+  （[gcp-kit](https://github.com/shouni/gcp-kit) の認証基盤を利用）。
 * **🧬 キャラクターの一貫性**: デザインシートを同一性アンカーとして、go-comic-kit の
   3-Factor Consistency Control（Seed / 参照アセット / VisualCues）で維持します。
 * **📣 Slack 通知 + Cloud Build**: ジョブの完了・失敗を Slack Webhook で通知（任意設定）。
@@ -182,7 +182,7 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 ## 🌐 HTTP エンドポイント
 
 `/api/*` はブラウザセッションまたは M2M（OIDC Bearer）のいずれかで呼び出せます。ブラウザ向けの
-画面（HTML）は ap-comp と同様の構成（`html/template` + go:embed、静的アセットは `/static/*`）で
+画面（HTML）は `html/template` + go:embed（静的アセットは `/static/*`）で
 本リポジトリ内に実装しています。画面のハンドラは JSON API とコアロジックを共有し、
 レスポンス形式（HTML/JSON）だけが異なります。
 
@@ -279,8 +279,8 @@ Slack 通知も走らないまま、`max_attempts = 1` の `story-queue` は再�
 切り離して行っています（`internal/pipeline/runner.go` の `failureReportTimeout` と
 `partialSaveTimeout`）。
 
-フリート全体の一覧（5 ワークロード分）と、tf の `precondition` による検査は `ap-infra` の
-README「タイムアウトの三段」にあります。
+3 段の値はデプロイ設定（Terraform）が唯一の出どころで、逆転していないことは
+デプロイ時の `precondition` でも検査しています。
 
 `RATE_INTERVAL` を上げるときはこの 3 段に収まるかを先に確認してください。`compose_comic` は
 既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分です。dispatch deadline の上限が
@@ -306,7 +306,7 @@ README「タイムアウトの三段」にあります。
 
 worker が受け付ける caller SA は `ALLOWED_TASK_SERVICE_ACCOUNTS` で指定します。タスクに指定される caller SA は web 側（`ap-story-web-runner`）なので、worker 側に必要なのは「その SA からを受け付ける」という設定です。トークンを生成して付与するのは Cloud Tasks であって、web ではありません。この変数が無かった頃は `SERVICE_ACCOUNT_EMAIL` が兼ねており、worker サービスに自分ではない SA のアドレスを入れる必要がありました（未設定なら今もその挙動にフォールバックします）。
 
-権限定義は `ap-infra` リポジトリの `app_ap_story.tf` にあります。
+SA と IAM の定義はデプロイ設定（Terraform）側にあります。
 
 ---
 

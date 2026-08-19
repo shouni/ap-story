@@ -88,7 +88,7 @@ func TestValidateJobID(t *testing.T) {
 	t.Parallel()
 
 	// アンダースコアは go-utils/jobid への統一で許容されるようになりました
-	// （ap-mv 由来の規則に揃えたため）。URL・GCS パスのいずれでも安全な文字です。
+	// （姉妹プロジェクト由来の規則に揃えたため）。URL・GCS パスのいずれでも安全な文字です。
 	valid := []string{"c20260717-113045-1a2b3c4d", "abc", "ABC-123", "a_b"}
 	for _, id := range valid {
 		if err := ValidateJobID(id); err != nil {

@@ -17,7 +17,7 @@ type Style struct {
 	// Name はスタイルモード名（フォームの選択値、state に記録される値）です。
 	Name string `json:"name"`
 	// Direction / UseWhen / Avoids / Category は選ぶ側への説明です。
-	// キー名は姉妹プロジェクト（ap-comp の lyrics/compose モード）に合わせています。
+	// キー名は姉妹プロジェクトの同種のモード定義に合わせています。
 	Direction string `json:"direction"`
 	UseWhen   string `json:"use_when"`
 	Avoids    string `json:"avoids"`

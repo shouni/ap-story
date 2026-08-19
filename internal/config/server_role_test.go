@@ -41,7 +41,7 @@ func withWebConfig(cfg *Config) *Config {
 	cfg.Auth.SessionSecret = "0123456789abcdef"
 	cfg.Auth.SessionEncryptKey = "0123456789abcdef"
 	cfg.Auth.AllowedEmails = []string{"user@example.com"}
-	cfg.Auth.AllowedM2MServiceAccounts = []string{"ap-mcp-runner@test-project.iam.gserviceaccount.com"}
+	cfg.Auth.AllowedM2MServiceAccounts = []string{"mcp-runner@test-project.iam.gserviceaccount.com"}
 	return cfg
 }
 

@@ -51,13 +51,13 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 // M2M 検証器は、audience と許可リストの両方が揃ってはじめて機能します。
 //
 // 片方でも欠けると ProtectedMiddleware は毎回セッション認証へフォールバックし、
-// ブラウザは正常なまま ap-mcp からの呼び出しだけがログイン画面の HTML を受け取ります。
+// ブラウザは正常なまま M2M クライアントからの呼び出しだけがログイン画面の HTML を受け取ります。
 // リクエストからは設定漏れだと分からないので、起動時に落ちることを固定します。
 func TestNewM2MVerifierRejectsIncompleteConfiguration(t *testing.T) {
 	t.Parallel()
 
 	const serviceURL = "https://service.example.com"
-	allowed := []string{"ap-mcp-runner@test-project.iam.gserviceaccount.com"}
+	allowed := []string{"mcp-runner@test-project.iam.gserviceaccount.com"}
 
 	tests := map[string]struct {
 		serviceURL string

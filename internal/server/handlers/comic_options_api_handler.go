@@ -9,7 +9,7 @@ import (
 // comicOptionsResponse は GET /api/comic-options のレスポンスです。
 //
 // フォームの <select> に出しているものと同じ一覧を JSON でも返します。ブラウザは
-// 選択肢を見て選べますが、JSON API の呼び出し側（ap-mcp 経由のエージェント）には
+// 選択肢を見て選べますが、JSON API の呼び出し側（MCP サーバー経由のエージェント）には
 // 何が指定できるのか知る手段がありません。投入時の許可リストはこの一覧なので、
 // 知らずに送れば 400 になります。
 type comicOptionsResponse struct {
