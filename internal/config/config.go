@@ -123,7 +123,7 @@ type AIConfig struct {
 	// TaskDispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
 	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
 	// （worker では validatePipelineTimeout が起動時に拒否します）。
-	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"25m"`
+	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT"`
 }
 
 // applyDefaults はモデル一覧を正規化します。画風はプリセット（assets/prompts/styles.json）が

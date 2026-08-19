@@ -207,14 +207,11 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 // プロセスごと止められるため失敗ハンドラも Slack 通知も走らず、max_attempts = 1 で再試行も
 // 無いので、ジョブが running のまま残ります。既定値がこの関係を満たすことも併せて固定します。
 func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
-	// 既定値は envDefault タグにしか無いため、タグそのものを読んで検査します。
-	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
-	t.Run("既定値は打ち切りより短い", func(t *testing.T) {
+	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
+	t.Run("既定値を持たない", func(t *testing.T) {
 		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
 		require.True(t, ok)
-		got, err := time.ParseDuration(field.Tag.Get("envDefault"))
-		require.NoError(t, err)
-		require.Less(t, got, testDispatchDeadline)
+		require.Empty(t, field.Tag.Get("envDefault"), "既定値を持たせないでください")
 
 		require.NoError(t, newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig())
 	})
