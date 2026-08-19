@@ -24,8 +24,8 @@ type characterListItem struct {
 // ServeCharacters は GET /characters を処理し、characters.json の全キャラクターを
 // マスター参照画像（既定）のサムネイル付きで一覧表示します。
 func (h *Handler) ServeCharacters(w http.ResponseWriter, r *http.Request) {
-	items := make([]characterListItem, 0, len(h.characters.List))
-	for _, c := range h.characters.List {
+	items := make([]characterListItem, 0, h.characters.Len())
+	for _, c := range h.characters.All() {
 		items = append(items, characterListItem{
 			ID:                c.ID,
 			Name:              c.Name,

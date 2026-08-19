@@ -56,7 +56,7 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 
 	data := designSheetFormData{}
 	if h.characters != nil {
-		for _, c := range h.characters.List {
+		for _, c := range h.characters.All() {
 			_, isChecked := checked[c.ID]
 			data.Characters = append(data.Characters, designSheetCharacterOption{
 				ID: c.ID, Name: c.Name, Checked: isChecked,

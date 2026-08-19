@@ -29,6 +29,8 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
 	// 0 のままだと worker の検証が「無制限」を理由に落ちます。
 	cfg.AI.PipelineTimeout = 25 * time.Minute
+	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
+	cfg.Tasks.DispatchDeadline = testDispatchDeadline
 	return cfg
 }
 
@@ -205,14 +207,11 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 // プロセスごと止められるため失敗ハンドラも Slack 通知も走らず、max_attempts = 1 で再試行も
 // 無いので、ジョブが running のまま残ります。既定値がこの関係を満たすことも併せて固定します。
 func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
-	// 既定値は envDefault タグにしか無いため、タグそのものを読んで検査します。
-	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
-	t.Run("既定値は打ち切りより短い", func(t *testing.T) {
+	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
+	t.Run("既定値を持たない", func(t *testing.T) {
 		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
 		require.True(t, ok)
-		got, err := time.ParseDuration(field.Tag.Get("envDefault"))
-		require.NoError(t, err)
-		require.Less(t, got, TaskDispatchDeadline)
+		require.Empty(t, field.Tag.Get("envDefault"), "既定値を持たせないでください")
 
 		require.NoError(t, newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig())
 	})
@@ -221,8 +220,8 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		name    string
 		timeout time.Duration
 	}{
-		{name: "打ち切りと等しいと落ちる", timeout: TaskDispatchDeadline},
-		{name: "打ち切りより長いと落ちる", timeout: TaskDispatchDeadline + time.Minute},
+		{name: "打ち切りと等しいと落ちる", timeout: testDispatchDeadline},
+		{name: "打ち切りより長いと落ちる", timeout: testDispatchDeadline + time.Minute},
 		{name: "無制限は落ちる", timeout: 0},
 		{name: "負の無制限も落ちる", timeout: -1},
 	} {
@@ -244,3 +243,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		require.NoError(t, cfg.ValidateEssentialConfig())
 	})
 }
+
+// testDispatchDeadline は、テストで使う打ち切りです。アプリは既定値を持たないため、
+// 実際のデプロイ設定と同じく明示します。
+const testDispatchDeadline = 30 * time.Minute
