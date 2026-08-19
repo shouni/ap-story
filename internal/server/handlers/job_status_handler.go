@@ -35,7 +35,7 @@ func (h *Handler) recordQueuedStatus(r *http.Request, task domain.Task) {
 }
 
 // JobStatus は、ジョブの進行状況（queued/running/succeeded/failed）を JSON で返します。
-// ブラウザからのポーリングと M2M クライアント（ap-mcp）の完了検知の両方が利用します。
+// ブラウザからのポーリングと M2M クライアント（MCP サーバー）の完了検知の両方が利用します。
 func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {

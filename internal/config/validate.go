@@ -3,35 +3,10 @@ package config
 import (
 	"fmt"
 	"log/slog"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/shouni/netarmor/securenet"
 )
-
-const taskGeneratePath = "/tasks/generate"
-
-func normalizeWorkerURL(workerURL string, serviceURL string) (string, error) {
-	workerURL = strings.TrimSpace(workerURL)
-	if workerURL != "" {
-		return workerURL, nil
-	}
-	return joinWorkerPath(serviceURL)
-}
-
-func joinWorkerPath(serviceURL string) (string, error) {
-	serviceURL = strings.TrimSpace(serviceURL)
-	if serviceURL == "" {
-		return taskGeneratePath, nil
-	}
-
-	workerURL, err := url.JoinPath(serviceURL, taskGeneratePath)
-	if err != nil {
-		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
-	}
-	return workerURL, nil
-}
 
 // IsSecureServiceURL は、設定された ServiceURL が安全なスキーム（HTTPS など）を使用しているかどうかを確認します。
 func (c *Config) IsSecureServiceURL() bool {
@@ -119,12 +94,6 @@ func (c *Config) validatePipelineTimeout() error {
 		return fmt.Errorf("PIPELINE_TIMEOUT (%s) は Cloud Tasks の打ち切り (%s) より短くしてください。等号でもアプリが失敗を記録する前に打ち切られます", c.AI.PipelineTimeout, c.Tasks.DispatchDeadline)
 	}
 	return nil
-}
-
-// TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
-// 値は env から読んだままなので、前後の空白だけ落とします。
-func (c *Config) TaskCallerServiceAccount() string {
-	return strings.TrimSpace(c.Tasks.CallerServiceAccountEmail)
 }
 
 // validateWebConfig は Web 面（OAuth ログインとセッション、タスク投入）に必要な設定を検証します。

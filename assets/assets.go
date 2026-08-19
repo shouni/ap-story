@@ -1,6 +1,6 @@
 // Package assets は、コードとは別のサイクルで編集される埋め込みリソース
 // （HTML テンプレート・CSS/JavaScript・プロンプトテンプレート）を提供します。
-// 姉妹プロジェクト（ap-comp / ap-mv）と同じ配置です。
+// 姉妹プロジェクトと同じ配置です。
 //
 // このパッケージは置き場に徹します。読み込み・パース・組み立ては利用側
 // （internal/server/handlers、internal/adapters/prompts）の責務です。ここに処理を

@@ -38,7 +38,7 @@ func NewJobID() (string, error) {
 // ValidateJobID は、ジョブ ID がルーティングとストレージパスで安全に使えることを検証します。
 // HTTP 入力と GCS パス生成は必ずこの検証（または SanitizeJobID）を経由してください。
 //
-// 検証規則は go-utils/jobid に集約しています。ap-mcp を介して ap-comp / ap-mv とも
+// 検証規則は go-utils/jobid に集約しています。MCP サーバーを介して姉妹プロジェクトとも
 // ジョブ ID をやり取りするため、「何を正当な ID とみなすか」がサービス間でずれると
 // 片方が発行した ID をもう片方が拒否する事故につながるためです。
 func ValidateJobID(jobID string) error {
