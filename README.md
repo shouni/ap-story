@@ -132,10 +132,6 @@ state の保存は「常に上書き・常に最新」で、go-comic-kit の sto
 Worker が受けるタスクはコマンドで分岐します。各コマンドは「state をロード →
 go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit の冪等な操作と1対1です。
 
-state は工程（台本 → パネル → ページ）の切れ目ごとに保存され、ステップが失敗した場合も
-そこまでの成果を保存してから終了します。したがって再実行は `render_comic` により未生成分
-だけで済み、失敗したジョブの画像を作り直す必要はありません。
-
 | command | 実行する go-comic-kit 操作 | 入力パラメータ |
 |---|---|---|
 | `compose_comic` | 全工程: GenerateOutline → 各章 GenerateChapterScript → GenerateAllPanels → ComposeAllPages（デザインシートは含まない。単体生成 `generate_design_sheet` で別途作成）。`stop_after_script` を指定すると台本までで止まる | source_url / source_text, script_mode, style_mode, text_model, image_model, stop_after_script |
@@ -234,10 +230,11 @@ state は工程（台本 → パネル → ページ）の切れ目ごとに保�
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
 | `REQUEST_TIMEOUT` | 外部 AI 呼び出し1回あたりの上限（既定 5m）。画像生成1枚に数十秒かかるため短くしすぎないこと |
-| `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限（既定 25m）。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます。**dispatch deadline（30m）以上の値と無制限は worker の起動時に拒否されます** |
+| `TASK_DISPATCH_DEADLINE` | Cloud Tasks がワーカーの応答を待つ上限。**既定値は無く、worker では未設定だと起動時に落ちます**（例: `30m`） |
+| `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます。**既定値は無く、worker では未設定・無制限・`TASK_DISPATCH_DEADLINE` 以上のいずれも起動時に拒否されます** |
 | `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトとリージョン |
 | `CLOUD_TASKS_QUEUE_ID` | Cloud Tasks キュー名。タスクを投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
-| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。投入するのは web 面だけなので `SERVER_ROLE=worker` では不要。未設定時は旧 `SERVICE_ACCOUNT_EMAIL` にフォールバックします（移行用・Terraform 適用後に削除） |
+| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
 | `ALLOWED_TASK_SERVICE_ACCOUNTS` | worker が**受け付ける** caller SA の許可リスト（カンマ区切り、worker では必須）。web と worker で実行 SA を分けている場合、worker が受け付けるべき発行元は自分自身ではなく **web 側の SA**（`ap-story-web-runner`） |
 | `TASK_AUDIENCE_URL` | OIDC トークンの audience。web/worker を分けた場合は**呼び先である worker の URL**（Cloud Run の IAM が不一致を 403 で弾く） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
@@ -265,12 +262,15 @@ worker の実行時間の上限を決める値は 3 つあり、この大小関�
 
 ```
 PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
-   25m (アプリ)        30m (タスク)            1800s (サービス)
+    (アプリ)          (タスク)                (サービス)
 ```
 
-実効上限を決めるのは**いちばん小さい値**です。dispatch deadline だけは未指定でも既定の
-10 分が効くため、指定を忘れると Cloud Run の timeout が何であれ 10 分でワーカーが
-打ち切られます（値は `internal/config/config.go` の `TaskDispatchDeadline`）。
+3 つともアプリ側に既定値はありません。値を決めるのはデプロイ設定（Terraform）だけで、
+同じ数字がコードとデプロイ設定の 2 箇所に現れないようにしています。
+
+実効上限を決めるのは**いちばん小さい値**です。dispatch deadline を Terraform で指定し忘れると
+Cloud Tasks 側の既定 10 分が効き、Cloud Run の timeout が何であれ 10 分でワーカーが
+打ち切られます。worker 面はこれを起動時に検査します（`TASK_DISPATCH_DEADLINE`）。
 
 **この大小関係は起動時に強制されます**（`config.validatePipelineTimeout`）。等号も無制限も
 拒否するのは、打ち切りが Cloud Tasks 側から来るとプロセスごと止められ、失敗の記録も部分保存も
@@ -304,7 +304,7 @@ Slack 通知も走らないまま、`max_attempts = 1` の `story-queue` は再�
 
 キャラクター定義（`characters.json`）は一覧・デザインシート画面が使うため、役割によらず読み込みます。
 
-worker が受け付ける caller SA は `ALLOWED_TASK_SERVICE_ACCOUNTS` で指定します。タスクに指定される caller SA は web 側（`ap-story-web-runner`）なので、worker 側に必要なのは「その SA からを受け付ける」という設定です。トークンを生成して付与するのは Cloud Tasks であって、web ではありません。この変数が無かった頃は `SERVICE_ACCOUNT_EMAIL` が兼ねており、worker サービスに自分ではない SA のアドレスを入れる必要がありました（未設定なら今もその挙動にフォールバックします）。
+worker が受け付ける caller SA は `ALLOWED_TASK_SERVICE_ACCOUNTS` で指定します。タスクに指定される caller SA は web 側（`ap-story-web-runner`）なので、worker 側に必要なのは「その SA からを受け付ける」という設定です。トークンを生成して付与するのは Cloud Tasks であって、web ではありません。
 
 SA と IAM の定義はデプロイ設定（Terraform）側にあります。
 
