@@ -18,9 +18,6 @@ const (
 	DefaultShutdownGrace = 15 * time.Second
 	// DefaultHTTPTimeout は外部 HTTP 通信のタイムアウトのデフォルト値です。
 	DefaultHTTPTimeout = 60 * time.Second
-	// MaxTaskDispatchDeadline は Cloud Tasks の HTTP ターゲットに指定できる上限です。
-	// プラットフォームの制約なのでアプリが持ちます（デプロイ設定ではありません）。
-	MaxTaskDispatchDeadline = 30 * time.Minute
 )
 
 // 画風の文言はこのパッケージが持ちません。コマ・ページもデザインシートも
