@@ -29,6 +29,8 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
 	// 0 のままだと worker の検証が「無制限」を理由に落ちます。
 	cfg.AI.PipelineTimeout = 25 * time.Minute
+	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
+	cfg.Tasks.DispatchDeadline = testDispatchDeadline
 	return cfg
 }
 
@@ -212,7 +214,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		require.True(t, ok)
 		got, err := time.ParseDuration(field.Tag.Get("envDefault"))
 		require.NoError(t, err)
-		require.Less(t, got, TaskDispatchDeadline)
+		require.Less(t, got, testDispatchDeadline)
 
 		require.NoError(t, newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig())
 	})
@@ -221,8 +223,8 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		name    string
 		timeout time.Duration
 	}{
-		{name: "打ち切りと等しいと落ちる", timeout: TaskDispatchDeadline},
-		{name: "打ち切りより長いと落ちる", timeout: TaskDispatchDeadline + time.Minute},
+		{name: "打ち切りと等しいと落ちる", timeout: testDispatchDeadline},
+		{name: "打ち切りより長いと落ちる", timeout: testDispatchDeadline + time.Minute},
 		{name: "無制限は落ちる", timeout: 0},
 		{name: "負の無制限も落ちる", timeout: -1},
 	} {
@@ -244,3 +246,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		require.NoError(t, cfg.ValidateEssentialConfig())
 	})
 }
+
+// testDispatchDeadline は、テストで使う打ち切りです。アプリは既定値を持たないため、
+// 実際のデプロイ設定と同じく明示します。
+const testDispatchDeadline = 30 * time.Minute

@@ -188,6 +188,8 @@ func essentialConfigEnv(t *testing.T) {
 	t.Setenv("CHARACTERS_JSON_PATH", "gs://bucket/characters.json")
 	t.Setenv("GEMINI_MODELS", "gemini-test")
 	t.Setenv("IMAGE_MODELS", "image-test")
+	// 三段のタイムアウトはデプロイ設定が決めるため、アプリは既定値を持ちません。
+	t.Setenv("TASK_DISPATCH_DEADLINE", "30m")
 }
 
 func TestValidateEssentialConfigPassesWithAllRequiredFields(t *testing.T) {

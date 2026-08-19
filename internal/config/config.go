@@ -18,11 +18,9 @@ const (
 	DefaultShutdownGrace = 15 * time.Second
 	// DefaultHTTPTimeout は外部 HTTP 通信のタイムアウトのデフォルト値です。
 	DefaultHTTPTimeout = 60 * time.Second
-	// TaskDispatchDeadline は Cloud Tasks がワーカーの応答を待つ上限です。
-	// HTTP ターゲットに指定できる最大値で、これ以上は伸ばせません。投入時にタスクへ
-	// 焼き込む値ですが、PIPELINE_TIMEOUT の上限としても効くため adapters ではなくここに
-	// 置いています（ValidateEssentialConfig が検査します）。
-	TaskDispatchDeadline = 30 * time.Minute
+	// MaxTaskDispatchDeadline は Cloud Tasks の HTTP ターゲットに指定できる上限です。
+	// プラットフォームの制約なのでアプリが持ちます（デプロイ設定ではありません）。
+	MaxTaskDispatchDeadline = 30 * time.Minute
 )
 
 // 画風の文言はこのパッケージが持ちません。コマ・ページもデザインシートも
@@ -62,6 +60,18 @@ type TasksConfig struct {
 	// 空だと検証器が fail-closed になるため、worker では必須です。
 	AllowedServiceAccountsRaw string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
 	AllowedServiceAccounts    []string
+	// DispatchDeadline は、投入するタスクに載せる応答待ちの上限です。
+	//
+	// 「待つ時間」ではなく **ワーカーの実行時間の実効上限** です。これを超えると
+	// ワーカーがまだ処理中でも Cloud Tasks が待受を打ち切り、キューは max_attempts = 1 なので
+	// 再試行も来ません。Cloud Run の timeout をいくら伸ばしてもこの上限は動きません。
+	// 定数ではなく env なのは、この値をインフラ側（Terraform）が唯一の出どころとして
+	// 持てるようにするためです。定数だとインフラが写しを抱え、ズレても誰も気付きません。
+	//
+	// **既定値は持ちません。** 三段のタイムアウトはデプロイ先の事情で決まる値なので、
+	// 出どころは Terraform 1 箇所に閉じます。アプリが既定を持つと同じ数字が 2 箇所に
+	// 現れ、設定漏れが「誰も選んでいない値」で動いてしまいます。
+	DispatchDeadline time.Duration `env:"TASK_DISPATCH_DEADLINE"`
 }
 
 // StorageConfig はストレージの設定です。

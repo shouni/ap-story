@@ -39,7 +39,7 @@ func NewTaskEnqueuer(ctx context.Context, cfg *config.Config) (*TaskEnqueuer, er
 		// compose_comic は既定値で下限 14 分かかるため、既定のままでは足りません。
 		// PIPELINE_TIMEOUT をこれより短く（本番では 25m）設定して、アプリが自分で先に
 		// 諦められるようにしています。関係は README「web / worker の分離」を参照。
-		DispatchDeadline: config.TaskDispatchDeadline,
+		DispatchDeadline: cfg.Tasks.DispatchDeadline,
 	}
 	enqueuer, err := tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
 	if err != nil {
