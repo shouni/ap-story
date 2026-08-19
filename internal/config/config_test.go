@@ -302,3 +302,14 @@ func TestWarnOnContradictoryGenerationSettings(t *testing.T) {
 		})
 	}
 }
+
+// バケット「名」であって URI ではありません。コンソールから貼ると `gs://story/`
+// の形になり、素通しすると成果物の URI が `gs://gs://story//...` になります。
+func TestLoadConfigNormalizesGCSBucket(t *testing.T) {
+	setDefaultURLConfigEnv(t)
+	t.Setenv("STORY_BUCKET", " gs://story-bucket/ ")
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+	require.Equal(t, "story-bucket", cfg.Storage.GCSBucket)
+}

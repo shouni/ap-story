@@ -3,14 +3,16 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/shouni/gcp-kit/serverrole"
+	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/shouni/go-comic-kit/ports"
-	"github.com/shouni/go-utils/text"
+	"github.com/shouni/go-utils/strlist"
 )
 
 const (
@@ -53,10 +55,9 @@ type TasksConfig struct {
 	// 指定する caller SA です。トークンを生成して付与するのは Cloud Tasks であり、
 	// このプロセスが署名するわけではありません。投入側＝ web 面だけの設定です。
 	CallerServiceAccountEmail string `env:"TASK_CALLER_SERVICE_ACCOUNT_EMAIL"`
-	// AllowedServiceAccountsRaw は、worker が受け付ける caller SA の許可リスト（カンマ区切り）です。
+	// AllowedServiceAccounts は、worker が受け付ける caller SA の許可リスト（カンマ区切り）です。
 	// 空だと検証器が fail-closed になるため、worker では必須です。
-	AllowedServiceAccountsRaw string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
-	AllowedServiceAccounts    []string
+	AllowedServiceAccounts []string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
 	// DispatchDeadline は、投入するタスクに載せる応答待ちの上限です。
 	//
 	// 「待つ時間」ではなく **ワーカーの実行時間の実効上限** です。これを超えると
@@ -130,27 +131,8 @@ type AIConfig struct {
 // 持つため、ここで補完するものはありません。並列数・タイムアウト・各種上限はキットの
 // ApplyDefaults に任せます（キットを壊さず動かすための値なので、既定値の持ち主はキット側です）。
 func (a *AIConfig) applyDefaults() {
-	a.GeminiModels = normalizeList(a.GeminiModels)
-	a.ImageModels = normalizeList(a.ImageModels)
-}
-
-// normalizeList は env が分割しただけのカンマ区切り値を整えます。
-// 前後の空白を落とし、空要素と重複を捨て、順序は保ちます。
-func normalizeList(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	normalized := make([]string, 0, len(values))
-	for _, v := range values {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		normalized = append(normalized, v)
-	}
-	return normalized
+	a.GeminiModels = strlist.Normalize(a.GeminiModels)
+	a.ImageModels = strlist.Normalize(a.ImageModels)
 }
 
 // KitConfig は go-comic-kit の ports.Config に変換します。
@@ -174,15 +156,12 @@ type AuthConfig struct {
 	// SessionSecret はセッションクッキーの署名鍵（HMAC、16バイト以上）です。
 	SessionSecret string `env:"SESSION_SECRET"`
 	// SessionEncryptKey はセッションクッキーの暗号化鍵（AES、16/24/32バイト）です。
-	SessionEncryptKey string `env:"SESSION_ENCRYPT_KEY"`
-	AllowedEmailsRaw  string `env:"ALLOWED_EMAILS"`
-	AllowedDomainsRaw string `env:"ALLOWED_DOMAINS"`
-	AllowedEmails     []string
-	AllowedDomains    []string
-	// AllowedM2MServiceAccountsRaw は、API をサーバー間通信（OIDC Bearer トークン）で
+	SessionEncryptKey string   `env:"SESSION_ENCRYPT_KEY"`
+	AllowedEmails     []string `env:"ALLOWED_EMAILS"`
+	AllowedDomains    []string `env:"ALLOWED_DOMAINS"`
+	// AllowedM2MServiceAccounts は、API をサーバー間通信（OIDC Bearer トークン）で
 	// 呼び出せるサービスアカウントのメールアドレス（カンマ区切り）です。
-	AllowedM2MServiceAccountsRaw string `env:"ALLOWED_M2M_SERVICE_ACCOUNTS"`
-	AllowedM2MServiceAccounts    []string
+	AllowedM2MServiceAccounts []string `env:"ALLOWED_M2M_SERVICE_ACCOUNTS"`
 }
 
 // Config はアプリ設定です。
@@ -210,10 +189,6 @@ func LoadConfig() (*Config, error) {
 		cfg.Tasks.TaskAudienceURL = cfg.Server.ServiceURL
 	}
 
-	cfg.Auth.AllowedEmails = text.ParseCommaSeparatedList(cfg.Auth.AllowedEmailsRaw)
-	cfg.Auth.AllowedDomains = text.ParseCommaSeparatedList(cfg.Auth.AllowedDomainsRaw)
-	cfg.Auth.AllowedM2MServiceAccounts = text.ParseCommaSeparatedList(cfg.Auth.AllowedM2MServiceAccountsRaw)
-	cfg.Tasks.AllowedServiceAccounts = text.ParseCommaSeparatedList(cfg.Tasks.AllowedServiceAccountsRaw)
 	cfg.Server.ShutdownTimeout = DefaultShutdownGrace
 
 	return &cfg, nil
@@ -234,6 +209,46 @@ func (c *Config) normalize() error {
 	}
 	c.Tasks.WorkerURL = workerURL
 	c.Tasks.TaskAudienceURL = strings.TrimSpace(c.Tasks.TaskAudienceURL)
+
+	// バケット「名」であって URI ではありません。コンソールから貼った `gs://...` を
+	// 素通しすると、成果物の URI が `gs://gs://...` になります。
+	c.Storage.GCSBucket = remoteio.NormalizeBucketName(c.Storage.GCSBucket)
+
+	// env はカンマで分割するだけなので、前後の空白と重複はここで落とします。
+	c.Auth.AllowedEmails = strlist.Normalize(c.Auth.AllowedEmails)
+	c.Auth.AllowedDomains = strlist.Normalize(c.Auth.AllowedDomains)
+	c.Auth.AllowedM2MServiceAccounts = strlist.Normalize(c.Auth.AllowedM2MServiceAccounts)
+	c.Tasks.AllowedServiceAccounts = strlist.Normalize(c.Tasks.AllowedServiceAccounts)
+
 	c.AI.applyDefaults()
 	return nil
+}
+
+const taskGeneratePath = "/tasks/generate"
+
+func normalizeWorkerURL(workerURL string, serviceURL string) (string, error) {
+	workerURL = strings.TrimSpace(workerURL)
+	if workerURL != "" {
+		return workerURL, nil
+	}
+	return joinWorkerPath(serviceURL)
+}
+
+func joinWorkerPath(serviceURL string) (string, error) {
+	serviceURL = strings.TrimSpace(serviceURL)
+	if serviceURL == "" {
+		return taskGeneratePath, nil
+	}
+
+	workerURL, err := url.JoinPath(serviceURL, taskGeneratePath)
+	if err != nil {
+		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
+	}
+	return workerURL, nil
+}
+
+// TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
+// 値は env から読んだままなので、前後の空白だけ落とします。
+func (c *Config) TaskCallerServiceAccount() string {
+	return strings.TrimSpace(c.Tasks.CallerServiceAccountEmail)
 }
