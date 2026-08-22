@@ -1,6 +1,9 @@
 package prompts
 
 import (
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -100,8 +103,9 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 
 	for _, want := range []string{
 		"PANEL COUNT: [ 2 ]",
-		"PANEL 1: ROW 1, RIGHT column",
-		"PANEL 2: ROW 1, LEFT column",
+		// 叫びを含む見せゴマなので、2コマとも全幅で縦に積む
+		"TIER 1 (65% of the page height): PANEL 1 = FULL WIDTH.",
+		"TIER 2 (35% of the page height): PANEL 2 = FULL WIDTH.",
 		// コマ画像がある側が正解なので、立ち絵の一覧は出さない（下の専用テスト参照）。
 		"SUBJECT [めたん]: Match input_file_2",
 		"COMPOSITION_GUIDE: Recreate the composition, posing, background, and character appearance from input_file_3",
@@ -122,8 +126,8 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 	}
 }
 
-// TestPagePromptFullWidthImpactForOddCount は、奇数コマの最後を全幅の見せゴマにする
-// レイアウト規則を確認します。
+// TestPagePromptFullWidthImpactForOddCount は、演出指定のないページでも最後のコマが
+// 全幅の見せゴマになることを確認します（ページ最後は次への引きなので広く取ります）。
 func TestPagePromptFullWidthImpactForOddCount(t *testing.T) {
 	t.Parallel()
 	cm := testCharacters(t)
@@ -135,11 +139,176 @@ func TestPagePromptFullWidthImpactForOddCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
-	if !strings.Contains(user, "PANEL 3: BOTTOM ROW, FULL-WIDTH") {
-		t.Errorf("prompt does not place the last odd panel full-width:\n%s", user)
+	for _, want := range []string{
+		"TIER 1 (45% of the page height): PANEL 1 = RIGHT, 50% of the width | PANEL 2 = LEFT, 50% of the width.",
+		"TIER 2 (55% of the page height): PANEL 3 = FULL WIDTH.",
+		"PANEL 3 [FULL-WIDTH IMPACT]",
+	} {
+		if !strings.Contains(user, want) {
+			t.Errorf("prompt does not contain %q:\n%s", want, user)
+		}
 	}
-	if !strings.Contains(user, "PANEL 3 [FULL-WIDTH IMPACT]") {
-		t.Error("prompt does not mark the last odd panel as an impact panel")
+}
+
+// TestPageLayoutFollowsPanelContent は、割り付けがコマの中身で決まることを確認します。
+// 一律の2列グリッドだと、章頭に必ず来る引きの画が半幅に潰れます。
+func TestPageLayoutFollowsPanelContent(t *testing.T) {
+	t.Parallel()
+
+	say := func(text string) comic.DialogueLine {
+		return comic.DialogueLine{SpeakerID: "zundamon", Kind: comic.DialogueKindSpeech, Text: text}
+	}
+	panels := []comic.Panel{
+		{ID: "p1", Shot: "wide", Setting: "サーバルーム", Dialogues: []comic.DialogueLine{say("ここが心臓部なのだ")}},
+		{ID: "p2", Shot: "medium", Setting: "サーバルーム", Dialogues: []comic.DialogueLine{say("説明する"), say("返す")}},
+		{ID: "p3", Shot: "close-up", Setting: "サーバルーム"},
+		{ID: "p4", Shot: "medium", Setting: "サーバルーム", Dialogues: []comic.DialogueLine{say("なるほど")}},
+		{ID: "p5", Shot: "close-up", Setting: "サーバルーム", Dialogues: []comic.DialogueLine{say("つまり")}},
+		{ID: "p6", Shot: "wide", Setting: "屋上", Dialogues: []comic.DialogueLine{{SpeakerID: "zundamon", Kind: comic.DialogueKindShout, Text: "行くのだ！"}}},
+	}
+
+	layout := planPageLayout(panels)
+	for _, tc := range []struct {
+		panel  int
+		column string
+	}{
+		{0, columnFull},  // 章頭の引き
+		{1, columnRight}, // 掛け合い。相方の無言の寄りより広く取る
+		{2, columnLeft},
+		{5, columnFull}, // 叫びで締める見せゴマ
+	} {
+		if got := layout[tc.panel].Column; got != tc.column {
+			t.Errorf("PANEL %d の位置 = %s, want %s", tc.panel+1, got, tc.column)
+		}
+	}
+	if layout[1].Width <= layout[2].Width {
+		t.Errorf("掛け合いのコマが無言の寄りより広くない: %d%% vs %d%%", layout[1].Width, layout[2].Width)
+	}
+	if layout[5].Height <= layout[2].Height {
+		t.Errorf("締めのコマの段が説明の段より高くない: %d%% vs %d%%", layout[5].Height, layout[2].Height)
+	}
+}
+
+// 段の高さの合計は必ず 100% です。端数が残ると、そこがページ下端の空白の帯になります。
+func TestPageLayoutTierHeightsFillThePage(t *testing.T) {
+	t.Parallel()
+
+	for n := 1; n <= 12; n++ {
+		panels := make([]comic.Panel, n)
+		for i := range panels {
+			panels[i] = comic.Panel{ID: fmt.Sprintf("p%d", i+1)}
+		}
+		layout := planPageLayout(panels)
+		if len(layout) != n {
+			t.Fatalf("n=%d: 割り付けが %d 件", n, len(layout))
+		}
+
+		total := 0
+		for _, tier := range groupTiers(layout) {
+			if tier.Height <= 0 {
+				t.Errorf("n=%d: TIER %d の高さが %d%%", n, tier.Number, tier.Height)
+			}
+			total += tier.Height
+			width := 0
+			for _, i := range tier.Panels {
+				width += layout[i].Width
+			}
+			if width != 100 {
+				t.Errorf("n=%d: TIER %d の幅の合計が %d%%", n, tier.Number, width)
+			}
+		}
+		if total != 100 {
+			t.Errorf("n=%d: 段の高さの合計が %d%%", n, total)
+		}
+	}
+}
+
+// 配置マップとコマごとの指示は同じ割り付けから書くこと。別々に組み立てると、
+// 同じページに食い違う位置指示が並びます。
+func TestPagePromptMapAgreesWithPanelBreakdown(t *testing.T) {
+	t.Parallel()
+
+	panels := make([]comic.Panel, 5)
+	for i := range panels {
+		panels[i] = comic.Panel{ID: fmt.Sprintf("p%d", i+1), Shot: "medium"}
+	}
+	panels[0].Shot = "wide"
+
+	_, user, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{Panels: panels, Characters: testCharacters(t)})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+
+	mapTier := map[int]int{}
+	for _, m := range regexp.MustCompile(`\* TIER (\d+) \(\d+% of the page height\): (.+)\.`).FindAllStringSubmatch(user, -1) {
+		tier, _ := strconv.Atoi(m[1])
+		for _, entry := range regexp.MustCompile(`PANEL (\d+) =`).FindAllStringSubmatch(m[2], -1) {
+			panel, _ := strconv.Atoi(entry[1])
+			mapTier[panel] = tier
+		}
+	}
+	if len(mapTier) != len(panels) {
+		t.Fatalf("配置マップに載ったコマが %d 件:\n%s", len(mapTier), user)
+	}
+	for _, m := range regexp.MustCompile(`### PANEL (\d+) \[[^\]]+\]\n- POSITION: Tier (\d+) of`).FindAllStringSubmatch(user, -1) {
+		panel, _ := strconv.Atoi(m[1])
+		tier, _ := strconv.Atoi(m[2])
+		if mapTier[panel] != tier {
+			t.Errorf("PANEL %d: 配置マップは TIER %d、コマの指示は TIER %d", panel, mapTier[panel], tier)
+		}
+		delete(mapTier, panel)
+	}
+	if len(mapTier) != 0 {
+		t.Errorf("配置マップにあってコマの指示に無い: %v", mapTier)
+	}
+}
+
+// 狭いコマに吹き出しが複数入るときは、そのことを伝えます。絵が全部隠れます。
+func TestPagePromptFlagsBalloonCrowdingInNarrowPanels(t *testing.T) {
+	t.Parallel()
+
+	chatter := []comic.DialogueLine{
+		{SpeakerID: "zundamon", Kind: comic.DialogueKindSpeech, Text: "どうなってるのだ"},
+		{SpeakerID: "metan", Kind: comic.DialogueKindSpeech, Text: "落ち着きなさい"},
+	}
+	// 引きで始まり引きで締めるページ。真ん中の段だけが半幅になる。
+	panels := []comic.Panel{
+		{ID: "p1", Shot: "wide"},
+		{ID: "p2", Shot: "medium", Dialogues: chatter},
+		{ID: "p3", Shot: "medium", Dialogues: chatter},
+		{ID: "p4", Shot: "wide"},
+	}
+
+	layout := planPageLayout(panels)
+	_, user, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{Panels: panels, Characters: testCharacters(t)})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if layout[1].Column == columnFull {
+		t.Fatalf("前提が崩れている: 半幅のコマが無い（%+v）", layout)
+	}
+	if !strings.Contains(user, "BALLOON SPACE: 2 balloons must fit inside this narrow panel") {
+		t.Errorf("狭いコマの吹き出し過密を伝えていない:\n%s", user)
+	}
+
+	// 全幅のコマには要らない。狭くないので言うだけ雑音になる。
+	_, single, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
+		Panels: panels[1:2], Characters: testCharacters(t),
+	})
+	if err != nil {
+		t.Fatalf("BuildPage() error = %v", err)
+	}
+	if strings.Contains(single, "BALLOON SPACE") {
+		t.Error("全幅のコマに狭さの注意が出ている")
+	}
+}
+
+// コマの無いページは作れません。0コマのまま組むと「PANEL COUNT: [ 0 ]」を渡すことになります。
+func TestPagePromptRejectsEmptyPage(t *testing.T) {
+	t.Parallel()
+
+	if _, _, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{Characters: testCharacters(t)}); err == nil {
+		t.Error("0コマのページがエラーにならない")
 	}
 }
 
