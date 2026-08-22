@@ -17,7 +17,8 @@ const (
 ### FORMAT RULES ###
 - STYLE: Follow the ARTISTIC STYLE section below exactly. It decides colour and rendering.
 - RENDERING: Sharp clean lineart with a professional finish.
-- LAYOUT: Strict multi-panel composition. Use ONLY the specified number of panels.
+- LAYOUT: The page is split into horizontal tiers. Panels never straddle a tier boundary.
+- PANEL SIZE: Tier heights and panel widths are given as percentages of the page. Honour them exactly — never fall back to an even grid.
 - NO FILLER: Do not add extra panels or decorative small frames. Fill the page with the given count.
 - BORDERS: Deep black, crisp frame borders for EVERY panel.
 - GUTTERS: Pure white space between panels.
@@ -54,9 +55,15 @@ func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, strin
 		return "", "", "", err
 	}
 
-	var sb strings.Builder
 	numPanels := len(data.Panels)
+	if numPanels == 0 {
+		return "", "", "", fmt.Errorf("page prompt requires at least one panel")
+	}
+	// 割り付けは一度だけ決め、配置マップとコマごとの指示の両方をここから書く。
+	// 別々に組み立てると、同じページに食い違う位置指示が並ぶ。
+	layout := planPageLayout(data.Panels)
 
+	var sb strings.Builder
 	sb.WriteString("# PAGE PRODUCTION REQUEST\n")
 	sb.WriteString("- OUTPUT: ONE single portrait manga page image.\n")
 	// 彩色はスタイルプリセットの指定（ART STYLE として後置される）に従わせます。
@@ -64,9 +71,9 @@ func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, strin
 	sb.WriteString("- COLOR: Follow the ARTISTIC STYLE instruction exactly.\n")
 	fmt.Fprintf(&sb, "- PANEL COUNT: [ %d ] (STRICTLY ONLY %d PANELS. DO NOT ADD ANY MORE).\n\n", numPanels, numPanels)
 
-	writeLayoutStructure(&sb, numPanels)
+	writeLayoutStructure(&sb, layout)
 	writeCharacterReferences(&sb, data)
-	writePanelBreakdown(&sb, data)
+	writePanelBreakdown(&sb, data, layout)
 
 	return p.systemPrompt(styleSuffix), strings.TrimRight(sb.String(), "\n"), negative, nil
 }
@@ -84,27 +91,32 @@ func (PagePrompt) systemPrompt(styleSuffix string) string {
 	return pageSystemPrompt + "\n\n### ARTISTIC STYLE ###\n" + styleSuffix
 }
 
-// writeLayoutStructure は右開き・2列グリッドのパネル配置マップを出力します。
-// パネル数が奇数の場合、最後のパネルは下段の全幅（見せゴマ）にします。
-func writeLayoutStructure(sb *strings.Builder, numPanels int) {
+// writeLayoutStructure は段組み（段ごとの高さ・コマの左右と幅）を出力します。
+// 右開きなので、段の中は番号の小さいコマが右です。
+func writeLayoutStructure(sb *strings.Builder, layout []panelPlacement) {
 	sb.WriteString("## MANDATORY PAGE STRUCTURE\n")
 	sb.WriteString("- READING ORDER: Japanese Style (Right-to-Left, then Top-to-Bottom).\n")
-	sb.WriteString("- PANEL PLACEMENT MAP:\n")
 
-	if numPanels == 1 {
+	tiers := groupTiers(layout)
+	if len(layout) == 1 {
+		sb.WriteString("- PANEL PLACEMENT MAP:\n")
 		sb.WriteString("  * PANEL 1: SINGLE FULL-PAGE PANEL (covers entire image area).\n")
-	} else {
-		for i := range numPanels {
-			if numPanels%2 == 1 && i == numPanels-1 {
-				fmt.Fprintf(sb, "  * PANEL %d: BOTTOM ROW, FULL-WIDTH.\n", i+1)
+		sb.WriteString("- FRAME STYLE: Deep black borders. GUTTERS: Pure white.\n\n")
+		return
+	}
+
+	fmt.Fprintf(sb, "- TIERS: %d horizontal tiers stacked top to bottom. The heights below are deliberate — do NOT even them out.\n", len(tiers))
+	sb.WriteString("- PANEL PLACEMENT MAP:\n")
+	for _, tier := range tiers {
+		parts := make([]string, 0, len(tier.Panels))
+		for _, i := range tier.Panels {
+			if layout[i].Column == columnFull {
+				parts = append(parts, fmt.Sprintf("PANEL %d = FULL WIDTH", i+1))
 				continue
 			}
-			side := "RIGHT"
-			if i%2 == 1 {
-				side = "LEFT"
-			}
-			fmt.Fprintf(sb, "  * PANEL %d: ROW %d, %s column.\n", i+1, i/2+1, side)
+			parts = append(parts, fmt.Sprintf("PANEL %d = %s, %d%% of the width", i+1, layout[i].Column, layout[i].Width))
 		}
+		fmt.Fprintf(sb, "  * TIER %d (%d%% of the page height): %s.\n", tier.Number, tier.Height, strings.Join(parts, " | "))
 	}
 	sb.WriteString("- FRAME STYLE: Deep black borders. GUTTERS: Pure white.\n\n")
 }
@@ -162,35 +174,48 @@ func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 }
 
 // writePanelBreakdown はパネルごとの内訳（配置・演出・登場キャラ・セリフ）を出力します。
-func writePanelBreakdown(sb *strings.Builder, data *ports.PagePromptData) {
-	numPanels := len(data.Panels)
+func writePanelBreakdown(sb *strings.Builder, data *ports.PagePromptData, layout []panelPlacement) {
 	sb.WriteString("## PANEL BREAKDOWN\n")
 	for i := range data.Panels {
 		panel := &data.Panels[i]
-		writePanelHeader(sb, i, numPanels)
+		writePanelHeader(sb, i, panel, layout[i])
 		writePanelScene(sb, panel, data)
 		writePanelCharacters(sb, panel, data)
-		writePanelDialogues(sb, panel, data.Characters)
+		writePanelDialogues(sb, panel, data.Characters, layout[i].Width)
 		sb.WriteString("\n")
 	}
 }
 
 // writePanelHeader はパネルの見出しと配置指示を出力します。
-func writePanelHeader(sb *strings.Builder, index, numPanels int) {
+func writePanelHeader(sb *strings.Builder, index int, panel *comic.Panel, place panelPlacement) {
 	switch {
-	case numPanels == 1:
-		fmt.Fprintf(sb, "### PANEL 1 [FULL-PAGE]\n- POSITION: Entire page area\n")
-	case numPanels%2 == 1 && index == numPanels-1:
+	case place.Tiers == 1 && place.Column == columnFull:
+		sb.WriteString("### PANEL 1 [FULL-PAGE]\n- POSITION: Entire page area\n")
+	case place.Column == columnFull:
 		fmt.Fprintf(sb, "### PANEL %d [FULL-WIDTH IMPACT]\n", index+1)
-		sb.WriteString("- POSITION: Bottom row, covering the entire width of the page\n")
-		sb.WriteString("- COMPOSITION: Cinematic wide shot, high impact focus.\n")
+		fmt.Fprintf(sb, "- POSITION: Tier %d of %d, full page width, %d%% of the page height\n", place.Tier, place.Tiers, place.Height)
+		fmt.Fprintf(sb, "- COMPOSITION: %s\n", fullWidthComposition(panel))
 	default:
-		side := "RIGHT"
-		if index%2 == 1 {
-			side = "LEFT"
-		}
-		fmt.Fprintf(sb, "### PANEL %d [Standard]\n- POSITION: Row %d, %s column\n", index+1, index/2+1, side)
+		fmt.Fprintf(sb, "### PANEL %d [Standard]\n", index+1)
+		fmt.Fprintf(sb, "- POSITION: Tier %d of %d, %s side, %d%% of the width, %d%% of the page height\n",
+			place.Tier, place.Tiers, place.Column, place.Width, place.Height)
 	}
+}
+
+// fullWidthComposition は全幅にした理由から構図の狙いを書きます。
+// 引きの画・叫びの決めゴマ・ただの間では、同じ全幅でも欲しい絵が違います。
+func fullWidthComposition(panel *comic.Panel) string {
+	var hints []string
+	if isWideShot(panel.Shot) {
+		hints = append(hints, "Wide establishing composition; show the location across the full width")
+	}
+	if hasImpactLine(panel) {
+		hints = append(hints, "High impact; keep the subject large and dynamic")
+	}
+	if len(hints) == 0 {
+		hints = append(hints, "Let the moment breathe; a single clear focal point")
+	}
+	return strings.Join(hints, ". ") + "."
 }
 
 // writePanelScene はシーン演出と構図ガイド（生成済みパネル画像）を出力します。
@@ -279,9 +304,12 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 //
 // 同じコマに複数の発話があるときは読む順序を明示します。順序を言わないと吹き出しの
 // 配置が絵の都合で決まり、掛け合いが逆順に読めてしまいます。
-func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters) {
-	if countSpokenLines(panel) > 1 {
+func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters, width int) {
+	if lines := countSpokenLines(panel); lines > 1 {
 		sb.WriteString("- BALLOON ORDER: Place the balloons below in the listed order, read right-to-left then top-to-bottom within this panel.\n")
+		if width < 100 {
+			fmt.Fprintf(sb, "- BALLOON SPACE: %d balloons must fit inside this narrow panel. Keep the composition simple and leave the upper area clear.\n", lines)
+		}
 	}
 	for _, line := range panel.Dialogues {
 		text := strings.TrimSpace(line.Text)
