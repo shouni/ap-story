@@ -7,8 +7,8 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/shouni/gcp-kit v1.10.3
 	github.com/shouni/go-character-kit v1.2.0
-	github.com/shouni/go-comic-kit v1.4.11
-	github.com/shouni/go-gemini-client v1.17.5
+	github.com/shouni/go-comic-kit v1.4.12
+	github.com/shouni/go-gemini-client v1.18.0
 	github.com/shouni/go-http-kit v1.8.4
 	github.com/shouni/go-job-kit v1.1.0
 	github.com/shouni/go-notify v1.2.5
@@ -53,7 +53,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/shouni/gemini-image-kit v1.14.3 // indirect
+	github.com/shouni/gemini-image-kit v1.15.0 // indirect
 	github.com/slack-go/slack v0.29.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
