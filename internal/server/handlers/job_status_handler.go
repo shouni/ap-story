@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shouni/ap-story/internal/domain"
-	"github.com/shouni/ap-story/internal/repository"
 )
 
 // recordQueuedStatus はジョブ状態に queued を記録します。
@@ -51,7 +50,7 @@ func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// 状態が無いのは異常ではなく「この機能より前に作られたジョブ」でも起こるため、
 		// 404 で明確に区別できるようにします。
-		if errors.Is(err, repository.ErrJobStatusNotFound) {
+		if errors.Is(err, domain.ErrJobStatusNotFound) {
 			writeErrorJSON(w, http.StatusNotFound, "job status not found")
 			return
 		}
