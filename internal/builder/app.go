@@ -44,6 +44,11 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if ioErr != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", ioErr)
 	}
+	// resources は組み立て中の巻き戻し用で、成功して返ったあとは誰も見ません。
+	// 実行中の解放は closers（app.Container.Close）が受け持つため、成功後も
+	// 生き続ける資源は両方へ入れます。rio は成功後の storage の所有者です
+	// （Bundle.Close が factory を閉じます）。
+	closers := []io.Closer{rio}
 
 	httpClient := httpkit.New(config.DefaultHTTPTimeout)
 
@@ -65,8 +70,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	// アクセス権も無く、持たせる理由がありません）。
 	//
 	// どちらもポインタなので、Web 面では nil のまま Container に入ります。
-	// Container.Close は Ops の nil を見ており、Pipeline を参照するのは
-	// BuildHandlers の ServesWorker 分岐だけです。
+	// Pipeline を参照するのは BuildHandlers の ServesWorker 分岐だけです。
 	var ops *ports.Operations
 	var pipelineRunner *pipeline.Runner
 	if cfg.Server.Role.ServesWorker() {
@@ -75,6 +79,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 			return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
 		}
 		ops = builtOps
+		closers = append(closers, ops)
 
 		notifier, notifierErr := buildNotifier(httpClient.WithoutRetry(), cfg)
 		if notifierErr != nil {
@@ -96,7 +101,6 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	// nil のポインタを domain.TaskQueue に代入すると「非 nil のインターフェースが nil を保持する」
 	// 状態になり、Closers の nil チェックをすり抜けて nil レシーバーで Close が呼ばれます。
 	// それを避けるため、組み立てたときにだけインターフェースと Closers へ入れます。
-	closers := []io.Closer{rio}
 	var taskQueue domain.TaskQueue
 	if cfg.Server.Role.ServesWeb() {
 		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg)

@@ -38,7 +38,11 @@ type Container struct {
 	Characters *characterkit.Characters
 	// HTTPClient は外部 HTTP 通信（go-web-reader 等）に使う汎用クライアントです。
 	HTTPClient httpkit.HTTPClient
-	Closers    []io.Closer
+	// Closers は、組み立て時に開いた資源です。Container.Close がまとめて閉じます。
+	// Close が個々のフィールドを見ないのは、資源が増えたときに builder が append
+	// するだけで済ませるためです。HistoryCache だけは Close が error を返さず
+	// io.Closer を満たさないので、末尾で個別に閉じます。
+	Closers []io.Closer
 }
 
 // RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。
@@ -49,6 +53,9 @@ type Container struct {
 type RemoteIO = remoteio.Bundle
 
 // Close は、Container が保持するすべての外部接続リソースを安全に解放します。
+//
+// エラーを返さないのは、呼び出し元が server.Run の defer 1 箇所きりで、返したところで
+// slog.Error 以外の行き先が無いためです。
 func (c *Container) Close() {
 	for _, closer := range c.Closers {
 		if closer == nil {
@@ -56,11 +63,6 @@ func (c *Container) Close() {
 		}
 		if err := closer.Close(); err != nil {
 			slog.Error("failed to close resource", "error", err)
-		}
-	}
-	if c.Ops != nil {
-		if err := c.Ops.Close(); err != nil {
-			slog.Error("failed to close comic operations", "error", err)
 		}
 	}
 	if c.HistoryCache != nil {
