@@ -105,8 +105,8 @@ github.com/shouni/gemini-image-kit v1.14.3 h1:atzNVOf1LkVj5i5ltn8dUlu0t0dcz1NsLi
 github.com/shouni/gemini-image-kit v1.14.3/go.mod h1:h5ZRae47EBlQxjxgaTFJd0yXH0Wv/CBaQW+MjhYKxWU=
 github.com/shouni/go-character-kit v1.2.0 h1:05i4cSee0GLDNYr+0tUqqrb8ke5IRG3BL8dPzjyHS+Q=
 github.com/shouni/go-character-kit v1.2.0/go.mod h1:ToInOMBIk1G9MO4CxzJ/g0eXTW1d6Wycp8ShKIG4inM=
-github.com/shouni/go-comic-kit v1.4.10 h1:Ouq/tL3f+dZ4/AVbNUuQ7Omdw3ApfdUDML8bwu+IESU=
-github.com/shouni/go-comic-kit v1.4.10/go.mod h1:9tnzt1AYV9Ow6usH9tvyEZ7fzsaq/fPaglKK2RITJRA=
+github.com/shouni/go-comic-kit v1.4.11 h1:5zlALiHG7RqDgnhZdIhPfM/qV8lBl9JT5UDjs8g63Ck=
+github.com/shouni/go-comic-kit v1.4.11/go.mod h1:4o1qWntjB8NntmvQMPNhETuMNsdiWMS+oIF0Rf9YXdw=
 github.com/shouni/go-gemini-client v1.17.5 h1:7fcTFOqJG0tiwCXovj4C5PzMthRYIHlJVwwjgTzIHRw=
 github.com/shouni/go-gemini-client v1.17.5/go.mod h1:IHbUFMFEqzgludWGfXL3b9mPDP/hW0kVHruEQ/Ha1ik=
 github.com/shouni/go-http-kit v1.8.4 h1:psm/YCQ50YOffS87jNe81cVgy5gzsIuxb4rjzjON/EQ=
@@ -115,8 +115,8 @@ github.com/shouni/go-job-kit v1.1.0 h1:ZWAeT+LE+PB5riiyBiPfvolDKCP9g3gu8a10qXnY0
 github.com/shouni/go-job-kit v1.1.0/go.mod h1:BPdt7PzZoQzx//6mLygWzYjDKEOiO0HphBHWSuQbGSw=
 github.com/shouni/go-notify v1.2.5 h1:kIgui8e//dbxTxhaFmb6edz2wFUiJws1lES9sYkx2fU=
 github.com/shouni/go-notify v1.2.5/go.mod h1:jzaQKK9wUxbEKilmQU30yH0Y/B0nyfi/F/SNCDsJBzw=
-github.com/shouni/go-prompt-kit v1.5.1 h1:oxs1zqeKBrcOYXd3W1y8kfShndzTbqEAmTO0OfCC/Ic=
-github.com/shouni/go-prompt-kit v1.5.1/go.mod h1:KMaeMUzVKc8LQMBe9NFBTtDteY4z8fJme96VEe0K9jM=
+github.com/shouni/go-prompt-kit v1.5.2 h1:16rJobn4x8Nq0QLDf4XbRuHqVyJ5jGv0MGewUBBizYw=
+github.com/shouni/go-prompt-kit v1.5.2/go.mod h1:KMaeMUzVKc8LQMBe9NFBTtDteY4z8fJme96VEe0K9jM=
 github.com/shouni/go-remote-io v1.9.0 h1:soOCs80UMvAC/wbyess4sn+WafKJZxdOArNsXeCafEM=
 github.com/shouni/go-remote-io v1.9.0/go.mod h1:eH/rBfJFQy+hylTq5eLzyj/5NDvvDGjNxEStRXsCw9s=
 github.com/shouni/go-utils v1.6.0 h1:euvfrBtceIQtqbQfDuRL21KoQy+d7wVYQj6eD+QVUB4=
