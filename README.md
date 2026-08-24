@@ -193,7 +193,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 | `GET /characters/{characterID}/history` | セッション | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
 | `GET /history` | セッション | 作品一覧画面（ナビ表記は Works。ページング・削除ボタン） |
 | `GET /history/{jobID}` | セッション | 作品詳細画面（章・パネル・ページ・デザインシートの閲覧） |
-| `GET /static/*` | なし | CSS/JS 静的アセット |
+| `GET /static/*` | なし | CSS/JS 静的アセット。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
 | `GET /api/comic-options` | セッション or M2M | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
 | `POST /api/comics` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
 | `GET /api/comics` | セッション or M2M | 履歴一覧（state の列挙、ページング） |
