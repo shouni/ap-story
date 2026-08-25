@@ -14,7 +14,7 @@ require (
 	github.com/shouni/go-notify v1.2.5
 	github.com/shouni/go-prompt-kit v1.5.2
 	github.com/shouni/go-remote-io v1.9.0
-	github.com/shouni/go-utils v1.6.0
+	github.com/shouni/go-utils v1.6.1
 	github.com/shouni/netarmor v1.2.4
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
