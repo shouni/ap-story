@@ -78,8 +78,9 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		if opsErr != nil {
 			return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
 		}
+		// go-comic-kit v1.6.0 から Operations は解放すべきリソースを持ちません
+		// （参照画像のキャッシュが読み出し時失効になり、掃除用 goroutine が消えたため）。
 		ops = builtOps
-		closers = append(closers, ops)
 
 		notifier, notifierErr := buildNotifier(httpClient.WithoutRetry(), cfg)
 		if notifierErr != nil {

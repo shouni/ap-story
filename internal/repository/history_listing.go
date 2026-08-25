@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
+	kitports "github.com/shouni/go-comic-kit/ports"
 
 	"github.com/shouni/go-comic-kit/store"
 	"github.com/shouni/go-job-kit/joblist"
@@ -38,8 +39,7 @@ func (r *ComicRepository) ListHistoryPage(ctx context.Context, page int, perPage
 	// ID に埋め込まれた生成時刻で並べます。既定の ID 降順に頼れないのは、採番形式を
 	// "c{時刻}-{乱数}" から jobid.New の "c-{時刻}-{乱数}" へ移行したためです。
 	// 辞書順では "c-" < "c2" となり、新形式の ID が旧形式より常に後ろに回ります。
-	all, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, r.loadHistoryOrFallback,
-		paging.WithSortKey(jobid.SortKey),
+	all, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, jobid.SortKey, r.loadHistoryOrFallback,
 		paging.WithConcurrency(historyLoadConcurrency),
 	)
 	if err != nil {
@@ -146,8 +146,8 @@ func historyFromState(jobID string, state *kitcomic.MangaState) domain.ComicHist
 // GetState は指定ジョブの MangaState を取得します。
 //
 // state がまだ無い場合は domain.ErrStateNotFound、あるはずなのに読めなかった場合は
-// domain.ErrStateUnavailable を返します。切り分けには remoteio が未存在を
-// os.ErrNotExist に包んで返すことを使うので、ストレージへの往復は増えません。
+// domain.ErrStateUnavailable を返します。切り分けは store.Load が返す go-comic-kit の
+// 番兵（ports.ErrNotFound）で行うので、ストレージへの往復は増えません。
 //
 // どちらにも原因のエラーを包んであります。以前はすべてを「見つかりません」に潰し、
 // 原因も捨てていたため、権限エラーも GCS 障害も画面には「作品がありません」と出て、
@@ -162,7 +162,10 @@ func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic
 	}
 	state, err := store.Load(ctx, r.reader, statePath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		// go-comic-kit v1.6.0 から store.Load は失敗を ports の番兵で分類します。
+		// 「まだ無い」は ports.ErrNotFound で、原因の os.ErrNotExist は包まれません。
+		// 壊れた state（ports.ErrInvalidRequest）は「あるのに読めない」側に倒します。
+		if errors.Is(err, kitports.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%w (job %q): %w", domain.ErrStateNotFound, jobID, err)
 		}
 		return nil, fmt.Errorf("%w (job %q): %w", domain.ErrStateUnavailable, jobID, err)
