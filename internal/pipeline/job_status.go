@@ -81,11 +81,9 @@ func (s statusRecorder) record(
 	}
 
 	status := domain.JobStatus{
-		Status: jobstatus.Status{
-			JobID:   task.JobID,
-			Command: string(task.Command),
-			State:   state,
-		},
+		JobID:   task.JobID,
+		Command: string(task.Command),
+		State:   state,
 	}
 
 	s.recorder.Record(ctx, task.JobID, status, func(next, prev *domain.JobStatus) {

@@ -51,13 +51,11 @@ type JobStatus struct {
 // NewQueuedJobStatus は、キュー投入直後のジョブ状態を組み立てます。
 func NewQueuedJobStatus(task Task, now time.Time) JobStatus {
 	return JobStatus{
-		Status: jobstatus.Status{
-			JobID:     task.JobID,
-			Command:   string(task.Command),
-			State:     JobStateQueued,
-			QueuedAt:  now,
-			UpdatedAt: now,
-		},
+		JobID:     task.JobID,
+		Command:   string(task.Command),
+		State:     JobStateQueued,
+		QueuedAt:  now,
+		UpdatedAt: now,
 	}
 }
 

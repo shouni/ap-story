@@ -155,18 +155,14 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 	}
 
 	pc := &Context{
-		State: State{
-			Task:               task,
-			OutputDir:          outputDir,
-			DesignJobOutputDir: designJobOutputDir,
-			CharacterOutputDir: domain.CharacterAssetDir(r.deps.Bucket),
-		},
-		Services: Services{
-			Ops:    r.deps.Ops,
-			Reader: r.deps.Reader,
-			Writer: r.deps.Writer,
-			Layout: r.deps.Layout,
-		},
+		Task:               task,
+		OutputDir:          outputDir,
+		DesignJobOutputDir: designJobOutputDir,
+		CharacterOutputDir: domain.CharacterAssetDir(r.deps.Bucket),
+		Ops:                r.deps.Ops,
+		Reader:             r.deps.Reader,
+		Writer:             r.deps.Writer,
+		Layout:             r.deps.Layout,
 	}
 
 	steps, err := r.deps.Planner.Plan(task)
