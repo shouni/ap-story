@@ -105,8 +105,12 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
 	// 画像生成コストがそのまま二重に発生します。
+	// 未完了ならここで running を記録する。入力検証より前に置くことで、全試行が
+	// Attempts に載り、どのジョブも必ず running を経由して終端に至る。
+	// OutputDir は検証に依存しないので先に解決する（解決できなければ記録は判定だけ）。
+	outputDir, _ := domain.JobOutputDir(r.deps.Bucket, task.JobID)
 	status := newStatusRecorder(r.deps.JobStatus)
-	done, err := status.alreadySucceeded(ctx, task.JobID)
+	done, err := status.begin(ctx, &task, outputDir)
 	if err != nil {
 		// 状態を読めない。判断できないので再配信に委ねる。
 		return err
@@ -114,13 +118,6 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	if done {
 		slog.InfoContext(ctx, "skipping already completed job")
 		return nil
-	}
-
-	// 入力検証より前に記録する。全試行が Attempts に載り、どのジョブも必ず
-	// running を経由して終端に至る。OutputDir は検証に依存しないので先に解決する。
-	outputDir, dirErr := domain.JobOutputDir(r.deps.Bucket, task.JobID)
-	if dirErr == nil {
-		status.markRunning(ctx, &task, outputDir)
 	}
 
 	title, err := r.run(ctx, &task)
