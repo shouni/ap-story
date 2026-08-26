@@ -1,21 +1,21 @@
 module github.com/shouni/ap-story
 
-go 1.26
+go 1.27
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/shouni/gcp-kit v1.10.3
-	github.com/shouni/go-character-kit v1.2.0
-	github.com/shouni/go-comic-kit v1.4.14
-	github.com/shouni/go-gemini-client v1.19.0
-	github.com/shouni/go-http-kit v1.8.5
-	github.com/shouni/go-job-kit v1.1.2
-	github.com/shouni/go-notify v1.2.5
-	github.com/shouni/go-prompt-kit v1.5.2
-	github.com/shouni/go-remote-io v1.9.0
-	github.com/shouni/go-utils v1.6.1
-	github.com/shouni/netarmor v1.2.4
+	github.com/shouni/gcp-kit v1.11.0
+	github.com/shouni/go-character-kit v1.3.0
+	github.com/shouni/go-comic-kit v1.6.0
+	github.com/shouni/go-gemini-client v1.20.0
+	github.com/shouni/go-http-kit v1.9.0
+	github.com/shouni/go-job-kit v1.2.0
+	github.com/shouni/go-notify v1.3.0
+	github.com/shouni/go-prompt-kit v1.7.0
+	github.com/shouni/go-remote-io v1.10.1
+	github.com/shouni/go-utils v1.7.0
+	github.com/shouni/netarmor v1.3.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
 )
@@ -33,7 +33,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.60.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.60.0 // indirect
-	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.39.0 // indirect
@@ -53,18 +53,18 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/shouni/gemini-image-kit v1.15.1 // indirect
+	github.com/shouni/gemini-image-kit v1.16.0 // indirect
 	github.com/slack-go/slack v0.29.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.45.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0 // indirect
-	go.opentelemetry.io/otel v1.45.0 // indirect
-	go.opentelemetry.io/otel/metric v1.45.0 // indirect
+	go.opentelemetry.io/otel v1.46.0 // indirect
+	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.45.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.45.0 // indirect
-	go.opentelemetry.io/otel/trace v1.45.0 // indirect
+	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
@@ -73,10 +73,10 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/api v0.293.0 // indirect
-	google.golang.org/genai v1.69.0 // indirect
+	google.golang.org/genai v1.70.0 // indirect
 	google.golang.org/genproto v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/grpc v1.83.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260825221802-da73d73af1c5 // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )

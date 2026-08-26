@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-notify/notify"
@@ -123,16 +122,14 @@ func (s *SlackAdapter) resultPageURL(task domain.Task) (string, string) {
 		if len(task.CharacterIDs) == 1 {
 			pagePath = "/characters/" + task.CharacterIDs[0]
 		}
-		resultURL, err := url.JoinPath(s.serviceURL, pagePath)
-		if err != nil {
-			return "", ""
+		if resultURL := notify.JoinURL(s.serviceURL, pagePath); resultURL != "" {
+			return resultURL, "Character Page"
 		}
-		return resultURL, "Character Page"
-	}
-
-	resultURL, err := url.JoinPath(s.serviceURL, "/history", task.JobID)
-	if err != nil {
 		return "", ""
 	}
-	return resultURL, "History Detail"
+
+	if resultURL := notify.JoinURL(s.serviceURL, "/history", task.JobID); resultURL != "" {
+		return resultURL, "History Detail"
+	}
+	return "", ""
 }

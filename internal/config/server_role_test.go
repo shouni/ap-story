@@ -209,7 +209,7 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
 	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
 	t.Run("既定値を持たない", func(t *testing.T) {
-		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
+		field, ok := reflect.TypeFor[AIConfig]().FieldByName("PipelineTimeout")
 		require.True(t, ok)
 		require.Empty(t, field.Tag.Get("envDefault"), "既定値を持たせないでください")
 

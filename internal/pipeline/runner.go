@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -93,11 +94,23 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 		slog.String("command", string(task.Command)),
 	)
 
+	// ログの相関に加えて、pprof のゴルーチンラベルにも同じ値を載せます。
+	// Go 1.27 以降、ラベルは**パニックのトレースバックの見出し行にも出る**ため、
+	// 落ちたときにどのジョブだったかがスタックだけで分かります。slogctx は
+	// panic の経路では効かないので、そこを埋めるのがこちらの役目です。
+	// ラベルは子ゴルーチン（並列生成など）へも継承されます。
+	ctx = pprof.WithLabels(ctx, pprof.Labels("job_id", task.JobID, "command", string(task.Command)))
+	pprof.SetGoroutineLabels(ctx)
+
 	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
 	// 画像生成コストがそのまま二重に発生します。
+	// 未完了ならここで running を記録する。入力検証より前に置くことで、全試行が
+	// Attempts に載り、どのジョブも必ず running を経由して終端に至る。
+	// OutputDir は検証に依存しないので先に解決する（解決できなければ記録は判定だけ）。
+	outputDir, _ := domain.JobOutputDir(r.deps.Bucket, task.JobID)
 	status := newStatusRecorder(r.deps.JobStatus)
-	done, err := status.alreadySucceeded(ctx, task.JobID)
+	done, err := status.begin(ctx, &task, outputDir)
 	if err != nil {
 		// 状態を読めない。判断できないので再配信に委ねる。
 		return err
@@ -105,13 +118,6 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	if done {
 		slog.InfoContext(ctx, "skipping already completed job")
 		return nil
-	}
-
-	// 入力検証より前に記録する。全試行が Attempts に載り、どのジョブも必ず
-	// running を経由して終端に至る。OutputDir は検証に依存しないので先に解決する。
-	outputDir, dirErr := domain.JobOutputDir(r.deps.Bucket, task.JobID)
-	if dirErr == nil {
-		status.markRunning(ctx, &task, outputDir)
 	}
 
 	title, err := r.run(ctx, &task)
@@ -155,18 +161,14 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 	}
 
 	pc := &Context{
-		State: State{
-			Task:               task,
-			OutputDir:          outputDir,
-			DesignJobOutputDir: designJobOutputDir,
-			CharacterOutputDir: domain.CharacterAssetDir(r.deps.Bucket),
-		},
-		Services: Services{
-			Ops:    r.deps.Ops,
-			Reader: r.deps.Reader,
-			Writer: r.deps.Writer,
-			Layout: r.deps.Layout,
-		},
+		Task:               task,
+		OutputDir:          outputDir,
+		DesignJobOutputDir: designJobOutputDir,
+		CharacterOutputDir: domain.CharacterAssetDir(r.deps.Bucket),
+		Ops:                r.deps.Ops,
+		Reader:             r.deps.Reader,
+		Writer:             r.deps.Writer,
+		Layout:             r.deps.Layout,
 	}
 
 	steps, err := r.deps.Planner.Plan(task)

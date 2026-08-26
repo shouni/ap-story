@@ -28,11 +28,9 @@ func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	repo := newStatusRepo(store)
 
 	err := repo.Save(context.Background(), statusTestJobID, domain.JobStatus{
-		Status: jobstatus.Status{
-			JobID:   statusTestJobID,
-			Command: "compose_comic",
-			State:   domain.JobStateQueued,
-		},
+		JobID:   statusTestJobID,
+		Command: "compose_comic",
+		State:   domain.JobStateQueued,
 	})
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -51,13 +49,11 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 
 	repo := newStatusRepo(newMemStore())
 	original := domain.JobStatus{
-		Status: jobstatus.Status{
-			JobID:    statusTestJobID,
-			Command:  "compose_comic",
-			State:    domain.JobStateSucceeded,
-			Title:    "テスト作品",
-			Attempts: 3,
-		},
+		JobID:     statusTestJobID,
+		Command:   "compose_comic",
+		State:     domain.JobStateSucceeded,
+		Title:     "テスト作品",
+		Attempts:  3,
 		OutputDir: "gs://bucket/comics/" + statusTestJobID,
 	}
 	if err := repo.Save(context.Background(), original.JobID, original); err != nil {

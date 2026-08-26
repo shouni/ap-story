@@ -61,7 +61,7 @@ func TestNewJobIDCarriesCreatedAt(t *testing.T) {
 // 作成日時の降順に並ぶことを確認します。
 //
 // 採番形式を jobid.New へ寄せたことで、辞書順では新旧が分離します（"c-" < "c2" のため、
-// 新形式の ID が常に旧形式より後ろに回る）。履歴の並び順は paging.WithSortKey(jobid.SortKey)
+// 新形式の ID が常に旧形式より後ろに回る）。履歴の並び順は paging.LoadPage の sortKey（jobid.SortKey）
 // に依存しており、既定の ID 降順へ戻すと一覧はエラーにならず静かに並び替わります。
 func TestNewJobIDSortsAgainstLegacyIDs(t *testing.T) {
 	t.Parallel()
