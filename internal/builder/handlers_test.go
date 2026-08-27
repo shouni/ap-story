@@ -3,7 +3,7 @@ package builder
 import (
 	"testing"
 
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/worker"
 	"github.com/stretchr/testify/require"
 
@@ -26,7 +26,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 		{name: "どちらも nil (web ロール)", h: &AppHandlers{}},
 		{
 			name:    "TaskAuth だけある",
-			h:       &AppHandlers{TaskAuth: auth.NewTaskVerifier("https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
+			h:       &AppHandlers{TaskAuth: oidc.New("https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
 			wantErr: true,
 		},
 		{

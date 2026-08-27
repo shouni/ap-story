@@ -13,6 +13,7 @@ import (
 
 	"github.com/shouni/ap-story/assets"
 	"github.com/shouni/ap-story/internal/builder"
+	"github.com/shouni/gcp-kit/auth"
 )
 
 // NewRouter は、ミドルウェアとルーティングを統合した http.Handler を構築します。
@@ -136,31 +137,35 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		// ブラウザセッション認証(Cookie+CSRF)、またはM2M呼び出し元はOIDC Bearerトークンで認証
-		r.Use(h.Auth.ProtectedMiddleware(h.M2M))
+		// ブラウザセッション認証(Cookie+CSRF)、またはM2M呼び出し元はOIDC Bearerトークンで認証。
+		// 人向けの方式を最後に置くと、どれも成立しなかったときログイン画面へ送られます
+		// （JSON を求めている相手には 401 が返ります）。
+		r.Use(auth.Protected(h.M2M, h.Auth))
 
 		if h.Web != nil {
-			// 未認証アクセスは auth.Handler.Middleware が /auth/login へリダイレクトする。
+			// 未認証アクセスは session.Handler が /auth/login へリダイレクトする。
 			r.Get("/", h.Web.Home)
 			r.Get("/compose", h.Web.ComposeForm)
 			r.Post("/compose", h.Web.EnqueueComicForm)
 			r.Get("/design-sheets", h.Web.DesignSheetForm)
 			r.Post("/design-sheets", h.Web.EnqueueDesignSheetForm)
-			r.Post("/api/design-sheets", h.Web.EnqueueDesignSheet)
+
+			// 人と機械が同じものを見る経路です。ルートは 1 本で、表現は Accept が
+			// 決めます（handlers/negotiated.go）。
 			r.Route("/characters", func(r chi.Router) {
-				r.Get("/", h.Web.ServeCharacters)
-				r.Get("/{characterID}", h.Web.ServeCharacterDetail)
+				r.Get("/", h.Web.Characters)
+				r.Get("/{characterID}", h.Web.Character)
 				r.Get("/{characterID}/history", h.Web.ServeCharacterHistory)
 			})
 			r.Route("/history", func(r chi.Router) {
-				r.Get("/", h.Web.ServeHistory)
-				r.Get("/{jobID}", h.Web.ServeDetails)
+				r.Get("/", h.Web.Comics)
+				r.Get("/{jobID}", h.Web.Comic)
 			})
 
+			// 機械にしか無い操作です。対応する画面がありません。
+			r.Post("/api/design-sheets", h.Web.EnqueueDesignSheet)
 			r.Route("/api/comics", func(r chi.Router) {
 				r.Post("/", h.Web.EnqueueComic)
-				r.Get("/", h.Web.ListComics)
-				r.Get("/{jobID}", h.Web.GetComic)
 				r.Delete("/{jobID}", h.Web.DeleteComic)
 				r.Get("/{jobID}/script", h.Web.GetComicScript)
 				r.Put("/{jobID}/script", h.Web.UpdateComicScript)
@@ -169,8 +174,6 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 				r.Get("/{jobID}/status", h.Web.JobStatus)
 			})
 			r.Get("/api/comic-options", h.Web.ComicOptions)
-			r.Get("/api/characters", h.Web.ListCharacters)
-			r.Get("/api/characters/{characterID}", h.Web.GetCharacterDetail)
 			r.Get("/api/characters/images/*", h.Web.RedirectCharacterImage)
 			r.Get("/api/characters/reference/*", h.Web.RedirectCharacterReferenceImage)
 			r.Delete("/api/characters/{characterID}/images/{jobID}", h.Web.DeleteCharacterDesign)
@@ -187,8 +190,9 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)
-		r.Use(h.TaskAuth.Middleware)
+		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)。
+		// 失敗はセッションへフォールバックせず、その場で止まります。
+		r.Use(auth.Require(h.TaskAuth))
 		r.Post("/tasks/generate", h.Worker.ProcessTask)
 	})
 }
