@@ -147,8 +147,8 @@ github.com/shouni/go-character-kit v1.3.0 h1:hVX6aPRZELLulNGDRPGR6lgzlrWQsNDorrN
 github.com/shouni/go-character-kit v1.3.0/go.mod h1:y0xe3U+Jk1zF4t1+KbxQ/ADgbMbzcDyhfj47NRSOpYE=
 github.com/shouni/go-comic-kit v1.6.0 h1:0AdSIM4AkRM0/jd2vKbOQxlASIXqVKid3xmjzc0qowE=
 github.com/shouni/go-comic-kit v1.6.0/go.mod h1:R7qeTiIISWEXF3572DjRnMM8KhtLMPV1wpmkYmQbOWg=
-github.com/shouni/go-gemini-client v1.20.0 h1:7yR0O2aNQjZPUiJqppGCPg0IQN3zHdeM1sYMG56Mm8o=
-github.com/shouni/go-gemini-client v1.20.0/go.mod h1:y0oLX8mM0ngVrqlAWw0SElflRf6iw4Izzd/Cwk4OAJw=
+github.com/shouni/go-gemini-client v1.21.0 h1:SJ96BaYx6n+8/Ob4YCESecvqCMkqcbf3ekHKzVl8QGI=
+github.com/shouni/go-gemini-client v1.21.0/go.mod h1:IH4s5hvGttCWkhn2GGXGJrr9Rbb0BC5B3j6CmjUxE9g=
 github.com/shouni/go-http-kit v1.9.0 h1:EUG1Xpa0U9uucZvT9/WG6L5iRIxQs0mmEQzpORk8qr8=
 github.com/shouni/go-http-kit v1.9.0/go.mod h1:HV2+wZNJR/SxNpYrlu2i8ROw64sQO1thdZ3mw9olQqc=
 github.com/shouni/go-job-kit v1.2.0 h1:f6mTBhcNkwZvOkbhH0ZroBLqQUETD1za7lfocBivRsA=
