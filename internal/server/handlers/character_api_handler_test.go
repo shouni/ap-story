@@ -16,7 +16,8 @@ func TestListCharactersReturnsAllCharacters(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/characters", nil)
 	rec := httptest.NewRecorder()
 
-	h.ListCharacters(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Characters(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -48,7 +49,8 @@ func TestGetCharacterDetailReturnsReferencesAndHistory(t *testing.T) {
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/characters/zundamon", "", "characterID", "zundamon")
 	rec := httptest.NewRecorder()
 
-	h.GetCharacterDetail(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -72,7 +74,8 @@ func TestGetCharacterDetailReturns404ForUnknownCharacter(t *testing.T) {
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/characters/unknown", "", "characterID", "unknown")
 	rec := httptest.NewRecorder()
 
-	h.GetCharacterDetail(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)

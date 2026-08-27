@@ -149,33 +149,41 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			r.Post("/compose", h.Web.EnqueueComicForm)
 			r.Get("/design-sheets", h.Web.DesignSheetForm)
 			r.Post("/design-sheets", h.Web.EnqueueDesignSheetForm)
-			r.Post("/api/design-sheets", h.Web.EnqueueDesignSheet)
+
+			// 人と機械が同じものを見る経路です。ルートは 1 本で、表現は Accept が
+			// 決めます（handlers/negotiated.go）。
 			r.Route("/characters", func(r chi.Router) {
-				r.Get("/", h.Web.ServeCharacters)
-				r.Get("/{characterID}", h.Web.ServeCharacterDetail)
+				r.Get("/", h.Web.Characters)
+				r.Get("/{characterID}", h.Web.Character)
 				r.Get("/{characterID}/history", h.Web.ServeCharacterHistory)
 			})
 			r.Route("/history", func(r chi.Router) {
-				r.Get("/", h.Web.ServeHistory)
-				r.Get("/{jobID}", h.Web.ServeDetails)
+				r.Get("/", h.Web.Comics)
+				r.Get("/{jobID}", h.Web.Comic)
 			})
 
+			// 機械にしか無い操作です。対応する画面がありません。
+			r.Post("/api/design-sheets", h.Web.EnqueueDesignSheet)
 			r.Route("/api/comics", func(r chi.Router) {
 				r.Post("/", h.Web.EnqueueComic)
-				r.Get("/", h.Web.ListComics)
-				r.Get("/{jobID}", h.Web.GetComic)
 				r.Delete("/{jobID}", h.Web.DeleteComic)
 				r.Get("/{jobID}/script", h.Web.GetComicScript)
 				r.Put("/{jobID}/script", h.Web.UpdateComicScript)
 				r.Post("/{jobID}/regenerate", h.Web.RegenerateComic)
 				r.Get("/{jobID}/images/*", h.Web.RedirectComicImage)
 				r.Get("/{jobID}/status", h.Web.JobStatus)
+
+				// 以下は /history へ統合済みです。ap-mcp が移るまでの別名で、
+				// 実装は同じものを指しています。移行後にこの 2 行を消します。
+				r.Get("/", h.Web.Comics)
+				r.Get("/{jobID}", h.Web.Comic)
 			})
 			r.Get("/api/comic-options", h.Web.ComicOptions)
-			r.Get("/api/characters", h.Web.ListCharacters)
-			r.Get("/api/characters/{characterID}", h.Web.GetCharacterDetail)
 			r.Get("/api/characters/images/*", h.Web.RedirectCharacterImage)
 			r.Get("/api/characters/reference/*", h.Web.RedirectCharacterReferenceImage)
+			// 同上。/characters へ統合済みの別名です。
+			r.Get("/api/characters", h.Web.Characters)
+			r.Get("/api/characters/{characterID}", h.Web.Character)
 			r.Delete("/api/characters/{characterID}/images/{jobID}", h.Web.DeleteCharacterDesign)
 		}
 	})

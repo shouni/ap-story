@@ -1,30 +1,10 @@
 package handlers
 
 import (
-	"errors"
-	"log/slog"
-	"net/http"
 	"slices"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
-
-	"github.com/go-chi/chi/v5"
-
-	"github.com/shouni/ap-story/internal/domain"
 )
-
-// ServeHistory は GET /history を処理し、ページング付きの履歴一覧画面を表示します。
-// データ取得は JSON API（ListComics）と同一で、レスポンス形式だけが HTML になります。
-func (h *Handler) ServeHistory(w http.ResponseWriter, r *http.Request) {
-	page := parseHistoryPage(r)
-	historyPage, err := h.repository.ListHistoryPage(r.Context(), page, defaultHistoryPageSize)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to list comic history", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	h.render(w, r, http.StatusOK, "history.html", "作品履歴", historyPage)
-}
 
 // detailPanel は詳細画面の1パネル分の表示データです。
 type detailPanel struct {
@@ -87,36 +67,6 @@ type historyDetailData struct {
 // historyPendingData は history_pending.html テンプレートに渡すデータです。
 type historyPendingData struct {
 	JobID string
-}
-
-// ServeDetails は GET /history/{jobID} を処理し、作品詳細画面
-// （章立て・パネル・ページ・デザインシート）を表示します。
-// state の取得は JSON API（GetComic）と同一で、レスポンス形式だけが HTML になります。
-// state がまだ存在しない場合（生成中の直リンクなど）は、生の 404 ではなく
-// 「処理中かもしれない」旨の案内画面を返します。
-//
-// **読めなかっただけの場合はその案内を出しません。** 権限不足や GCS 障害で
-// 「処理中かもしれません」と案内すると、待てば表示されると読めてしまい、
-// 実際には待っても直りません。
-func (h *Handler) ServeDetails(w http.ResponseWriter, r *http.Request) {
-	jobID := chi.URLParam(r, "jobID")
-	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, "invalid job id", http.StatusBadRequest)
-		return
-	}
-
-	state, err := h.repository.GetState(r.Context(), jobID)
-	if err != nil {
-		if !errors.Is(err, domain.ErrStateNotFound) {
-			slog.ErrorContext(r.Context(), "failed to load comic state", "job_id", jobID, "error", err)
-			http.Error(w, "作品の読み込みに失敗しました。時間をおいて開き直してください。", http.StatusBadGateway)
-			return
-		}
-		h.render(w, r, http.StatusNotFound, "history_pending.html", "処理中または未存在", historyPendingData{JobID: jobID})
-		return
-	}
-
-	h.render(w, r, http.StatusOK, "history_detail.html", state.Title, h.buildDetailData(jobID, state))
 }
 
 // buildDetailData は MangaState を詳細画面用の表示データへ変換します。

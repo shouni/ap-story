@@ -20,7 +20,7 @@ func TestServeCharactersRendersRosterWithMasterReferenceThumbnail(t *testing.T) 
 	req := httptest.NewRequest(http.MethodGet, "/characters", nil)
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacters(rec, req)
+	h.Characters(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -53,7 +53,7 @@ func TestServeCharacterDetailRendersReferencesAndHistoryNewestFirst(t *testing.T
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/zundamon", "", "characterID", "zundamon")
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacterDetail(rec, req)
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -79,7 +79,7 @@ func TestServeCharacterDetailRendersMultipleReferenceAspectRatios(t *testing.T) 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/metan", "", "characterID", "metan")
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacterDetail(rec, req)
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -102,7 +102,7 @@ func TestServeCharacterDetailRendersEmptyState(t *testing.T) {
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/zundamon", "", "characterID", "zundamon")
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacterDetail(rec, req)
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -119,7 +119,7 @@ func TestServeCharacterDetailReturns404ForUnknownCharacter(t *testing.T) {
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/unknown", "", "characterID", "unknown")
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacterDetail(rec, req)
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -151,7 +151,7 @@ func TestServeCharacterDetailCapsHistoryWithLinkToFullList(t *testing.T) {
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/zundamon", "", "characterID", "zundamon")
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacterDetail(rec, req)
+	h.Character(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)

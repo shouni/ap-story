@@ -191,20 +191,18 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 | `GET /characters` | セッション | キャラクター一覧（マスター参照画像のサムネイル付き） |
 | `GET /characters/{characterID}` | セッション | キャラクター詳細（上段: サイズ/アスペクト比ごとのマスター参照画像、下段: デザインシート生成履歴の最新12件+削除ボタン。新しい順、合成生成は対象外） |
 | `GET /characters/{characterID}/history` | セッション | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
-| `GET /history` | セッション | 作品一覧画面（ナビ表記は Works。ページング・削除ボタン） |
-| `GET /history/{jobID}` | セッション | 作品詳細画面（章・パネル・ページ・デザインシートの閲覧） |
+| `GET /history` | セッション or M2M | 作品一覧。`Accept: application/json` なら state の列挙（ページング）、ブラウザなら一覧画面。`GET /api/comics` は ap-mcp 移行までの別名 |
+| `GET /history/{jobID}` | セッション or M2M | 作品詳細。JSON なら `comic_state.json` の内容、ブラウザなら詳細画面。`GET /api/comics/{jobID}` は別名 |
 | `GET /static/*` | なし | CSS/JS 静的アセット。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
 | `GET /api/comic-options` | セッション or M2M | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
 | `POST /api/comics` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
-| `GET /api/comics` | セッション or M2M | 履歴一覧（state の列挙、ページング） |
-| `GET /api/comics/{jobID}` | セッション or M2M | 詳細（comic_state.json の内容） |
 | `GET /api/comics/{jobID}/script` | セッション or M2M | 台本の読み出し（章の見出しと各コマのセリフだけ。生成記録やプロンプトは含まない） |
 | `PUT /api/comics/{jobID}/script` | セッション or M2M | 台本の保存（セリフのみ差し替え。合成し直すべきページを `affected_pages` で返す） |
 | `POST /api/comics/{jobID}/regenerate` | セッション or M2M | 再生成ジョブの投入（command + パラメータ） |
 | `GET /api/comics/{jobID}/images/*` | セッション or M2M | パネル・ページ画像への署名 URL リダイレクト |
 | `POST /api/design-sheets` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・style_mode・model_override・reference_url_override・visual_cues_override は任意） |
-| `GET /api/characters` | セッション or M2M | キャラクター一覧（id・name・reference_url を返す。画像 URL は gs:// のまま） |
-| `GET /api/characters/{characterID}` | セッション or M2M | キャラクター詳細（マスター参照画像 + 生成履歴全件、新しい順） |
+| `GET /characters`（`/api/characters` は別名） | セッション or M2M | キャラクター一覧（id・name・reference_url を返す。画像 URL は gs:// のまま） |
+| `GET /characters/{characterID}`（`/api/characters/{characterID}` は別名） | セッション or M2M | キャラクター詳細（マスター参照画像 + 生成履歴全件、新しい順） |
 | `GET /api/characters/images/*` | セッション or M2M | デザインシート生成履歴の画像への署名 URL リダイレクト（作品非依存） |
 | `GET /api/characters/reference/*` | セッション or M2M | キャラクターのマスター参照画像への署名 URL リダイレクト |
 | `DELETE /api/characters/{characterID}/images/{jobID}` | セッション or M2M | デザインシート生成履歴1件の削除（単体生成ジョブなら state も削除、作品ジョブは state 内の参照のみ除去） |

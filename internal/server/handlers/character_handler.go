@@ -21,20 +21,6 @@ type characterListItem struct {
 	ThumbnailImageURL string
 }
 
-// ServeCharacters は GET /characters を処理し、characters.json の全キャラクターを
-// マスター参照画像（既定）のサムネイル付きで一覧表示します。
-func (h *Handler) ServeCharacters(w http.ResponseWriter, r *http.Request) {
-	items := make([]characterListItem, 0, h.characters.Len())
-	for _, c := range h.characters.All() {
-		items = append(items, characterListItem{
-			ID:                c.ID,
-			Name:              c.Name,
-			ThumbnailImageURL: h.characterReferenceWebPath(c.ReferenceURL),
-		})
-	}
-	h.render(w, r, http.StatusOK, "characters.html", "Characters", items)
-}
-
 // characterReferenceImage は character_detail.html に渡す1枚のマスター参照画像です。
 type characterReferenceImage struct {
 	Label    string
@@ -65,36 +51,6 @@ type characterDetailData struct {
 	// HistoryTotal は上限適用前の全履歴件数です。History より大きい場合、
 	// テンプレートは全件表示ページへのリンクを出します。
 	HistoryTotal int
-}
-
-// ServeCharacterDetail は GET /characters/{characterID} を処理し、マスター参照画像
-// （既定・アスペクト比別）と、AI生成のデザインシート履歴（新しい順）を表示します。
-func (h *Handler) ServeCharacterDetail(w http.ResponseWriter, r *http.Request) {
-	characterID := chi.URLParam(r, "characterID")
-	char := h.characters.GetCharacter(characterID)
-	if char == nil {
-		http.Error(w, "character not found", http.StatusNotFound)
-		return
-	}
-
-	data := characterDetailData{
-		CharacterID: characterID,
-		Name:        char.Name,
-		References:  h.buildCharacterReferences(char.ReferenceURL, char.ReferenceURLs),
-	}
-
-	history, err := h.buildCharacterHistoryImages(r, characterID)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	data.HistoryTotal = len(history)
-	if len(history) > characterDetailHistoryLimit {
-		history = history[:characterDetailHistoryLimit]
-	}
-	data.History = history
-
-	h.render(w, r, http.StatusOK, "character_detail.html", char.Name, data)
 }
 
 // characterHistoryPageData は character_history.html テンプレートに渡すデータです。

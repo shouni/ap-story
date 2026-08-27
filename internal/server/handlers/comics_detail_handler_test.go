@@ -28,7 +28,7 @@ func TestServeHistoryRendersItemsWithPaging(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/history?page=2", nil)
 	rec := httptest.NewRecorder()
 
-	h.ServeHistory(rec, req)
+	h.Comics(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -74,7 +74,7 @@ func TestServeDetailsRendersStateWithImageLinks(t *testing.T) {
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.ServeDetails(rec, req)
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -103,7 +103,7 @@ func TestServeDetailsReturns404ForMissingJob(t *testing.T) {
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-x", "", "jobID", "job-x")
 	rec := httptest.NewRecorder()
 
-	h.ServeDetails(rec, req)
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -128,7 +128,7 @@ func renderDetail(t *testing.T, state *kitcomic.MangaState) string {
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.ServeDetails(rec, req)
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -354,7 +354,7 @@ func TestServeDetailsOrdersPagesByNumber(t *testing.T) {
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.ServeDetails(rec, req)
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)

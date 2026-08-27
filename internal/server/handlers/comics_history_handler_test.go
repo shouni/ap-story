@@ -27,7 +27,8 @@ func TestListComicsSuccess(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/comics", nil)
 	rec := httptest.NewRecorder()
-	h.ListComics(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Comics(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
@@ -49,7 +50,8 @@ func TestListComicsReturns500OnRepositoryError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/comics", nil)
 	rec := httptest.NewRecorder()
-	h.ListComics(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Comics(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
@@ -65,7 +67,8 @@ func TestGetComicSuccess(t *testing.T) {
 
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.GetComic(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
@@ -85,7 +88,8 @@ func TestGetComicRejectsInvalidJobID(t *testing.T) {
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, &fakeComicRepository{})
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/..%2Fescape", "", "jobID", "../escape")
 	rec := httptest.NewRecorder()
-	h.GetComic(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -98,7 +102,8 @@ func TestGetComicReturns404WhenNotFound(t *testing.T) {
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, &fakeComicRepository{})
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/job-missing", "", "jobID", "job-missing")
 	rec := httptest.NewRecorder()
-	h.GetComic(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Comic(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -154,7 +159,8 @@ func TestGetComicDoesNotReturn404WhenStateUnreadable(t *testing.T) {
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/job-x", "", "jobID", "job-x")
 	rec := httptest.NewRecorder()
-	h.GetComic(rec, req)
+	req.Header.Set("Accept", "application/json")
+	h.Comic(rec, req)
 
 	if rec.Code == http.StatusNotFound {
 		t.Fatalf("status = 404: 読めないだけの作品を「ありません」と答えている: %s", rec.Body.String())
