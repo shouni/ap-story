@@ -9,24 +9,35 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/oidc"
+	"github.com/shouni/gcp-kit/auth/session"
 
+	"github.com/gorilla/sessions"
 	"github.com/shouni/ap-story/internal/builder"
 	"github.com/shouni/ap-story/internal/server/handlers"
+	"github.com/shouni/gcp-kit/auth"
 )
 
-func testAuthHandler(t *testing.T) *auth.Handler {
+const (
+	testSessionAuthKey    = "session-auth-key-32-bytes-long!"
+	testSessionEncryptKey = "0123456789abcdef"
+	testSessionName       = "test-session"
+)
+
+func testAuthHandler(t *testing.T) *session.Handler {
 	t.Helper()
-	h, err := auth.NewHandler(auth.Config{
+	h, err := session.New(session.Config{
 		ClientID:          "client-id",
 		ClientSecret:      "client-secret",
 		RedirectURL:       "https://example.com/auth/callback",
-		SessionAuthKey:    "session-auth-key-32-bytes-long!",
-		SessionEncryptKey: "0123456789abcdef",
-		SessionName:       "test-session",
+		SessionAuthKey:    testSessionAuthKey,
+		SessionEncryptKey: testSessionEncryptKey,
+		SessionName:       testSessionName,
+		// 許可リストが空だと fail-closed で全員拒否されます。
+		AllowedDomains: []string{"example.com"},
 	})
 	if err != nil {
-		t.Fatalf("auth.NewHandler failed: %v", err)
+		t.Fatalf("session.New failed: %v", err)
 	}
 	return h
 }
@@ -66,11 +77,11 @@ func TestProtectedAccessMiddlewareFallsBackToSessionWithoutM2MToken(t *testing.T
 	t.Parallel()
 
 	authHandler := testAuthHandler(t)
-	m2m := auth.NewM2MVerifier("https://example.com", nil)
+	m2m := oidc.New("https://example.com", nil)
 
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
-	mw := authHandler.ProtectedMiddleware(m2m)(next)
+	mw := auth.Protected(m2m, authHandler)(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
 	rec := httptest.NewRecorder()
@@ -86,31 +97,44 @@ func TestProtectedAccessMiddlewareFallsBackToSessionWithoutM2MToken(t *testing.T
 	}
 }
 
-func TestProtectedAccessMiddlewareRejectsInvalidM2MToken(t *testing.T) {
+func TestProtectedAccessRejectsInvalidM2MToken(t *testing.T) {
 	t.Parallel()
 
 	authHandler := testAuthHandler(t)
-	m2m := auth.NewM2MVerifier("https://example.com", []string{"sa@project.iam.gserviceaccount.com"})
+	m2m := oidc.New("https://example.com", []string{"sa@project.iam.gserviceaccount.com"})
 
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
-	mw := authHandler.ProtectedMiddleware(m2m)(next)
+	mw := auth.Protected(m2m, authHandler)(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
 	req.Header.Set("Authorization", "Bearer not-a-real-token")
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 
-	// 不正なトークンは M2M 認証に失敗するため、セッション認証にフォールバックする。
+	// 提示した資格情報が通らなかった呼び出しは、そこで確定します。ログイン画面へ
+	// 送ると、JSON を求めているエージェントが HTML を受け取ることになります。
 	if called {
-		t.Error("next handler was called, want M2M rejection to fall back to session auth")
+		t.Error("next handler was called, want the invalid token to be rejected")
 	}
-	if rec.Code != http.StatusFound {
-		t.Errorf("status = %d, want %d (redirect to login after M2M failure)", rec.Code, http.StatusFound)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (invalid_token)", rec.Code, http.StatusUnauthorized)
+	}
+	if got := rec.Header().Get("WWW-Authenticate"); got == "" {
+		t.Error("WWW-Authenticate が無い（RFC 9110 §15.5.2）")
+	}
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Errorf("Location = %q, want empty（ログイン画面へ送らない）", got)
 	}
 }
 
-func TestCSRFAutoGenMiddlewareGeneratesTokenOnGet(t *testing.T) {
+// TestCSRFTokenReachesTemplates は、認証を通った GET で CSRF トークンが
+// テンプレート側から読めることを確認します。
+//
+// トークンの発行は gcp-kit の session.Authenticate が行います。ここで見たいのは
+// handlers.CSRFTokenFromContext が同じキーを読めていることで、ずれるとフォームの
+// hidden が空になり、以降の POST が全て弾かれます。
+func TestCSRFTokenReachesTemplates(t *testing.T) {
 	t.Parallel()
 
 	authHandler := testAuthHandler(t)
@@ -118,11 +142,11 @@ func TestCSRFAutoGenMiddlewareGeneratesTokenOnGet(t *testing.T) {
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		gotToken = handlers.CSRFTokenFromContext(r.Context())
 	})
-	mw := authHandler.CSRFContextMiddleware(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
+	req.AddCookie(loggedInCookie(t, authHandler))
 	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
+	auth.Require(authHandler)(next).ServeHTTP(rec, req)
 
 	if gotToken == "" {
 		t.Error("CSRF token was not generated and propagated to context")
@@ -130,6 +154,35 @@ func TestCSRFAutoGenMiddlewareGeneratesTokenOnGet(t *testing.T) {
 	if rec.Result().Cookies() == nil {
 		t.Error("no session cookie was set to persist the generated CSRF token")
 	}
+}
+
+// loggedInCookie は、ログイン済みセッションを表すクッキーを返します。
+//
+// OAuth のコールバックを経ずにログイン状態を作るため、Handler と同じ鍵で
+// 組み立てたストアへ直接書き込みます。testAuthHandler と鍵・セッション名が
+// ずれると Handler 側が読めないので、定数を共有しています。
+func loggedInCookie(t *testing.T, _ *session.Handler) *http.Cookie {
+	t.Helper()
+
+	store := sessions.NewCookieStore([]byte(testSessionAuthKey), []byte(testSessionEncryptKey))
+	store.Options = &sessions.Options{Path: "/", MaxAge: 3600, HttpOnly: true, SameSite: http.SameSiteLaxMode}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	sess, err := store.Get(req, testSessionName)
+	if err != nil {
+		t.Fatalf("store.Get() error = %v", err)
+	}
+	sess.Values[session.DefaultUserSessionKey] = "user@example.com"
+	if err := sess.Save(req, rec); err != nil {
+		t.Fatalf("session.Save() error = %v", err)
+	}
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("セッションクッキーが生成されていない")
+	}
+	return cookies[0]
 }
 
 // TestNewRouterOmitsWorkerRoutesWithoutTaskAuth は、SERVER_ROLE=web のプロセスで
@@ -160,7 +213,7 @@ func TestNewRouterOmitsWebRoutesWithoutWebHandler(t *testing.T) {
 
 	// Worker 面だけを担う構成: Auth も Web も nil。
 	router := NewRouter(&builder.AppHandlers{
-		TaskAuth: auth.NewTaskVerifier("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: oidc.New("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 
 	for _, path := range []string{"/", "/api/comics"} {
@@ -181,7 +234,7 @@ func TestNewRouterKeepsHealthzForWorkerRole(t *testing.T) {
 	t.Parallel()
 
 	router := NewRouter(&builder.AppHandlers{
-		TaskAuth: auth.NewTaskVerifier("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: oidc.New("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

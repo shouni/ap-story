@@ -13,6 +13,7 @@ import (
 
 	"github.com/shouni/ap-story/assets"
 	"github.com/shouni/ap-story/internal/builder"
+	"github.com/shouni/gcp-kit/auth"
 )
 
 // NewRouter は、ミドルウェアとルーティングを統合した http.Handler を構築します。
@@ -136,11 +137,13 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		// ブラウザセッション認証(Cookie+CSRF)、またはM2M呼び出し元はOIDC Bearerトークンで認証
-		r.Use(h.Auth.ProtectedMiddleware(h.M2M))
+		// ブラウザセッション認証(Cookie+CSRF)、またはM2M呼び出し元はOIDC Bearerトークンで認証。
+		// 人向けの方式を最後に置くと、どれも成立しなかったときログイン画面へ送られます
+		// （JSON を求めている相手には 401 が返ります）。
+		r.Use(auth.Protected(h.M2M, h.Auth))
 
 		if h.Web != nil {
-			// 未認証アクセスは auth.Handler.Middleware が /auth/login へリダイレクトする。
+			// 未認証アクセスは session.Handler が /auth/login へリダイレクトする。
 			r.Get("/", h.Web.Home)
 			r.Get("/compose", h.Web.ComposeForm)
 			r.Post("/compose", h.Web.EnqueueComicForm)
@@ -187,8 +190,9 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)
-		r.Use(h.TaskAuth.Middleware)
+		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)。
+		// 失敗はセッションへフォールバックせず、その場で止まります。
+		r.Use(auth.Require(h.TaskAuth))
 		r.Post("/tasks/generate", h.Worker.ProcessTask)
 	})
 }
