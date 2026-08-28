@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/sessions v1.4.0
 	github.com/shouni/gcp-kit v1.13.2
 	github.com/shouni/go-character-kit v1.3.0
-	github.com/shouni/go-comic-kit v1.7.0
+	github.com/shouni/go-comic-kit v1.7.1
 	github.com/shouni/go-gemini-client v1.21.0
 	github.com/shouni/go-http-kit v1.10.0
 	github.com/shouni/go-job-kit v1.3.0
