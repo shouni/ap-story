@@ -1,18 +1,17 @@
 package repository
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"os"
+	"iter"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-remote-io/remoteio/memio"
 
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
@@ -20,9 +19,20 @@ import (
 
 // memStore は remoteio.InputReader / remoteio.OutputWriter を満たすインメモリ fake です。
 // buildHistoriesConcurrently が並行して Open/GetState を呼ぶため、mu で保護します。
+// memStore は memio を包んだストレージのフェイクです。
+//
+// 一覧の畳み込み・不在の返し方・削除の単位といったストレージの振る舞いは memio が
+// 受け持ちます（本物のハンドラと同じ適合性スイートを通っています）。ここに残しているのは
+// 「どこを開いたか」「どこを走査したか」という呼び出しの記録だけです。
+//
+// 以前はこのフェイクが Delete をプレフィックス一括削除として実装していました。
+// 本物の Delete は単一オブジェクトなので、production では消えないものが
+// テストでは消えていました。
 type memStore struct {
+	remoteio.Store
+	h *memio.Handler
+
 	mu      sync.Mutex
-	files   map[string][]byte
 	deleted []string
 	// opens は Open されたパスの記録です（読み込み回数のアサーション用）。
 	opens []string
@@ -30,97 +40,66 @@ type memStore struct {
 	lists []string
 }
 
-func newMemStore() *memStore { return &memStore{files: map[string][]byte{}} }
-
-func (m *memStore) Open(_ context.Context, path string) (io.ReadCloser, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.opens = append(m.opens, path)
-	data, ok := m.files[path]
-	if !ok {
-		// remoteio は未存在を os.ErrNotExist に包んで返します。フェイクもそれに
-		// 合わせないと、「まだ無い」と「読めない」を分けて扱う側がすり抜けます。
-		return nil, fmt.Errorf("オブジェクトが見つかりません (%s): %w", path, os.ErrNotExist)
-	}
-	return io.NopCloser(bytes.NewReader(data)), nil
+func newMemStore() *memStore {
+	m := &memStore{h: memio.New(memio.WithScheme(remoteio.SchemeGCS))}
+	m.Store = remoteio.NewStore(m.h)
+	return m
 }
 
-// List は GCS の一覧を模倣します。
-//
-// 区切り文字の扱いまで写しているのは、本番の一覧が WithDelimiter に乗っているためです。
-// フェイクが区切り文字を無視して全件返すと、疑似ディレクトリの組み立てが素通りしてしまい、
-// 一覧のテストが何も確かめないものになります。
-func (m *memStore) List(_ context.Context, prefix string, callback func(path string) error, opts ...remoteio.ListOption) error {
-	settings := remoteio.NewListSettings(opts...)
-
+func (m *memStore) Open(ctx context.Context, name string) (io.ReadCloser, error) {
 	m.mu.Lock()
-	m.lists = append(m.lists, prefix)
-	prefix = remoteio.ListPrefix(prefix, settings)
-	paths := make([]string, 0, len(m.files))
-	for path := range m.files {
-		if strings.HasPrefix(path, prefix) {
-			paths = append(paths, path)
-		}
-	}
+	m.opens = append(m.opens, name)
 	m.mu.Unlock()
-
-	seen := make(map[string]bool, len(paths))
-	for _, path := range paths {
-		entry := path
-		if settings.Delimiter != "" {
-			rest := strings.TrimPrefix(path, prefix)
-			if idx := strings.Index(rest, settings.Delimiter); idx >= 0 {
-				// 区切り文字より先は疑似ディレクトリへ畳まれます。
-				entry = prefix + rest[:idx] + settings.Delimiter
-			}
-		}
-		if seen[entry] {
-			continue
-		}
-		seen[entry] = true
-		if err := callback(entry); err != nil {
-			return err
-		}
-	}
-	return nil
+	return m.Store.Open(ctx, name)
 }
 
-func (m *memStore) Exists(_ context.Context, path string) (bool, error) {
+func (m *memStore) List(ctx context.Context, name string, opts ...remoteio.ListOption) iter.Seq2[remoteio.Entry, error] {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	_, ok := m.files[path]
-	return ok, nil
+	m.lists = append(m.lists, name)
+	m.mu.Unlock()
+	return m.Store.List(ctx, name, opts...)
 }
 
-func (m *memStore) Write(_ context.Context, path string, r io.Reader, _ ...remoteio.WriteOption) error {
-	data, err := io.ReadAll(r)
+func (m *memStore) Delete(ctx context.Context, name string) error {
+	m.mu.Lock()
+	m.deleted = append(m.deleted, name)
+	m.mu.Unlock()
+	return m.Store.Delete(ctx, name)
+}
+
+// Sub をライブラリの Sub へ委譲します。埋め込みから昇格した Sub をそのまま使うと、
+// スコープの土台が埋め込まれた Store になり、上の記録が素通しされます。
+func (m *memStore) Sub(prefix string) remoteio.Store { return remoteio.Sub(m, prefix) }
+
+// put は前提となるオブジェクトを置きます。
+func (m *memStore) put(uri, body string) {
+	if err := m.h.Seed(uri, []byte(body)); err != nil {
+		panic(err)
+	}
+}
+
+// get は保存されている内容を返します。
+func (m *memStore) get(t *testing.T, uri string) []byte {
+	t.Helper()
+	data, err := remoteio.ReadAll(context.Background(), m.Store, uri)
 	if err != nil {
-		return err
+		t.Fatalf("read(%s) error = %v", uri, err)
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.files[path] = data
-	return nil
+	return data
 }
 
-func (m *memStore) Delete(_ context.Context, path string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.deleted = append(m.deleted, path)
-	for p := range m.files {
-		if strings.HasPrefix(p, path) {
-			delete(m.files, p)
-		}
-	}
-	return nil
+// has は対象が保存されているかを返します。
+func (m *memStore) has(uri string) bool {
+	ok, err := m.Exists(context.Background(), uri)
+	return err == nil && ok
 }
 
 func newTestRepository(store *memStore) *ComicRepository {
-	return NewComicRepository(config.StorageConfig{GCSBucket: "test-bucket"}, store, store, NewHistoryCache())
+	return NewComicRepository(config.StorageConfig{GCSBucket: "test-bucket"}, store, NewHistoryCache())
 }
 
 func putState(store *memStore, jobID, body string) {
-	store.files["gs://test-bucket/comics/"+jobID+"/comic_state.json"] = []byte(body)
+	store.put("gs://test-bucket/comics/"+jobID+"/comic_state.json", body)
 }
 
 func TestListHistoryPageBuildsSummariesFromState(t *testing.T) {
@@ -129,7 +108,7 @@ func TestListHistoryPageBuildsSummariesFromState(t *testing.T) {
 	store := newMemStore()
 	putState(store, "job-1", `{"version":1,"id":"job-1","title":"夜明けのデプロイ","chapters":[{"id":"ch01"}],"panels":[{"id":"p1"},{"id":"p2"}]}`)
 	// ジョブ配下の成果物は疑似ディレクトリへ畳まれ、ジョブが二重に数えられない
-	store.files["gs://test-bucket/comics/job-1/images/panel_1.png"] = []byte("binary")
+	store.put("gs://test-bucket/comics/job-1/images/panel_1.png", "binary")
 
 	repo := newTestRepository(store)
 	page, err := repo.ListHistoryPage(context.Background(), 1, 20)
@@ -171,8 +150,7 @@ func TestListHistoryPageIgnoresDesignJobsPrefix(t *testing.T) {
 	store := newMemStore()
 	putState(store, "job-comic", `{"version":1,"id":"job-comic","title":"作品","chapters":[{"id":"ch01"}],"panels":[]}`)
 	// 現行形式の単体生成ジョブ state は design-jobs/ 配下のため列挙対象外
-	store.files["gs://test-bucket/design-jobs/job-design/comic_state.json"] = []byte(
-		`{"version":1,"id":"job-design","title":"単体生成","panels":[]}`)
+	store.put("gs://test-bucket/design-jobs/job-design/comic_state.json", `{"version":1,"id":"job-design","title":"単体生成","panels":[]}`)
 
 	repo := newTestRepository(store)
 	page, err := repo.ListHistoryPage(context.Background(), 1, 20)
@@ -211,7 +189,7 @@ func TestListHistoryPageExcludesUnreadableState(t *testing.T) {
 	t.Parallel()
 
 	store := newMemStore()
-	store.files["gs://test-bucket/comics/job-broken/comic_state.json"] = []byte(`not json`)
+	store.put("gs://test-bucket/comics/job-broken/comic_state.json", `not json`)
 
 	repo := newTestRepository(store)
 	page, err := repo.ListHistoryPage(context.Background(), 1, 20)
@@ -276,7 +254,7 @@ func TestDeleteHistoryRemovesStateAndCache(t *testing.T) {
 	if err := repo.DeleteHistory(context.Background(), "job-1"); err != nil {
 		t.Fatalf("DeleteHistory failed: %v", err)
 	}
-	if _, ok := store.files["gs://test-bucket/comics/job-1/comic_state.json"]; ok {
+	if store.has("gs://test-bucket/comics/job-1/comic_state.json") {
 		t.Error("state file was not deleted")
 	}
 	if _, ok := repo.getCachedHistory("job-1"); ok {
@@ -305,11 +283,11 @@ func TestListJobIDsFoldsJobArtifactsIntoOneEntry(t *testing.T) {
 
 	store := newMemStore()
 	putState(store, "job-1", `{"version":1,"id":"job-1","title":"作品","chapters":[{"id":"ch01"}],"panels":[]}`)
-	store.files["gs://test-bucket/comics/job-1/images/panel_1.png"] = []byte("binary")
-	store.files["gs://test-bucket/comics/job-1/images/comic_page_1.png"] = []byte("binary")
+	store.put("gs://test-bucket/comics/job-1/images/panel_1.png", "binary")
+	store.put("gs://test-bucket/comics/job-1/images/comic_page_1.png", "binary")
 	putState(store, "job-2", `{"version":1,"id":"job-2","title":"作品2","chapters":[{"id":"ch01"}],"panels":[]}`)
 	// comics/ 直下のオブジェクトはジョブディレクトリではない
-	store.files["gs://test-bucket/comics/stray.json"] = []byte("{}")
+	store.put("gs://test-bucket/comics/stray.json", "{}")
 
 	repo := newTestRepository(store)
 	jobIDs, err := repo.listJobIDs(context.Background())
@@ -407,7 +385,7 @@ func TestGetStateSeparatesMissingFromUnreadable(t *testing.T) {
 		store := newMemStore()
 		// 壊れた JSON は「存在するが読めない」側。未存在と同じ扱いにすると、
 		// 破損に気づかないまま生成が終わったものとして扱われます。
-		store.files["gs://test-bucket/comics/"+jobID+"/comic_state.json"] = []byte("{ broken")
+		store.put("gs://test-bucket/comics/"+jobID+"/comic_state.json", "{ broken")
 
 		_, err := newTestRepository(store).GetState(context.Background(), jobID)
 		if !errors.Is(err, domain.ErrStateUnavailable) {

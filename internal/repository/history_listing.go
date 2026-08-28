@@ -10,6 +10,7 @@ import (
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 	kitports "github.com/shouni/go-comic-kit/ports"
+	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/go-comic-kit/store"
 	"github.com/shouni/go-job-kit/joblist"
@@ -77,7 +78,7 @@ const jobIDListCacheKey = "job-ids"
 // 章立てフィルタで表示から外れます。
 func (r *ComicRepository) listJobIDs(ctx context.Context) ([]string, error) {
 	return r.jobIDCache.Load(ctx, jobIDListCacheKey, func(ctx context.Context) ([]string, error) {
-		return joblist.Collect(ctx, r.reader, fmt.Sprintf("gs://%s/%s", r.bucket, comicsPrefix))
+		return joblist.Collect(ctx, r.store, remoteio.BuildURI(remoteio.SchemeGCS, r.bucket, comicsPrefix))
 	})
 }
 
@@ -160,7 +161,7 @@ func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic
 	if err != nil {
 		return nil, err
 	}
-	state, err := store.Load(ctx, r.reader, statePath)
+	state, err := store.Load(ctx, r.store, statePath)
 	if err != nil {
 		// go-comic-kit v1.6.0 から store.Load は失敗を ports の番兵で分類します。
 		// 「まだ無い」は ports.ErrNotFound で、原因の os.ErrNotExist は包まれません。

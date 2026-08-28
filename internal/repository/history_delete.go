@@ -11,7 +11,7 @@ func (r *ComicRepository) DeleteHistory(ctx context.Context, jobID string) error
 	if err != nil {
 		return err
 	}
-	if err := r.writer.Delete(ctx, outputDir); err != nil {
+	if err := r.deletePrefix(ctx, outputDir); err != nil {
 		return fmt.Errorf("comic %qの削除に失敗しました: %w", jobID, err)
 	}
 	r.deleteCachedHistory(jobID)

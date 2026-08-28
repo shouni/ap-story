@@ -19,8 +19,7 @@ var _ domain.JobStatusStore = (*jobstatus.Store[domain.JobStatus])(nil)
 // 状態ファイルは常に最新の1世代だけを保持し、上書きで更新します。
 func NewJobStatusRepository(
 	storage config.StorageConfig,
-	reader remoteio.InputReader,
-	writer remoteio.OutputWriter,
+	store remoteio.Store,
 ) *jobstatus.Store[domain.JobStatus] {
 	bucket := storage.GCSBucket
 	locate := func(jobID string) (string, error) {
@@ -28,8 +27,8 @@ func NewJobStatusRepository(
 		if err != nil {
 			return "", err
 		}
-		return remoteio.BuildGCSURI(bucket, relPath), nil
+		return remoteio.BuildURI(remoteio.SchemeGCS, bucket, relPath), nil
 	}
 
-	return jobstatus.NewStore[domain.JobStatus](reader, writer, locate)
+	return jobstatus.NewStore[domain.JobStatus](store, locate)
 }

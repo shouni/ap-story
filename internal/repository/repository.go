@@ -2,6 +2,9 @@
 package repository
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/shouni/go-comic-kit/asset"
@@ -16,9 +19,10 @@ const defaultHistoryCacheTTL = 10 * time.Minute
 
 // ComicRepository は GCS 上の comic_state.json を読み書きし、履歴一覧・詳細・削除を提供します。
 type ComicRepository struct {
-	bucket       string
-	reader       remoteio.InputReader
-	writer       remoteio.OutputWriter
+	bucket string
+	// store は完全な URI を受け取るルートのストアです。成果物のディレクトリは
+	// domain が組み立てて go-comic-kit へも渡るため、ここでスコープは絞りません。
+	store        remoteio.Store
 	historyCache *cache.TTL[domain.ComicHistory]
 	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
 	// 履歴サマリ本体のキャッシュ（historyCache）と違い、これが無いと履歴画面を開くたびに
@@ -37,14 +41,12 @@ func NewHistoryCache() *cache.TTL[domain.ComicHistory] {
 // NewComicRepository は ComicRepository を構築します。
 func NewComicRepository(
 	storage config.StorageConfig,
-	reader remoteio.InputReader,
-	writer remoteio.OutputWriter,
+	store remoteio.Store,
 	historyCache *cache.TTL[domain.ComicHistory],
 ) *ComicRepository {
 	return &ComicRepository{
 		bucket:       storage.GCSBucket,
-		reader:       reader,
-		writer:       writer,
+		store:        store,
 		historyCache: historyCache,
 		jobIDCache:   cache.NewIDList(cache.DefaultIDListTTL),
 	}
@@ -82,4 +84,28 @@ func formatTime(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// deletePrefix はプレフィックス配下のオブジェクトをすべて削除します。
+//
+// remoteio の Delete は単一オブジェクトを消すもので、プレフィックスを渡しても
+// 「その名前のオブジェクトは無い」として黙って成功します。ディレクトリという実体が
+// 無いストレージでは、消す側が一覧して 1 つずつ消すしかありません。
+// 以前はプレフィックスをそのまま Delete へ渡しており、本番では何も消えていませんでした。
+func (r *ComicRepository) deletePrefix(ctx context.Context, prefix string) error {
+	var uris []string
+	for entry, err := range r.store.List(ctx, prefix) {
+		if err != nil {
+			return fmt.Errorf("削除対象の一覧取得に失敗しました (%s): %w", prefix, err)
+		}
+		uris = append(uris, entry.URI)
+	}
+
+	var errs []error
+	for _, uri := range uris {
+		if err := r.store.Delete(ctx, uri); err != nil {
+			errs = append(errs, fmt.Errorf("%s の削除に失敗しました: %w", uri, err))
+		}
+	}
+	return errors.Join(errs...)
 }

@@ -16,7 +16,7 @@ import (
 const statusTestJobID = "c20260726-120000-abcd1234"
 
 func newStatusRepo(store *memStore) *jobstatus.Store[domain.JobStatus] {
-	return NewJobStatusRepository(config.StorageConfig{GCSBucket: "bucket"}, store, store)
+	return NewJobStatusRepository(config.StorageConfig{GCSBucket: "bucket"}, store)
 }
 
 // 状態は成果物と同じ comics/{jobID}/ 配下に置き、履歴削除（プレフィックス一括削除）で
@@ -37,7 +37,7 @@ func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	}
 
 	want := "gs://bucket/comics/" + statusTestJobID + "/status.json"
-	if _, ok := store.files[want]; !ok {
+	if !store.has(want) {
 		t.Fatalf("status.json が %q に書かれていない。書き込み済み: %v", want, keysOf(store))
 	}
 }
@@ -83,13 +83,4 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 }
 
 // keysOf は memStore に書き込まれたパス一覧を返します。
-func keysOf(store *memStore) []string {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	paths := make([]string, 0, len(store.files))
-	for path := range store.files {
-		paths = append(paths, path)
-	}
-	return paths
-}
+func keysOf(store *memStore) []string { return store.h.URIs() }

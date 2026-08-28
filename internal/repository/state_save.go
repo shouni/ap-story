@@ -32,7 +32,7 @@ func (r *ComicRepository) SaveState(ctx context.Context, jobID string, state *ki
 	if err != nil {
 		return err
 	}
-	if _, err := store.Save(ctx, r.writer, state, outputDir); err != nil {
+	if _, err := store.Save(ctx, r.store, state, outputDir); err != nil {
 		return fmt.Errorf("state の保存に失敗しました (%s): %w", jobID, err)
 	}
 
