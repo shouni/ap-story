@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/shouni/ap-story/internal/adapters/prompts"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // comicOptionsResponse は GET /api/comic-options のレスポンスです。
@@ -35,11 +37,11 @@ type comicModeOption struct {
 // モードとモデルの一覧を返します。
 func (h *Handler) ComicOptions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeErrorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		negotiate.Error(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, comicOptionsResponse{
+	negotiate.JSON(w, r, http.StatusOK, comicOptionsResponse{
 		ScriptModes: comicModeOptions(h.scriptModes),
 		StyleModes:  comicModeOptions(h.styleModes),
 		TextModels:  h.geminiModels,

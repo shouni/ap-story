@@ -135,19 +135,24 @@ func TestValidateEssentialConfigRequiresAllowlistForWorker(t *testing.T) {
 
 func TestLoadConfigNormalizesServerRole(t *testing.T) {
 	tests := []struct {
-		name    string
-		raw     string
-		want    serverrole.Role
-		wantErr bool
+		name      string
+		raw       string
+		want      serverrole.Role
+		wantErr   bool
+		wantInErr string
 	}{
 		{name: "both", raw: "both", want: serverrole.Both},
 		// 未設定を both に落とすと、本番の環境変数が 1 つ欠けただけで
-		// 公開 web に /tasks/generate が復活します。
-		{name: "未設定は拒否", raw: "", wantErr: true},
+		// 公開 web に /tasks/generate が復活します。値が無いとデコーダは
+		// UnmarshalText を呼ばないため、normalize が環境変数名つきで返します。
+		{name: "未設定は拒否", raw: "", wantErr: true, wantInErr: "SERVER_ROLE"},
 		{name: "web", raw: "web", want: serverrole.Web},
 		{name: "worker", raw: "worker", want: serverrole.Worker},
 		{name: "大文字と空白を許容", raw: " Worker ", want: serverrole.Worker},
-		{name: "未知の値は拒否", raw: "batch", wantErr: true},
+		// 未知の値は env のデコード時点で弾かれます（serverrole.Role が
+		// encoding.TextUnmarshaler を実装しているため）。env が包むので環境変数名では
+		// なくフィールド名が出ますが、何が不正で何なら通るかは残ります。
+		{name: "未知の値は拒否", raw: "batch", wantErr: true, wantInErr: `"batch"`},
 	}
 
 	for _, tt := range tests {
@@ -158,7 +163,9 @@ func TestLoadConfigNormalizesServerRole(t *testing.T) {
 			cfg, err := LoadConfig()
 			if tt.wantErr {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "SERVER_ROLE")
+				require.Contains(t, err.Error(), tt.wantInErr)
+				// どちらの経路でも、通る値が何かは示されている必要があります。
+				require.Contains(t, err.Error(), `"web"`)
 				return
 			}
 			require.NoError(t, err)

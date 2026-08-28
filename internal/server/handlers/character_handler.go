@@ -6,6 +6,8 @@ import (
 	"sort"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // referenceAspectOrder は character_detail.html でのアスペクト比表示順です。
@@ -88,7 +90,7 @@ func (h *Handler) ServeCharacterHistory(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) DeleteCharacterDesign(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	if h.characters.GetCharacter(characterID) == nil {
-		writeErrorJSON(w, http.StatusNotFound, "character not found")
+		negotiate.Error(w, r, http.StatusNotFound, "character not found")
 		return
 	}
 	jobID := chi.URLParam(r, "jobID")
@@ -96,7 +98,7 @@ func (h *Handler) DeleteCharacterDesign(w http.ResponseWriter, r *http.Request) 
 	if err := h.repository.DeleteCharacterDesign(r.Context(), characterID, jobID); err != nil {
 		slog.ErrorContext(r.Context(), "failed to delete character design",
 			"character_id", characterID, "job_id", jobID, "error", err)
-		writeErrorJSON(w, http.StatusInternalServerError, "failed to delete character design")
+		negotiate.Error(w, r, http.StatusInternalServerError, "failed to delete character design")
 		return
 	}
 

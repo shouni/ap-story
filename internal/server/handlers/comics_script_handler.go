@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shouni/ap-story/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // GetComicScript は GET /api/comics/{jobID}/script を処理し、台本のうち
@@ -20,7 +22,7 @@ import (
 func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "invalid job id")
+		negotiate.Error(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
@@ -30,7 +32,7 @@ func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, domain.NewScriptDraft(state))
+	negotiate.JSON(w, r, http.StatusOK, domain.NewScriptDraft(state))
 }
 
 // UpdateComicScript は PUT /api/comics/{jobID}/script を処理し、送られてきた台本の
@@ -44,13 +46,13 @@ func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateComicScript(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "invalid job id")
+		negotiate.Error(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
 	var draft domain.ScriptDraft
 	if err := json.NewDecoder(r.Body).Decode(&draft); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "invalid JSON body")
+		negotiate.Error(w, r, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -59,7 +61,7 @@ func (h *Handler) UpdateComicScript(w http.ResponseWriter, r *http.Request) {
 	// 条件付き書き込み（GCS の ifGenerationMatch）の口を持たないため、重なりそうな
 	// 要求をここで断るのが唯一の防ぎ方です。
 	if err := h.rejectWhileJobIsRunning(r, jobID); err != nil {
-		writeErrorJSON(w, http.StatusConflict, err.Error())
+		negotiate.Error(w, r, http.StatusConflict, err.Error())
 		return
 	}
 
@@ -71,7 +73,7 @@ func (h *Handler) UpdateComicScript(w http.ResponseWriter, r *http.Request) {
 
 	before := domain.NewScriptDraft(state)
 	if err := draft.ApplyTo(state, h.isKnownSpeaker); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -83,12 +85,12 @@ func (h *Handler) UpdateComicScript(w http.ResponseWriter, r *http.Request) {
 	if change.ChangedLines > 0 {
 		if err := h.repository.SaveState(r.Context(), jobID, state); err != nil {
 			slog.ErrorContext(r.Context(), "failed to save comic script", "error", err, "job_id", jobID)
-			writeErrorJSON(w, http.StatusInternalServerError, "failed to save script")
+			negotiate.Error(w, r, http.StatusInternalServerError, "failed to save script")
 			return
 		}
 	}
 
-	writeJSON(w, http.StatusOK, scriptUpdateResponse{
+	negotiate.JSON(w, r, http.StatusOK, scriptUpdateResponse{
 		JobID:        jobID,
 		ScriptChange: change,
 		Script:       after,

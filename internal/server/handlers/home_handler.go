@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/shouni/ap-story/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // homeHistoryLimit は Home 画面に表示する履歴件数です。
@@ -20,7 +22,7 @@ type homeData struct {
 // 認証済みのリクエストのみです。
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeErrorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		negotiate.Error(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
