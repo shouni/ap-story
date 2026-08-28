@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shouni/ap-story/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // recordQueuedStatus はジョブ状態に queued を記録します。
@@ -38,11 +40,11 @@ func (h *Handler) recordQueuedStatus(r *http.Request, task domain.Task) {
 func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "Invalid JobID format")
+		negotiate.ErrorJSON(w, r, http.StatusBadRequest, "Invalid JobID format")
 		return
 	}
 	if h.jobStatus == nil {
-		writeErrorJSON(w, http.StatusServiceUnavailable, "job status tracking is not configured")
+		negotiate.ErrorJSON(w, r, http.StatusServiceUnavailable, "job status tracking is not configured")
 		return
 	}
 
@@ -51,13 +53,13 @@ func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 		// 状態が無いのは異常ではなく「この機能より前に作られたジョブ」でも起こるため、
 		// 404 で明確に区別できるようにします。
 		if errors.Is(err, domain.ErrJobStatusNotFound) {
-			writeErrorJSON(w, http.StatusNotFound, "job status not found")
+			negotiate.ErrorJSON(w, r, http.StatusNotFound, "job status not found")
 			return
 		}
 		slog.ErrorContext(r.Context(), "failed to load job status", "job_id", jobID, "error", err)
-		writeErrorJSON(w, http.StatusInternalServerError, "failed to load job status")
+		negotiate.ErrorJSON(w, r, http.StatusInternalServerError, "failed to load job status")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, status)
+	negotiate.JSON(w, r, http.StatusOK, status)
 }

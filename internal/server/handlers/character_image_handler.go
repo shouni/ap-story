@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/shouni/go-remote-io/remoteio"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // characterImagePrefix は、ジョブ（作品）に依存しない共有キャラクター資産
@@ -39,7 +41,7 @@ func (h *Handler) redirectCharacterAsset(w http.ResponseWriter, r *http.Request,
 	relPath := chi.URLParam(r, "*")
 	objectPath, err := resolveCharacterAssetPath(prefix, relPath)
 	if err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -47,7 +49,7 @@ func (h *Handler) redirectCharacterAsset(w http.ResponseWriter, r *http.Request,
 	signedURL, err := h.signer.GenerateSignedURL(r.Context(), objectURI, http.MethodGet, signedURLExpiration)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to generate signed URL", "object_path", objectPath, "error", err)
-		writeErrorJSON(w, http.StatusInternalServerError, "internal server error")
+		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 

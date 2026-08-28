@@ -18,27 +18,18 @@ import (
 // 決めます。片方の読者にしか無いもの（入力フォーム、再生成の指示、画像の転送など）は
 // 別のリソースなので、ここには置きません。
 
-// failNegotiated は、要求された表現でエラーを返します。
-func (h *Handler) failNegotiated(w http.ResponseWriter, r *http.Request, status int, message string) {
-	if negotiate.WantsJSON(w, r) {
-		writeErrorJSON(w, status, message)
-		return
-	}
-	http.Error(w, message, status)
-}
-
 // Comics は履歴一覧を返します。?page= を受けます。
 func (h *Handler) Comics(w http.ResponseWriter, r *http.Request) {
 	page := parseHistoryPage(r)
 	historyPage, err := h.repository.ListHistoryPage(r.Context(), page, defaultHistoryPageSize)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list comic history", "error", err)
-		h.failNegotiated(w, r, http.StatusInternalServerError, "internal server error")
+		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	if negotiate.WantsJSON(w, r) {
-		writeJSON(w, http.StatusOK, historyPage)
+		negotiate.JSON(w, r, http.StatusOK, historyPage)
 		return
 	}
 	h.render(w, r, http.StatusOK, "history.html", "作品履歴", historyPage)
@@ -51,7 +42,7 @@ func (h *Handler) Comics(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Comic(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		h.failNegotiated(w, r, http.StatusBadRequest, "invalid job id")
+		negotiate.Error(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
@@ -71,7 +62,7 @@ func (h *Handler) Comic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if negotiate.WantsJSON(w, r) {
-		writeJSON(w, http.StatusOK, state)
+		negotiate.JSON(w, r, http.StatusOK, state)
 		return
 	}
 	h.render(w, r, http.StatusOK, "history_detail.html", state.Title, h.buildDetailData(jobID, state))
@@ -92,7 +83,7 @@ func (h *Handler) Characters(w http.ResponseWriter, r *http.Request) {
 				ReferenceURL: c.ReferenceURL,
 			})
 		}
-		writeJSON(w, http.StatusOK, items)
+		negotiate.JSON(w, r, http.StatusOK, items)
 		return
 	}
 
@@ -116,7 +107,7 @@ func (h *Handler) Character(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	char := h.characters.GetCharacter(characterID)
 	if char == nil {
-		h.failNegotiated(w, r, http.StatusNotFound, "character not found")
+		negotiate.Error(w, r, http.StatusNotFound, "character not found")
 		return
 	}
 
@@ -124,10 +115,10 @@ func (h *Handler) Character(w http.ResponseWriter, r *http.Request) {
 		history, err := h.repository.ListCharacterDesignHistory(r.Context(), characterID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to list character design history", "character_id", characterID, "error", err)
-			writeErrorJSON(w, http.StatusInternalServerError, "internal server error")
+			negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		writeJSON(w, http.StatusOK, characterDetailResponse{
+		negotiate.JSON(w, r, http.StatusOK, characterDetailResponse{
 			ID:            char.ID,
 			Name:          char.Name,
 			ReferenceURL:  char.ReferenceURL,
