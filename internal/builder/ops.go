@@ -8,10 +8,10 @@ import (
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-comic-kit/workflow"
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-story/internal/adapters"
 	"github.com/shouni/ap-story/internal/adapters/prompts"
-	"github.com/shouni/ap-story/internal/app"
 	"github.com/shouni/ap-story/internal/config"
 )
 
@@ -21,7 +21,7 @@ import (
 func buildOperations(
 	ctx context.Context,
 	cfg *config.Config,
-	rio *app.RemoteIO,
+	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	characters *characterkit.Characters,
 ) (*ports.Operations, error) {
@@ -43,8 +43,8 @@ func buildOperations(
 	ops, err := workflow.New(workflow.Args{
 		Config:              cfg.AI.KitConfig(),
 		HTTPClient:          httpClient,
-		Reader:              rio.Reader,
-		Writer:              rio.Writer,
+		Reader:              store,
+		Writer:              store,
 		AIClient:            aiClient,
 		Characters:          characters,
 		OutlinePrompt:       scriptPrompts,

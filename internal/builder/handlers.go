@@ -106,7 +106,7 @@ func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 		TaskQueue:    appCtx.TaskQueue,
 		Repository:   appCtx.Repository,
 		JobStatus:    appCtx.JobStatus,
-		Signer:       appCtx.RemoteIO.Signer,
+		Signer:       appCtx.Store,
 		Bucket:       appCtx.Config.Storage.GCSBucket,
 		Characters:   appCtx.Characters,
 		ImageModels:  appCtx.Config.AI.ImageModels,

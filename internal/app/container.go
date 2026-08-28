@@ -20,7 +20,8 @@ import (
 type Container struct {
 	Config *config.Config
 	// I/O and Storage
-	RemoteIO *RemoteIO
+	// Store は読み書き・一覧・署名の窓口です。寿命はファクトリ側にあります。
+	Store remoteio.Store
 	// go-comic-kit の全操作（章立て・章台本・デザインシート・パネル・ページ）
 	Ops *ports.Operations
 	// Pipeline は Task のコマンドに応じて Ops の操作を実行する Worker パイプラインです。
@@ -44,13 +45,6 @@ type Container struct {
 	// io.Closer を満たさないので、末尾で個別に閉じます。
 	Closers []io.Closer
 }
-
-// RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。
-//
-// 実体は go-remote-io が持つ remoteio.Bundle です。同じ構造体と組み立て関数を
-// 各アプリが個別に持っていたものをライブラリへ引き取ったため、ここはアプリ内での
-// 呼び名を保つための別名だけになっています（rio.Reader などの参照はそのまま使えます）。
-type RemoteIO = remoteio.Bundle
 
 // Close は、Container が保持するすべての外部接続リソースを安全に解放します。
 //

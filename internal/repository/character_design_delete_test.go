@@ -8,7 +8,7 @@ import (
 
 func putCharacterDesignImage(store *memStore, characterID, jobID string) string {
 	path := "gs://test-bucket/character/" + characterID + "/" + jobID + ".png"
-	store.files[path] = []byte("binary")
+	store.put(path, "binary")
 	return path
 }
 
@@ -19,18 +19,18 @@ func TestDeleteCharacterDesignRemovesImageAndDesignJobState(t *testing.T) {
 	imagePath := putCharacterDesignImage(store, "zundamon", "c20260718-000000-eeee5555")
 	// 現行形式: 単体生成ジョブの state は design-jobs/ 配下。ジョブごと削除される。
 	statePath := "gs://test-bucket/design-jobs/c20260718-000000-eeee5555/comic_state.json"
-	store.files[statePath] = []byte(
-		`{"version":1,"id":"c20260718-000000-eeee5555","design_sheets":[{"character_id":"zundamon","image_url":"` + imagePath + `"}]}`)
+	store.put(statePath,
+		`{"version":1,"id":"c20260718-000000-eeee5555","design_sheets":[{"character_id":"zundamon","image_url":"`+imagePath+`"}]}`)
 
 	repo := newTestRepository(store)
 	if err := repo.DeleteCharacterDesign(context.Background(), "zundamon", "c20260718-000000-eeee5555"); err != nil {
 		t.Fatalf("DeleteCharacterDesign failed: %v", err)
 	}
 
-	if _, ok := store.files[imagePath]; ok {
+	if store.has(imagePath) {
 		t.Error("design sheet image was not deleted")
 	}
-	if _, ok := store.files[statePath]; ok {
+	if store.has(statePath) {
 		t.Error("design job state was not deleted")
 	}
 }
@@ -49,10 +49,10 @@ func TestDeleteCharacterDesignRemovesImageAndLegacyDesignOnlyState(t *testing.T)
 		t.Fatalf("DeleteCharacterDesign failed: %v", err)
 	}
 
-	if _, ok := store.files[imagePath]; ok {
+	if store.has(imagePath) {
 		t.Error("design sheet image was not deleted")
 	}
-	if _, ok := store.files["gs://test-bucket/comics/c20260718-000000-aaaa1111/comic_state.json"]; ok {
+	if store.has("gs://test-bucket/comics/c20260718-000000-aaaa1111/comic_state.json") {
 		t.Error("legacy design-only job state was not deleted")
 	}
 }
@@ -73,13 +73,14 @@ func TestDeleteCharacterDesignKeepsComicStateButPrunesReference(t *testing.T) {
 		t.Fatalf("DeleteCharacterDesign failed: %v", err)
 	}
 
-	if _, ok := store.files[imagePath]; ok {
+	if store.has(imagePath) {
 		t.Error("design sheet image was not deleted")
 	}
-	stateJSON, ok := store.files["gs://test-bucket/comics/c20260718-000000-bbbb2222/comic_state.json"]
-	if !ok {
+	const stateURI = "gs://test-bucket/comics/c20260718-000000-bbbb2222/comic_state.json"
+	if !store.has(stateURI) {
 		t.Fatal("comic job state must not be deleted")
 	}
+	stateJSON := store.get(t, stateURI)
 	if strings.Contains(string(stateJSON), imagePath) {
 		t.Error("deleted image reference remains in state")
 	}
@@ -98,7 +99,7 @@ func TestDeleteCharacterDesignWithoutStateRemovesImageOnly(t *testing.T) {
 	if err := repo.DeleteCharacterDesign(context.Background(), "zundamon", "c20260718-000000-cccc3333"); err != nil {
 		t.Fatalf("DeleteCharacterDesign failed: %v", err)
 	}
-	if _, ok := store.files[imagePath]; ok {
+	if store.has(imagePath) {
 		t.Error("design sheet image was not deleted")
 	}
 }

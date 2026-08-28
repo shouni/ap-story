@@ -169,7 +169,7 @@ func (f *fakeComicRepository) DeleteHistory(_ context.Context, jobID string) err
 	return nil
 }
 
-// fakeSigner は remoteio.URLSigner を満たすテスト用 fake です。
+// fakeSigner は Signer を満たすテスト用 fake です。
 type fakeSigner struct {
 	lastObjectURI string
 	lastExpires   time.Duration
@@ -177,7 +177,7 @@ type fakeSigner struct {
 	err           error
 }
 
-func (f *fakeSigner) GenerateSignedURL(_ context.Context, objectURI, _ string, expires time.Duration) (string, error) {
+func (f *fakeSigner) SignURL(_ context.Context, objectURI, _ string, expires time.Duration) (string, error) {
 	f.lastObjectURI = objectURI
 	f.lastExpires = expires
 	if f.err != nil {

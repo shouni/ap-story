@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-utils/jobid"
 )
 
@@ -69,7 +70,7 @@ func JobOutputDir(bucket, jobID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("gs://%s/%s", bucket, prefix), nil
+	return remoteio.BuildURI(remoteio.SchemeGCS, bucket, prefix), nil
 }
 
 // DesignJobOutputDir は、デザインシート単体生成ジョブの state を格納する完全な GCS URI
@@ -90,5 +91,5 @@ func DesignJobOutputDir(bucket, jobID string) (string, error) {
 // go-comic-kit の DesignSheetRequest.OutputDir に渡すと、
 // "character/{タグ}/{JobID}.ext" として解決されます。
 func CharacterAssetDir(bucket string) string {
-	return fmt.Sprintf("gs://%s", bucket)
+	return remoteio.BuildURI(remoteio.SchemeGCS, bucket, "")
 }

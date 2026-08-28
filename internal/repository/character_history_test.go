@@ -9,12 +9,12 @@ func TestListCharacterDesignHistoryReturnsNewestFirst(t *testing.T) {
 	t.Parallel()
 
 	store := newMemStore()
-	store.files["gs://test-bucket/character/zundamon/job-1.png"] = []byte("a")
-	store.files["gs://test-bucket/character/zundamon/job-2.png"] = []byte("b")
+	store.put("gs://test-bucket/character/zundamon/job-1.png", "a")
+	store.put("gs://test-bucket/character/zundamon/job-2.png", "b")
 	// 別キャラクター（混ざらないことの確認用）
-	store.files["gs://test-bucket/character/metan/job-9.png"] = []byte("c")
+	store.put("gs://test-bucket/character/metan/job-9.png", "c")
 	// 合成生成のタグ違いディレクトリ（対象外であることの確認用）
-	store.files["gs://test-bucket/character/zundamon_metan/job-3.png"] = []byte("d")
+	store.put("gs://test-bucket/character/zundamon_metan/job-3.png", "d")
 
 	repo := newTestRepository(store)
 	items, err := repo.ListCharacterDesignHistory(context.Background(), "zundamon")

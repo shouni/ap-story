@@ -9,7 +9,6 @@ import (
 
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-http-kit/httpkit"
-	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-story/internal/adapters"
@@ -40,20 +39,20 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 	resources = append(resources, storage)
 
-	rio, ioErr := remoteio.NewBundle(storage)
+	store, ioErr := storage.Store()
 	if ioErr != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", ioErr)
 	}
 	// resources は組み立て中の巻き戻し用で、成功して返ったあとは誰も見ません。
 	// 実行中の解放は closers（app.Container.Close）が受け持つため、成功後も
-	// 生き続ける資源は両方へ入れます。rio は成功後の storage の所有者です
+	// 生き続ける資源は両方へ入れます。ストレージの寿命はファクトリが持ちます
 	// （Bundle.Close が factory を閉じます）。
-	closers := []io.Closer{rio}
+	closers := []io.Closer{storage}
 
 	httpClient := httpkit.New(config.DefaultHTTPTimeout)
 
 	// 2. Characters
-	characters, charErr := adapters.LoadCharacters(ctx, rio.Reader, cfg.Storage.CharactersJSONPath)
+	characters, charErr := adapters.LoadCharacters(ctx, store, cfg.Storage.CharactersJSONPath)
 	if charErr != nil {
 		return nil, fmt.Errorf("failed to load characters: %w", charErr)
 	}
@@ -61,7 +60,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	// 3. Job Status
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込むため、
 	// 役割によらず必要です。
-	jobStatus := repository.NewJobStatusRepository(cfg.Storage, rio.Reader, rio.Writer)
+	jobStatus := repository.NewJobStatusRepository(cfg.Storage, store)
 
 	// 4. go-comic-kit Operations、Notifier、Worker Pipeline
 	// 生成を実行するのは Worker 面だけです。Web 面で組み立てないことで、
@@ -74,7 +73,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	var ops *ports.Operations
 	var pipelineRunner *pipeline.Runner
 	if cfg.Server.Role.ServesWorker() {
-		builtOps, opsErr := buildOperations(ctx, cfg, rio, httpClient, characters)
+		builtOps, opsErr := buildOperations(ctx, cfg, store, httpClient, characters)
 		if opsErr != nil {
 			return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
 		}
@@ -87,7 +86,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 			return nil, fmt.Errorf("failed to initialize notifier: %w", notifierErr)
 		}
 
-		runner, pipeErr := buildPipeline(cfg, rio, ops, notifier, jobStatus)
+		runner, pipeErr := buildPipeline(cfg, store, ops, notifier, jobStatus)
 		if pipeErr != nil {
 			return nil, fmt.Errorf("failed to initialize pipeline: %w", pipeErr)
 		}
@@ -115,11 +114,11 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 
 	// 6. History Repository
 	historyCache := repository.NewHistoryCache()
-	repo := repository.NewComicRepository(cfg.Storage, rio.Reader, rio.Writer, historyCache)
+	repo := repository.NewComicRepository(cfg.Storage, store, historyCache)
 
 	appCtx := &app.Container{
 		Config:       cfg,
-		RemoteIO:     rio,
+		Store:        store,
 		Ops:          ops,
 		Pipeline:     pipelineRunner,
 		TaskQueue:    taskQueue,

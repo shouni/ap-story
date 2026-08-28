@@ -41,8 +41,8 @@ func (h *Handler) RedirectComicImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	objectURI := remoteio.BuildGCSURI(h.bucket, objectPath)
-	signedURL, err := h.signer.GenerateSignedURL(r.Context(), objectURI, http.MethodGet, signedURLExpiration)
+	objectURI := remoteio.BuildURI(remoteio.SchemeGCS, h.bucket, objectPath)
+	signedURL, err := h.signer.SignURL(r.Context(), objectURI, http.MethodGet, signedURLExpiration)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to generate signed URL", "object_path", objectPath, "error", err)
 		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")

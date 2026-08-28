@@ -3,16 +3,23 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"strings"
+	"time"
 
 	characterkit "github.com/shouni/go-character-kit/character"
-	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-story/internal/adapters/prompts"
 	"github.com/shouni/ap-story/internal/domain"
 )
+
+// Signer は、画像リダイレクトが必要とする署名機能だけを表します。
+// remoteio.Store がそのまま満たします。
+type Signer interface {
+	SignURL(ctx context.Context, name, method string, expires time.Duration) (string, error)
+}
 
 // Handler は、API/Web UI ハンドラーが共有する依存関係を保持します。
 type Handler struct {
@@ -20,7 +27,7 @@ type Handler struct {
 	repository domain.ComicRepository
 	// jobStatus はジョブ進行状況の記録・参照先です。未設定なら状態機能は無効です。
 	jobStatus  domain.JobStatusStore
-	signer     remoteio.URLSigner
+	signer     Signer
 	bucket     string
 	templates  map[string]*template.Template
 	characters *characterkit.Characters
@@ -39,7 +46,7 @@ type HandlerOptions struct {
 	TaskQueue    domain.TaskQueue
 	Repository   domain.ComicRepository
 	JobStatus    domain.JobStatusStore
-	Signer       remoteio.URLSigner
+	Signer       Signer
 	Bucket       string
 	Characters   *characterkit.Characters
 	ImageModels  []string

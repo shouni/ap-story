@@ -14,7 +14,7 @@ import (
 // キャラクター定義を読み込みます。埋め込み（go:embed）ではなく
 // 実行時にロードするのは、キャラクター追加・更新のたびに再デプロイを不要にするためです。
 // path が空文字の場合は go-character-kit の埋め込みデフォルトキャラクター定義を使います。
-func LoadCharacters(ctx context.Context, reader remoteio.InputReader, path string) (*characterkit.Characters, error) {
+func LoadCharacters(ctx context.Context, reader remoteio.Reader, path string) (*characterkit.Characters, error) {
 	if path == "" {
 		characters, err := assets.LoadCharacters()
 		if err != nil {
