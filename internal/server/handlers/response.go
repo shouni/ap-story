@@ -18,9 +18,9 @@ import (
 // （応答には出しません。ストレージの内部事情を呼び出し側へ渡さないためです）。
 func writeStateError(w http.ResponseWriter, r *http.Request, jobID string, err error) {
 	if errors.Is(err, domain.ErrStateNotFound) {
-		negotiate.Error(w, r, http.StatusNotFound, "comic not found")
+		negotiate.ErrorJSON(w, r, http.StatusNotFound, "comic not found")
 		return
 	}
 	slog.ErrorContext(r.Context(), "failed to load comic state", "job_id", jobID, "error", err)
-	negotiate.Error(w, r, http.StatusBadGateway, "failed to load comic state")
+	negotiate.ErrorJSON(w, r, http.StatusBadGateway, "failed to load comic state")
 }

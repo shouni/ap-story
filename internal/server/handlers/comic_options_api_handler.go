@@ -37,7 +37,7 @@ type comicModeOption struct {
 // モードとモデルの一覧を返します。
 func (h *Handler) ComicOptions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		negotiate.Error(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		negotiate.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 

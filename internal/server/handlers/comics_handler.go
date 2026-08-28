@@ -93,30 +93,30 @@ func (h *Handler) validateChoices(task domain.Task) error {
 // jobID はサーバー側で新規採番し、レスポンスとして返します。
 func (h *Handler) EnqueueComic(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		negotiate.Error(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		negotiate.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	var req composeComicRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid JSON body")
+		negotiate.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	task, err := h.newComposeTask(req)
 	if err != nil {
 		slog.Error("failed to generate job id", "error", err)
-		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
+		negotiate.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	if err := task.ValidateSubmission(); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		negotiate.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := h.validateChoices(task); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		negotiate.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *Handler) enqueueAndRespond(w http.ResponseWriter, r *http.Request, task
 	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
 		slog.Error("failed to enqueue task", "job_id", task.JobID, "command", task.Command, "error", err)
-		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
+		negotiate.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
