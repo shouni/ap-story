@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/shouni/ap-story/actions/workflows/ci.yml/badge.svg)](https://github.com/shouni/ap-story/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen)](#)
-[![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
+[![Language](https://img.shields.io/badge/Language-Go-blue)](https://go.dev/)
 [![Platform](https://img.shields.io/badge/Platform-Cloud%20Run-blue?logo=google-cloud)](https://cloud.google.com/run)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 概要 (About)
+## 🚀 概要 (About) - 原稿から章立て・ネーム・コマ・ページまで一本で
 
 **AP Story** は、[go-comic-kit](https://github.com/shouni/go-comic-kit) を用いた
 **MCP 対応の漫画生成オーケストレータサービス**（Cloud Run + Cloud Tasks）です。
