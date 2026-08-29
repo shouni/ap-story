@@ -10,7 +10,7 @@ import (
 
 	"github.com/shouni/ap-story/internal/domain"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // defaultHistoryPageSize は履歴一覧のデフォルトページサイズです。
@@ -20,13 +20,13 @@ const defaultHistoryPageSize = 20
 func (h *Handler) DeleteComic(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid job id")
+		respond.Error(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
 	if err := h.repository.DeleteHistory(r.Context(), jobID); err != nil {
 		slog.ErrorContext(r.Context(), "failed to delete comic history", "job_id", jobID, "error", err)
-		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

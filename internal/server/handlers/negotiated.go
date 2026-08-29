@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -24,12 +24,12 @@ func (h *Handler) Comics(w http.ResponseWriter, r *http.Request) {
 	historyPage, err := h.repository.ListHistoryPage(r.Context(), page, defaultHistoryPageSize)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list comic history", "error", err)
-		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	if negotiate.WantsJSON(w, r) {
-		negotiate.JSON(w, r, http.StatusOK, historyPage)
+	if respond.WantsJSON(w, r) {
+		respond.JSON(w, r, http.StatusOK, historyPage)
 		return
 	}
 	h.render(w, r, http.StatusOK, "history.html", "作品履歴", historyPage)
@@ -42,13 +42,13 @@ func (h *Handler) Comics(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Comic(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid job id")
+		respond.Error(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
 	state, err := h.repository.GetState(r.Context(), jobID)
 	if err != nil {
-		if negotiate.WantsJSON(w, r) {
+		if respond.WantsJSON(w, r) {
 			writeStateError(w, r, jobID, err)
 			return
 		}
@@ -61,8 +61,8 @@ func (h *Handler) Comic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if negotiate.WantsJSON(w, r) {
-		negotiate.JSON(w, r, http.StatusOK, state)
+	if respond.WantsJSON(w, r) {
+		respond.JSON(w, r, http.StatusOK, state)
 		return
 	}
 	h.render(w, r, http.StatusOK, "history_detail.html", state.Title, h.buildDetailData(jobID, state))
@@ -74,7 +74,7 @@ func (h *Handler) Comic(w http.ResponseWriter, r *http.Request) {
 // 参照 URL を渡します。書き換えた URL は画面の画像エンドポイントに紐づくため、
 // 機械が受け取っても素材の在り処にはなりません。
 func (h *Handler) Characters(w http.ResponseWriter, r *http.Request) {
-	if negotiate.WantsJSON(w, r) {
+	if respond.WantsJSON(w, r) {
 		items := make([]characterSummaryResponse, 0, h.characters.Len())
 		for _, c := range h.characters.All() {
 			items = append(items, characterSummaryResponse{
@@ -83,7 +83,7 @@ func (h *Handler) Characters(w http.ResponseWriter, r *http.Request) {
 				ReferenceURL: c.ReferenceURL,
 			})
 		}
-		negotiate.JSON(w, r, http.StatusOK, items)
+		respond.JSON(w, r, http.StatusOK, items)
 		return
 	}
 
@@ -107,18 +107,18 @@ func (h *Handler) Character(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	char := h.characters.GetCharacter(characterID)
 	if char == nil {
-		negotiate.Error(w, r, http.StatusNotFound, "character not found")
+		respond.Error(w, r, http.StatusNotFound, "character not found")
 		return
 	}
 
-	if negotiate.WantsJSON(w, r) {
+	if respond.WantsJSON(w, r) {
 		history, err := h.repository.ListCharacterDesignHistory(r.Context(), characterID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to list character design history", "character_id", characterID, "error", err)
-			negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
+			respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		negotiate.JSON(w, r, http.StatusOK, characterDetailResponse{
+		respond.JSON(w, r, http.StatusOK, characterDetailResponse{
 			ID:            char.ID,
 			Name:          char.Name,
 			ReferenceURL:  char.ReferenceURL,

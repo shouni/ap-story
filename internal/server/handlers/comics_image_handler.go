@@ -13,7 +13,7 @@ import (
 
 	"github.com/shouni/ap-story/internal/domain"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // signedURLExpiration は画像配信用の署名 URL の有効期限です。
@@ -30,14 +30,14 @@ var (
 func (h *Handler) RedirectComicImage(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid job id")
+		respond.Error(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
 	relPath := chi.URLParam(r, "*")
 	objectPath, err := resolveComicImagePath(jobID, relPath)
 	if err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -45,7 +45,7 @@ func (h *Handler) RedirectComicImage(w http.ResponseWriter, r *http.Request) {
 	signedURL, err := h.signer.SignURL(r.Context(), objectURI, http.MethodGet, signedURLExpiration)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to generate signed URL", "object_path", objectPath, "error", err)
-		negotiate.Error(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
