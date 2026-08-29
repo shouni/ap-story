@@ -3,9 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
-	"path"
 	"sort"
-	"strings"
 
 	"github.com/shouni/go-comic-kit/asset"
 	"github.com/shouni/go-remote-io/remoteio"
@@ -29,8 +27,10 @@ func (r *ComicRepository) ListCharacterDesignHistory(ctx context.Context, charac
 		if err != nil {
 			return nil, fmt.Errorf("キャラクター画像履歴のリスト取得に失敗しました: %w", err)
 		}
-		jobID := jobIDFromCharacterImagePath(entry.URI, strings.TrimSuffix(listURI, "/"))
-		if jobID == "" {
+		// ファイル名の規約は go-comic-kit が持ちます。ここで逆算すると、
+		// kit が付け方を変えたときに一覧がエラーも出さずに空になります。
+		jobID, ok := asset.DesignSheetJobID(listURI, entry.URI)
+		if !ok {
 			continue
 		}
 		items = append(items, domain.CharacterDesignHistoryItem{
@@ -48,17 +48,4 @@ func (r *ComicRepository) ListCharacterDesignHistory(ctx context.Context, charac
 		return items[i].JobID > items[j].JobID
 	})
 	return items, nil
-}
-
-// jobIDFromCharacterImagePath は "character/{characterID}/{jobID}.ext" の GCS フルパスから
-// jobID を抽出します。prefix 配下でない、あるいは1階層ちょうどでない場合は空文字を返します。
-func jobIDFromCharacterImagePath(gcsPath, prefix string) string {
-	if !strings.HasPrefix(gcsPath, prefix) {
-		return ""
-	}
-	rel := strings.TrimPrefix(strings.TrimPrefix(gcsPath, prefix), "/")
-	if rel == "" || strings.Contains(rel, "/") {
-		return ""
-	}
-	return strings.TrimSuffix(rel, path.Ext(rel))
 }

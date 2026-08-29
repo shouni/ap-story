@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/shouni/ap-story/actions/workflows/ci.yml/badge.svg)](https://github.com/shouni/ap-story/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen)](#)
-[![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
+[![Language](https://img.shields.io/badge/Language-Go-blue)](https://go.dev/)
 [![Platform](https://img.shields.io/badge/Platform-Cloud%20Run-blue?logo=google-cloud)](https://cloud.google.com/run)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 概要 (About)
+## 🚀 概要 (About) - 原稿から章立て・ネーム・コマ・ページまで一本で
 
 **AP Story** は、[go-comic-kit](https://github.com/shouni/go-comic-kit) を用いた
 **MCP 対応の漫画生成オーケストレータサービス**（Cloud Run + Cloud Tasks）です。
@@ -166,8 +166,8 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
    **このフォームは章立てとネームまでしか作らない。** 押した時点では章立てが未実行で、
    何コマになるか分からないため、画像の開始はコマ数が見えている作品詳細に任せる。
 2. `/history/{jobID}` で台本を確認する。問題なければ**画像モデルを選んで「コマを生成」**。作品全体でも、
-   章カードから1章だけでも始められる。途中で失敗しても**「続きのコマを生成」**が未生成分だけを埋める。
-3. コマが揃うと、同じ場所のボタンが**「ページを合成」**に変わる。ページはコマを並べた合成物なので、
+   章カードから1章だけでも始められる。途中で失敗しても**「続きのコマを生成」が未生成分だけを埋める**。
+3. コマが揃うと、同じ場所のボタンが**「ページを合成」に変わる**。ページはコマを並べた合成物なので、
    コマの出来を見てから合成へ進む（崩れたコマから2Kのページを作ると払い直しになる）。
 4. 気に入らないコマ・ページは詳細画面から個別に直す。
    * **シャッフル**（<code>bi-shuffle</code>）: シードを振り直して別の絵にする。

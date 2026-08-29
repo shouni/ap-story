@@ -121,7 +121,7 @@ func TestProtectedAccessRejectsInvalidM2MToken(t *testing.T) {
 		t.Errorf("status = %d, want %d (invalid_token)", rec.Code, http.StatusUnauthorized)
 	}
 	if got := rec.Header().Get("WWW-Authenticate"); got == "" {
-		t.Error("WWW-Authenticate が無い（RFC 9110 §15.5.2）")
+		t.Error("WWW-Authenticate が無い（RFC 9110, Section 15.5.2）")
 	}
 	if got := rec.Header().Get("Location"); got != "" {
 		t.Errorf("Location = %q, want empty（ログイン画面へ送らない）", got)
