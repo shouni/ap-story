@@ -9,7 +9,7 @@ import (
 
 	"github.com/shouni/ap-story/internal/domain"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // RegenerateComic は POST /api/comics/{jobID}/regenerate を処理し、指定ジョブに対する
@@ -18,36 +18,36 @@ import (
 // job_id は無視します（新規ジョブの投入は POST /api/comics を使ってください）。
 func (h *Handler) RegenerateComic(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		negotiate.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		respond.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, "invalid job id")
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid job id")
 		return
 	}
 
 	var task domain.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	task.JobID = jobID
 	task.CreatedAt = time.Now().UTC()
 
 	if task.Command == domain.TaskCommandComposeComic {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, "compose_comic is not a regenerate command; use POST /api/comics instead")
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "compose_comic is not a regenerate command; use POST /api/comics instead")
 		return
 	}
 
 	if err := task.ValidateSubmission(); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
+		respond.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := h.validateChoices(task); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
+		respond.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 

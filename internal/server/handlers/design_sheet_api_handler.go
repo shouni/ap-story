@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // designSheetAPIRequest は POST /api/design-sheets のリクエストボディです。
@@ -27,13 +27,13 @@ type designSheetAPIRequest struct {
 // 投入します。job_id はサーバー側で新規採番し、レスポンスとして返します。
 func (h *Handler) EnqueueDesignSheet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		negotiate.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		respond.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	var req designSheetAPIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -43,19 +43,19 @@ func (h *Handler) EnqueueDesignSheet(w http.ResponseWriter, r *http.Request) {
 	task, err := h.newDesignSheetTask(params)
 	if err != nil {
 		slog.Error("failed to generate job id", "error", err)
-		negotiate.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	if err := task.ValidateSubmission(); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
+		respond.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// モデル名と画風は許可リストで縛る。ブラウザは <select> に縛られるが、
 	// この JSON 経路は任意の文字列を送れるため、ここが唯一の関門になる。
 	if err := h.validateChoices(task); err != nil {
-		negotiate.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
+		respond.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shouni/gcp-kit/serverrole"
+	"github.com/shouni/go-serve-kit/serverrole"
 
 	"github.com/stretchr/testify/require"
 )
