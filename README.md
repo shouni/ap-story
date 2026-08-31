@@ -284,7 +284,9 @@ Slack 通知も走らないまま、`max_attempts = 1` の `story-queue` は再�
 既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分です。dispatch deadline の上限が
 30 分なので、タイムアウトを伸ばして対処する余地はほとんどありません。
 
-`SERVER_ROLE=both` にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動かします。
+`SERVER_ROLE=both` にすると 1 プロセスが両方の面を提供します。`go run ./main.go` で画面は
+確認できますが、**パイプラインは走りません。Cloud Tasks は localhost へ配送できないため、
+投入してもワーカーは動きません**。ロジックの確認は `go test ./... -race` で行ってください。
 
 `SERVER_ROLE` に既定値は無く、未設定なら起動時に落ちます。未設定を `both` とみなすと、本番の
 環境変数が 1 つ欠けただけで公開 web に `/tasks/generate` が復活するためです。
