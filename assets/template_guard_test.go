@@ -16,7 +16,7 @@ import (
 //
 // 兄弟アプリでこれが実際に起きています。2026-08-24 に 5 アプリを調べたところ、
 // インラインスクリプトが残っていたのは ap-voice と adk-review で、どちらもこの種の
-// ガードを持たないアプリでした。持っている ap-comp と ap-mv は 0 件です。
+// ガードを持たないアプリでした。持っている ap-music と ap-mv は 0 件です。
 
 // templateNames は、埋め込まれている全テンプレートのパスを返します。
 func templateNames(t *testing.T) []string {
