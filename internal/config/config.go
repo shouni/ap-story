@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shouni/go-remote-io/remoteio"
-	"github.com/shouni/go-serve-kit/serverrole"
-
 	"github.com/caarlos0/env/v11"
 	"github.com/shouni/go-comic-kit/ports"
+	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-serve-kit/serverrole"
 	"github.com/shouni/go-utils/strlist"
 )
 
@@ -203,7 +202,7 @@ func (c *Config) normalize() error {
 	c.Server.Role = role
 
 	c.Server.ServiceURL = strings.TrimSpace(c.Server.ServiceURL)
-	workerURL, err := normalizeWorkerURL(c.Tasks.WorkerURL, c.Server.ServiceURL)
+	workerURL, err := normalizeWorkerURL(c.Server.Role, c.Tasks.WorkerURL, c.Server.ServiceURL)
 	if err != nil {
 		return err
 	}
@@ -224,27 +223,31 @@ func (c *Config) normalize() error {
 	return nil
 }
 
-const taskGeneratePath = "/tasks/generate"
-
-func normalizeWorkerURL(workerURL string, serviceURL string) (string, error) {
+// normalizeWorkerURL は配送先の worker サービス URL を整えます。返すのはサービスの
+// URL までで、タスクのパスは投入の直前（internal/builder）で継ぎ足します。
+//
+// SERVICE_URL から導出するのは Worker 面を担うプロセスだけです。分割デプロイの
+// SERVICE_URL は公開側に固定されているため、web 専用で導出すると全件 404 になります。
+func normalizeWorkerURL(role serverrole.Role, workerURL string, serviceURL string) (string, error) {
 	workerURL = strings.TrimSpace(workerURL)
 	if workerURL != "" {
+		if _, err := url.Parse(workerURL); err != nil {
+			return "", fmt.Errorf("invalid worker URL %q: %w", workerURL, err)
+		}
 		return workerURL, nil
 	}
-	return joinWorkerPath(serviceURL)
-}
+	if !role.ServesWorker() {
+		return "", nil
+	}
 
-func joinWorkerPath(serviceURL string) (string, error) {
 	serviceURL = strings.TrimSpace(serviceURL)
 	if serviceURL == "" {
-		return taskGeneratePath, nil
+		return "", nil
 	}
-
-	workerURL, err := url.JoinPath(serviceURL, taskGeneratePath)
-	if err != nil {
+	if _, err := url.Parse(serviceURL); err != nil {
 		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
 	}
-	return workerURL, nil
+	return serviceURL, nil
 }
 
 // TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。

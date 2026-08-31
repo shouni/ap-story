@@ -36,6 +36,7 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 
 func withWebConfig(cfg *Config) *Config {
 	cfg.Tasks.QueueID = "story-queue"
+	cfg.Tasks.WorkerURL = "https://ap-story-worker.example.run.app"
 	cfg.Auth.GoogleClientID = "client-id"
 	cfg.Auth.GoogleClientSecret = "client-secret"
 	cfg.Auth.SessionSecret = "0123456789abcdef"
@@ -143,7 +144,7 @@ func TestLoadConfigNormalizesServerRole(t *testing.T) {
 	}{
 		{name: "both", raw: "both", want: serverrole.Both},
 		// 未設定を both に落とすと、本番の環境変数が 1 つ欠けただけで
-		// 公開 web に /tasks/generate が復活します。値が無いとデコーダは
+		// 公開 web に worker ルートが復活します。値が無いとデコーダは
 		// UnmarshalText を呼ばないため、normalize が環境変数名つきで返します。
 		{name: "未設定は拒否", raw: "", wantErr: true, wantInErr: "SERVER_ROLE"},
 		{name: "web", raw: "web", want: serverrole.Web},

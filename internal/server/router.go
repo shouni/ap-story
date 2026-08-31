@@ -9,13 +9,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/cloudlog"
 	"github.com/shouni/gcp-kit/cloudrun"
 	"github.com/shouni/go-serve-kit/secureheaders"
 
 	"github.com/shouni/ap-story/assets"
 	"github.com/shouni/ap-story/internal/builder"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/ap-story/internal/domain"
 )
 
 // NewRouter は、ミドルウェアとルーティングを統合した http.Handler を構築します。
@@ -35,8 +36,8 @@ func setupCommonMiddleware(r *chi.Mux, projectID string) {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.CleanPath)
-	// 画面は日本語 UTF-8（1 文字 3 バイト）なので圧縮がよく効くが、これまで無圧縮で
-	// 配信していた。静的ファイルも同じ経路に乗る（vendor は immutable なので再圧縮は稀）。
+	// 画面は日本語 UTF-8（1 文字 3 バイト）なので圧縮がよく効きます。静的ファイルも
+	// 同じ経路に乗ります（vendor は immutable なので再圧縮は稀です）。
 	r.Use(middleware.Compress(compressionLevel))
 	r.Use(secureheaders.Middleware(secureheaders.Config{
 		ImageSources: []string{gcsOrigin},
@@ -139,7 +140,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)。
 		// 失敗はセッションへフォールバックせず、その場で止まります。
 		r.Use(auth.Require(h.TaskAuth))
-		r.Post("/tasks/generate", h.Worker.ProcessTask)
+		r.Post(domain.WorkerTaskPath, h.Worker.ProcessTask)
 	})
 }
 
