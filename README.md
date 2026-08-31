@@ -217,7 +217,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 | `PORT` | HTTP ポート（Cloud Run 既定 8080） |
 | `SERVER_ROLE` | **必須**。プロセスが担う役割。`web` / `worker` / `both`。未設定と未知の値は起動時エラーです。詳細は「web / worker の分離」を参照 |
 | `SERVICE_URL` | 自サービスの**公開** URL。OAuth のリダイレクト先、M2M 認証の audience、Slack 通知リンクの生成元を兼ねるため、worker にも**非公開の worker 自身ではなく web の URL** を設定する |
-| `WORKER_URL` | Cloud Tasks が呼び出す Worker エンドポイント（省略時は SERVICE_URL 由来）。web 面のみ使用 |
+| `WORKER_URL` | worker **サービス**の URL。パスは含めません |
 | `STORY_BUCKET` | 成果物・state の GCS バケット |
 | `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
 | `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定、全体がフォームの選択肢と投入時の許可リスト。**web で必須**（worker は読みません。ジョブが自分のモデル名を運びます） |

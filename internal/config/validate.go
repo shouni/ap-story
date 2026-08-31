@@ -104,8 +104,9 @@ func (c *Config) validateWebConfig() error {
 	// worker は読みません——ジョブが必ず自分のモデル名を運ぶようになったためです
 	// （go-comic-kit も設定としてのモデル既定を持ちません）。
 	//
-	// 空のまま起動すると選択欄が消え、JSON API のモデル指定が全部 400 になります。
-	// 起動自体は成功してしまうので、「選べないこと」に気付くのが使ってみた後になります。
+	// 空を起動時に落とすのは、通すとフォームの選択欄が消え、JSON API のモデル指定が
+	// 全部 400 になるためです。起動自体は成功してしまうので、そのままでは
+	// 「選べないこと」に気付くのが使ってみた後になります。
 	for _, models := range []struct {
 		name string
 		list []string
@@ -121,6 +122,12 @@ func (c *Config) validateWebConfig() error {
 	// タスクを投入するのは Web 面だけなので、キュー名も Web 面の要件です。
 	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+	}
+
+	// 配送先も投入側＝ Web 面の要件です。未設定を SERVICE_URL から導出しない理由は
+	// normalizeWorkerURL を参照（導出させると必ず 404 になります）。
+	if c.Tasks.WorkerURL == "" {
+		return fmt.Errorf("WORKER_URL が設定されていません（worker サービスの URL を渡します）")
 	}
 
 	// caller SA はタスクを投入する側＝ web 面の要件です。worker が受け付ける許可リストは

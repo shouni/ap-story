@@ -18,6 +18,8 @@ func setDefaultURLConfigEnv(t *testing.T) {
 	t.Setenv("SERVER_ROLE", string(serverrole.Both))
 }
 
+// WORKER_URL / SERVICE_URL からの導出は worker サービスの URL までを返し、
+// タスクのパスは付けません。継ぎ足すのは投入の直前（domain.WorkerTaskURL）です。
 func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -27,22 +29,22 @@ func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
 	}{
 		{
 			name: "uses service URL fallback",
-			want: "http://localhost:8080/tasks/generate",
+			want: "http://localhost:8080",
 		},
 		{
 			name:      "trims explicit worker URL",
-			workerURL: " https://worker.example.com/tasks/generate ",
-			want:      "https://worker.example.com/tasks/generate",
+			workerURL: " https://worker.example.com ",
+			want:      "https://worker.example.com",
 		},
 		{
-			name:       "joins query and fragment safely",
+			name:       "keeps query and fragment untouched",
 			serviceURL: " https://service.example.com/base?debug=true#worker ",
-			want:       "https://service.example.com/base/tasks/generate?debug=true#worker",
+			want:       "https://service.example.com/base?debug=true#worker",
 		},
 		{
-			name:       "trims trailing slash before fallback",
+			name:       "trims surrounding spaces on fallback",
 			serviceURL: " https://service.example.com/ ",
-			want:       "https://service.example.com/tasks/generate",
+			want:       "https://service.example.com/",
 		},
 	}
 
