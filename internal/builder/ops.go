@@ -22,7 +22,7 @@ func buildOperations(
 	ctx context.Context,
 	cfg *config.Config,
 	store remoteio.Store,
-	httpClient httpkit.HTTPClient,
+	downloader httpkit.Streamer,
 	characters *characterkit.Characters,
 ) (*ports.Operations, error) {
 	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg.GCP)
@@ -42,7 +42,7 @@ func buildOperations(
 
 	ops, err := workflow.New(workflow.Args{
 		Config:              cfg.AI.KitConfig(),
-		HTTPClient:          httpClient,
+		Downloader:          downloader,
 		Reader:              store,
 		Writer:              store,
 		AIClient:            aiClient,
