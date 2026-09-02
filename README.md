@@ -236,7 +236,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 | `ALLOWED_TASK_SERVICE_ACCOUNTS` | worker が**受け付ける** caller SA の許可リスト（カンマ区切り、worker では必須）。web と worker で実行 SA を分けている場合、worker が受け付けるべき発行元は自分自身ではなく **web 側の SA**（`ap-story-web-runner`） |
 | `TASK_AUDIENCE_URL` | OIDC トークンの audience。web/worker を分けた場合は**呼び先である worker の URL**（Cloud Run の IAM が不一致を 403 で弾く） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
-| `SESSION_SECRET` / `SESSION_ENCRYPT_KEY` | セッションクッキーの署名鍵・暗号化鍵 |
+| `SESSION_FIRESTORE_DATABASE` / `SESSION_FIRESTORE_COLLECTION` | セッションを置く Firestore（既定はどちらも `sessions`）。**ジョブ状態用とは別のデータベースを指します** |
 | `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可するメール/ドメイン（カンマ区切り、いずれか必須） |
 | `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り）。`web` 面では必須で、未設定だと起動に失敗します |
 | `SLACK_WEBHOOK_URL` | 完了通知（任意）。worker 面のみ使用 |

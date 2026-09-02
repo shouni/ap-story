@@ -39,8 +39,6 @@ func withWebConfig(cfg *Config) *Config {
 	cfg.Tasks.WorkerURL = "https://ap-story-worker.example.run.app"
 	cfg.Auth.GoogleClientID = "client-id"
 	cfg.Auth.GoogleClientSecret = "client-secret"
-	cfg.Auth.SessionSecret = "0123456789abcdef"
-	cfg.Auth.SessionEncryptKey = "0123456789abcdef"
 	cfg.Auth.AllowedEmails = []string{"user@example.com"}
 	cfg.Auth.AllowedM2MServiceAccounts = []string{"mcp-runner@test-project.iam.gserviceaccount.com"}
 	return cfg

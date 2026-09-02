@@ -3,10 +3,10 @@ module github.com/shouni/ap-story
 go 1.27
 
 require (
+	cloud.google.com/go/firestore v1.25.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/gorilla/sessions v1.4.0
-	github.com/shouni/gcp-kit v1.14.1
+	github.com/shouni/gcp-kit v1.15.0
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-comic-kit v1.7.3
 	github.com/shouni/go-gemini-client v1.21.4
@@ -30,6 +30,7 @@ require (
 	cloud.google.com/go/cloudtasks v1.19.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.13.0 // indirect
+	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
 	cloud.google.com/go/storage v1.66.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.37.0 // indirect
@@ -49,7 +50,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
 	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
