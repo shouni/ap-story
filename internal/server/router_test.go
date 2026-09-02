@@ -12,27 +12,21 @@ import (
 	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/auth/session"
 
-	"github.com/gorilla/sessions"
 	"github.com/shouni/ap-story/internal/builder"
 	"github.com/shouni/ap-story/internal/server/handlers"
 	"github.com/shouni/gcp-kit/auth"
 )
 
-const (
-	testSessionAuthKey    = "session-auth-key-32-bytes-long!"
-	testSessionEncryptKey = "0123456789abcdef"
-	testSessionName       = "test-session"
-)
+const testSessionName = "test-session"
 
 func testAuthHandler(t *testing.T) *session.Handler {
 	t.Helper()
 	h, err := session.New(session.Config{
-		ClientID:          "client-id",
-		ClientSecret:      "client-secret",
-		RedirectURL:       "https://example.com/auth/callback",
-		SessionAuthKey:    testSessionAuthKey,
-		SessionEncryptKey: testSessionEncryptKey,
-		SessionName:       testSessionName,
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		RedirectURL:  "https://example.com/auth/callback",
+		SessionName:  testSessionName,
+		Store:        session.NewMemoryStore(session.StoreConfig{}),
 		// 許可リストが空だと fail-closed で全員拒否されます。
 		AllowedDomains: []string{"example.com"},
 	})
@@ -156,26 +150,16 @@ func TestCSRFTokenReachesTemplates(t *testing.T) {
 	}
 }
 
-// loggedInCookie は、ログイン済みセッションを表すクッキーを返します。
+// loggedInCookie は、h でログイン済みのセッションを作り、そのクッキーを返します。
 //
-// OAuth のコールバックを経ずにログイン状態を作るため、Handler と同じ鍵で
-// 組み立てたストアへ直接書き込みます。testAuthHandler と鍵・セッション名が
-// ずれると Handler 側が読めないので、定数を共有しています。
-func loggedInCookie(t *testing.T, _ *session.Handler) *http.Cookie {
+// OAuth のコールバックを経ずにログイン状態を作ります。クッキーは h 自身に
+// 焼かせます。セッションの実体はストア側にあるので、自前で組み立てても読めません。
+func loggedInCookie(t *testing.T, h *session.Handler) *http.Cookie {
 	t.Helper()
 
-	store := sessions.NewCookieStore([]byte(testSessionAuthKey), []byte(testSessionEncryptKey))
-	store.Options = &sessions.Options{Path: "/", MaxAge: 3600, HttpOnly: true, SameSite: http.SameSiteLaxMode}
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	sess, err := store.Get(req, testSessionName)
-	if err != nil {
-		t.Fatalf("store.Get() error = %v", err)
-	}
-	sess.Values[session.DefaultUserSessionKey] = "user@example.com"
-	if err := sess.Save(req, rec); err != nil {
-		t.Fatalf("session.Save() error = %v", err)
+	if err := h.IssueSession(rec, httptest.NewRequest(http.MethodGet, "/", nil), "user@example.com"); err != nil {
+		t.Fatalf("IssueSession() error = %v", err)
 	}
 
 	cookies := rec.Result().Cookies()

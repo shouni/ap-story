@@ -177,8 +177,6 @@ func essentialConfigEnv(t *testing.T) {
 	t.Setenv("SERVICE_URL", "https://service.example.com")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
-	t.Setenv("SESSION_SECRET", "session-secret-32-bytes-long!!!!")
-	t.Setenv("SESSION_ENCRYPT_KEY", "0123456789abcdef")
 	t.Setenv("ALLOWED_EMAILS", "user@example.com")
 	t.Setenv("ALLOWED_M2M_SERVICE_ACCOUNTS", "sa@project.iam.gserviceaccount.com")
 	t.Setenv("GCP_PROJECT_ID", "proj")
@@ -237,7 +235,7 @@ func TestValidateEssentialConfigRequiresHTTPSServiceURL(t *testing.T) {
 }
 
 func TestValidateEssentialConfigRequiresGoogleOAuthFields(t *testing.T) {
-	for _, env := range []string{"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "SESSION_SECRET"} {
+	for _, env := range []string{"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"} {
 		t.Run(env, func(t *testing.T) {
 			essentialConfigEnv(t)
 			t.Setenv(env, "")
@@ -255,14 +253,6 @@ func TestValidateEssentialConfigRequiresAllowedEmailsOrDomains(t *testing.T) {
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 	require.ErrorContains(t, cfg.ValidateEssentialConfig(), "認可リスト")
-}
-
-func TestValidateEssentialConfigValidatesSessionEncryptKeyLength(t *testing.T) {
-	essentialConfigEnv(t)
-	t.Setenv("SESSION_ENCRYPT_KEY", "too-short")
-	cfg, err := LoadConfig()
-	require.NoError(t, err)
-	require.ErrorContains(t, cfg.ValidateEssentialConfig(), "SESSION_ENCRYPT_KEY")
 }
 
 func TestValidateEssentialConfigRequiresStorageFields(t *testing.T) {

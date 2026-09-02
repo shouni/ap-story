@@ -14,6 +14,7 @@ import (
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
 	"github.com/shouni/ap-story/internal/pipeline"
+	"github.com/shouni/gcp-kit/auth/session"
 )
 
 // Container はアプリケーションの依存関係（DIコンテナ）を保持します。
@@ -28,6 +29,8 @@ type Container struct {
 	Pipeline *pipeline.Runner
 	// TaskQueue は非同期ジョブ（Task）を Cloud Tasks に投入します。
 	TaskQueue domain.TaskQueue
+	// SessionStore はログインセッションの保存先です。web 面だけが持ちます。
+	SessionStore session.Store
 	// Repository は作品履歴の一覧・詳細・削除を提供します。
 	Repository domain.ComicRepository
 	// JobStatus はジョブ進行状況の記録・参照を提供します。
