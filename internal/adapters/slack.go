@@ -43,7 +43,7 @@ var _ domain.Notifier = (*SlackAdapter)(nil)
 
 // NewSlackAdapter は Slack 通知アダプターを構築します。webhookURL が空文字の場合は
 // 通知が無効化された（呼び出しても常に成功しスキップする）アダプターを返します。
-func NewSlackAdapter(httpClient httpkit.Requester, webhookURL, serviceURL string) (*SlackAdapter, error) {
+func NewSlackAdapter(httpClient httpkit.Poster, webhookURL, serviceURL string) (*SlackAdapter, error) {
 	notifier, err := slack.NewNotifier(httpClient, webhookURL)
 	if err != nil {
 		return nil, fmt.Errorf("slack クライアントの初期化に失敗しました: %w", err)

@@ -49,7 +49,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	// （Bundle.Close が factory を閉じます）。
 	closers := []io.Closer{storage}
 
-	httpClient := httpkit.New(config.DefaultHTTPTimeout)
+	httpClient := httpkit.New()
 
 	// 2. Characters
 	characters, charErr := adapters.LoadCharacters(ctx, store, cfg.Storage.CharactersJSONPath)
