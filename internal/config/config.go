@@ -14,13 +14,6 @@ import (
 	"github.com/shouni/go-utils/strlist"
 )
 
-const (
-	// DefaultShutdownGrace はサーバー停止時の猶予時間のデフォルト値です。
-	DefaultShutdownGrace = 15 * time.Second
-	// DefaultHTTPTimeout は外部 HTTP 通信のタイムアウトのデフォルト値です。
-	DefaultHTTPTimeout = 60 * time.Second
-)
-
 // 画風の文言はこのパッケージが持ちません。コマ・ページもデザインシートも
 // assets/prompts/styles.json のプリセットをスタイルモードで選ぶ形になったためです
 // （シート用は演出を落とした design_style を別に持ちます）。
@@ -187,8 +180,6 @@ func LoadConfig() (*Config, error) {
 	if cfg.Tasks.TaskAudienceURL == "" {
 		cfg.Tasks.TaskAudienceURL = cfg.Server.ServiceURL
 	}
-
-	cfg.Server.ShutdownTimeout = DefaultShutdownGrace
 
 	return &cfg, nil
 }
