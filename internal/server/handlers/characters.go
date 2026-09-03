@@ -62,9 +62,9 @@ type characterHistoryPageData struct {
 	History     []characterHistoryImage
 }
 
-// ServeCharacterHistory は GET /characters/{characterID}/history を処理し、
+// CharacterDesignSheets は GET /characters/{characterID}/design-sheets を処理し、
 // AI生成のデザインシート履歴を全件（新しい順）表示します。
-func (h *Handler) ServeCharacterHistory(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CharacterDesignSheets(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	char := h.characters.GetCharacter(characterID)
 	if char == nil {
@@ -85,7 +85,7 @@ func (h *Handler) ServeCharacterHistory(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// DeleteCharacterDesign は DELETE /api/characters/{characterID}/images/{jobID} を処理し、
+// DeleteCharacterDesign は DELETE /characters/{characterID}/design-sheets/{jobID} を処理し、
 // 指定キャラクターの生成履歴1件（画像と、単体生成ジョブなら state も）を削除します。
 func (h *Handler) DeleteCharacterDesign(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")

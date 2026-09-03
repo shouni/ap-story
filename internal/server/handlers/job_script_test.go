@@ -41,7 +41,7 @@ func scriptTestState() *kitcomic.MangaState {
 // scriptRequest は chi の URL パラメータを載せたリクエストを組み立てます。
 func scriptRequest(t *testing.T, method, body string) *http.Request {
 	t.Helper()
-	req := httptest.NewRequest(method, "/api/comics/"+scriptJobID+"/script", strings.NewReader(body))
+	req := httptest.NewRequest(method, "/jobs/"+scriptJobID+"/script", strings.NewReader(body))
 	routeCtx := chi.NewRouteContext()
 	routeCtx.URLParams.Add("jobID", scriptJobID)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
@@ -68,7 +68,7 @@ func TestGetComicScriptReturnsOnlyTheEditablePart(t *testing.T) {
 
 	h, _ := newScriptHandler(t)
 	rec := httptest.NewRecorder()
-	h.GetComicScript(rec, scriptRequest(t, http.MethodGet, ""))
+	h.JobScript(rec, scriptRequest(t, http.MethodGet, ""))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
@@ -96,7 +96,7 @@ func TestUpdateComicScriptSavesTheEditedLines(t *testing.T) {
 	]}`
 
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
@@ -125,7 +125,7 @@ func TestUpdateComicScriptReportsThePagesThatMustBeRecomposed(t *testing.T) {
 	]}`
 
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	var got struct {
 		ChangedLines  int   `json:"changed_lines"`
@@ -155,7 +155,7 @@ func TestUpdateComicScriptDoesNotWriteWhenNothingChanged(t *testing.T) {
 	]}`
 
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -175,7 +175,7 @@ func TestUpdateComicScriptRejectsChangesToThePanelLineup(t *testing.T) {
 	]}`
 
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (body: %s)", rec.Code, rec.Body.String())
@@ -202,7 +202,7 @@ func TestUpdateComicScriptRefusesWhileAJobIsRunning(t *testing.T) {
 		{"panel_id":"ch01-p02","dialogues":[{"speaker_id":"metan","text":"そうよ","kind":"speech"}]}
 	]}`
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409 (body: %s)", rec.Code, rec.Body.String())
@@ -226,7 +226,7 @@ func TestUpdateComicScriptAllowsEditingWhenNoStatusWasEverRecorded(t *testing.T)
 		{"panel_id":"ch01-p02","dialogues":[{"speaker_id":"metan","text":"そうよ","kind":"speech"}]}
 	]}`
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
@@ -243,7 +243,7 @@ func TestUpdateComicScriptRejectsAnUnknownSpeaker(t *testing.T) {
 	]}`
 
 	rec := httptest.NewRecorder()
-	h.UpdateComicScript(rec, scriptRequest(t, http.MethodPut, body))
+	h.JobScriptUpdate(rec, scriptRequest(t, http.MethodPut, body))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (body: %s)", rec.Code, rec.Body.String())

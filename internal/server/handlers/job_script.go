@@ -13,13 +13,13 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// GetComicScript は GET /api/comics/{jobID}/script を処理し、台本のうち
+// JobScript は GET /jobs/{jobID}/script を処理し、台本のうち
 // 編集できる部分（章の見出しと各コマのセリフ）だけを返します。
 //
-// state 全体は GET /api/comics/{jobID} で取れますが、そちらは生成記録や組み立て済みの
+// state 全体は GET /jobs/{jobID} で取れますが、そちらは生成記録や組み立て済みの
 // プロンプトまで含んで100KBを超えます。校正のために通して読むには重いうえ、
 // そのまま編集して戻せる形にもなっていません。
-func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JobScript(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
 		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid job id")
@@ -35,7 +35,7 @@ func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, r, http.StatusOK, domain.NewScriptDraft(state))
 }
 
-// UpdateComicScript は PUT /api/comics/{jobID}/script を処理し、送られてきた台本の
+// JobScriptUpdate は PUT /jobs/{jobID}/script を処理し、送られてきた台本の
 // セリフを state へ反映します。反映されるのはセリフだけで、コマの構成は動かせません
 // （domain.ScriptDraft.ApplyTo を参照）。
 //
@@ -43,7 +43,7 @@ func (h *Handler) GetComicScript(w http.ResponseWriter, r *http.Request) {
 // 描き込むので、直した文字を絵に載せるには対象ページを合成し直す必要があります。
 // そのページ番号を affected_pages で返すのは、保存が終わりではないことを
 // 呼び出し側に伝えるためです。
-func (h *Handler) UpdateComicScript(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JobScriptUpdate(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
 		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid job id")

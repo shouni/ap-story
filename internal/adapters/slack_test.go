@@ -84,7 +84,7 @@ func TestSlackContentIncludesCommandAndJobID(t *testing.T) {
 	if !strings.Contains(content, "**Job ID:** `job-1`") {
 		t.Errorf("content = %q, want job id", content)
 	}
-	if !strings.Contains(content, "**History Detail:** [https://example.com/history/job-1]") {
+	if !strings.Contains(content, "**History Detail:** [https://example.com/jobs/job-1]") {
 		t.Errorf("content = %q, want history detail web link", content)
 	}
 }
@@ -182,7 +182,7 @@ func TestNotifyCompleteSendsTitleAndBody(t *testing.T) {
 
 	want := "**Command:** `compose_comic`\n" +
 		"**Job ID:** `job-1`\n" +
-		"**History Detail:** [https://example.com/history/job-1](https://example.com/history/job-1)"
+		"**History Detail:** [https://example.com/jobs/job-1](https://example.com/jobs/job-1)"
 	if msg.Body != want {
 		t.Errorf("Body =\n%q\nwant\n%q", msg.Body, want)
 	}

@@ -15,7 +15,7 @@
     <nav aria-label="作品履歴ページ">
         <ul class="pagination pagination-sm mb-0">
             <li class="page-item {{if not .Data.HasPrev}}disabled{{end}}">
-                <a class="page-link" href="/history?page={{.Data.PrevPage}}" aria-label="前のページ">
+                <a class="page-link" href="/jobs?page={{.Data.PrevPage}}" aria-label="前のページ">
                     <i class="bi bi-chevron-left"></i>
                 </a>
             </li>
@@ -23,7 +23,7 @@
                 <span class="page-link">{{.Data.Page}} / {{.Data.TotalPages}}</span>
             </li>
             <li class="page-item {{if not .Data.HasNext}}disabled{{end}}">
-                <a class="page-link" href="/history?page={{.Data.NextPage}}" aria-label="次のページ">
+                <a class="page-link" href="/jobs?page={{.Data.NextPage}}" aria-label="次のページ">
                     <i class="bi bi-chevron-right"></i>
                 </a>
             </li>
@@ -38,7 +38,7 @@
     <div class="list-group-item list-group-item-action p-3 position-relative" id="history-item-{{.JobID}}">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
             <div class="flex-grow-1 mb-3 mb-md-0 me-md-3">
-                <a href="/history/{{.JobID}}" class="text-decoration-none text-dark d-block mb-1 stretched-link">
+                <a href="/jobs/{{.JobID}}" class="text-decoration-none text-dark d-block mb-1 stretched-link">
                     <h2 class="h5 mb-1 fw-bold text-truncate">{{if .Title}}{{.Title}}{{else}}(無題){{end}}</h2>
                 </a>
                 <div class="text-muted small">
@@ -55,7 +55,7 @@
             </div>
 
             <div class="d-flex align-items-center justify-content-end gap-1 position-relative z-3">
-                <a href="/history/{{.JobID}}" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center px-3">
+                <a href="/jobs/{{.JobID}}" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center px-3">
                     詳細
                 </a>
                 <button class="btn btn-outline-danger btn-sm px-2 js-delete-history"

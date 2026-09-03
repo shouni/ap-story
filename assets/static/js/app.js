@@ -52,7 +52,7 @@ document.addEventListener('click', (event) => {
     if (!jobId) return;
 
     window.App.deleteResource({
-        url: `/api/comics/${jobId}`,
+        url: `/jobs/${jobId}`,
         confirmMessage: 'この作品の履歴と成果物を削除しますか？',
         event,
         stopPropagation: true,
@@ -61,7 +61,7 @@ document.addEventListener('click', (event) => {
             if (item) {
                 item.remove();
             } else {
-                window.location.href = '/history';
+                window.location.href = '/jobs';
             }
         }
     });
@@ -77,7 +77,7 @@ document.addEventListener('click', (event) => {
     if (!characterId || !jobId) return;
 
     window.App.deleteResource({
-        url: `/api/characters/${characterId}/images/${jobId}`,
+        url: `/characters/${characterId}/design-sheets/${jobId}`,
         confirmMessage: 'このデザインシートを削除しますか？',
         event,
         stopPropagation: true,
@@ -99,7 +99,7 @@ window.App.enqueueRegenerate = async ({ jobId, payload, button, pendingLabel = '
     }
 
     try {
-        const response = await fetch(`/api/comics/${jobId}/regenerate`, {
+        const response = await fetch(`/jobs/${jobId}/regenerate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -288,7 +288,7 @@ const loadScript = async () => {
     if (!root || window.App.script.loaded) return;
 
     try {
-        const response = await fetch(`/api/comics/${root.dataset.jobId}/script`);
+        const response = await fetch(`/jobs/${root.dataset.jobId}/script`);
         if (!response.ok) {
             setScriptStatus('.js-script-status', '台本の取得に失敗しました', true);
             return;
@@ -340,7 +340,7 @@ const saveScript = async (draft, statusSelector, button) => {
     setScriptStatus(statusSelector, '保存中…');
 
     try {
-        const response = await fetch(`/api/comics/${root.dataset.jobId}/script`, {
+        const response = await fetch(`/jobs/${root.dataset.jobId}/script`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',

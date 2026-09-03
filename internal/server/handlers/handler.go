@@ -1,4 +1,4 @@
-// Package handlers は、/api/* の JSON API と、Home 等のブラウザ向け画面(HTML)の
+// Package handlers は、JSON と HTML を同じルートで返す Web 面の
 // HTTP ハンドラーを提供します。
 package handlers
 

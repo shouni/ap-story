@@ -200,7 +200,7 @@ func TestNewRouterOmitsWebRoutesWithoutWebHandler(t *testing.T) {
 		TaskAuth: mustOIDC(t, "https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 
-	for _, path := range []string{"/", "/api/comics"} {
+	for _, path := range []string{"/", "/jobs"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 
@@ -242,8 +242,8 @@ func TestNewRouterRegistersTheScriptRoutes(t *testing.T) {
 	}, "")
 
 	want := map[string]string{
-		http.MethodGet: "/api/comics/{jobID}/script",
-		http.MethodPut: "/api/comics/{jobID}/script",
+		http.MethodGet: "/jobs/{jobID}/script",
+		http.MethodPut: "/jobs/{jobID}/script",
 	}
 	found := map[string]bool{}
 	walk := func(method string, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {

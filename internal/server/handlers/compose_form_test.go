@@ -29,10 +29,10 @@ func TestComposeFormRenders(t *testing.T) {
 
 func postComposeForm(t *testing.T, h *Handler, values url.Values) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader(values.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
-	h.EnqueueComicForm(rec, req)
+	h.createComicForm(rec, req)
 	return rec
 }
 

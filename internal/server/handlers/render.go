@@ -13,11 +13,11 @@ const titleSuffix = " - AP Story"
 // layout.html の `{{if eq .ActiveNav "..."}}` と対応します。
 func activeNav(path string) string {
 	switch {
-	case strings.HasPrefix(path, "/history"):
+	case strings.HasPrefix(path, "/jobs"):
 		return "works"
 	case strings.HasPrefix(path, "/characters"):
 		return "characters"
-	case strings.HasPrefix(path, "/compose"), strings.HasPrefix(path, "/design-sheets"):
+	case strings.HasPrefix(path, "/compose"):
 		return "create"
 	default:
 		return ""

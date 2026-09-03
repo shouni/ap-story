@@ -4,7 +4,7 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// characterSummaryResponse は GET /api/characters の1キャラクター分のレスポンスです。
+// characterSummaryResponse は GET /characters の1キャラクター分のレスポンスです。
 // 画像 URL は state 同様 gs:// URI のまま返します（署名 URL 変換は
 // /api/characters/reference/* リダイレクトエンドポイントの責務です）。
 type characterSummaryResponse struct {
@@ -13,7 +13,7 @@ type characterSummaryResponse struct {
 	ReferenceURL string `json:"reference_url,omitempty"`
 }
 
-// characterDetailResponse は GET /api/characters/{characterID} のレスポンスです。
+// characterDetailResponse は GET /characters/{characterID} のレスポンスです。
 type characterDetailResponse struct {
 	ID            string                              `json:"id"`
 	Name          string                              `json:"name"`

@@ -8,7 +8,7 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// comicOptionsResponse は GET /api/comic-options のレスポンスです。
+// comicOptionsResponse は GET /comic-options のレスポンスです。
 //
 // フォームの <select> に出しているものと同じ一覧を JSON でも返します。ブラウザは
 // 選択肢を見て選べますが、JSON API の呼び出し側（MCP サーバー経由のエージェント）には
@@ -33,7 +33,7 @@ type comicModeOption struct {
 	Category  string `json:"category,omitempty"`
 }
 
-// ComicOptions は GET /api/comic-options を処理し、生成ジョブに指定できる
+// ComicOptions は GET /comic-options を処理し、生成ジョブに指定できる
 // モードとモデルの一覧を返します。
 func (h *Handler) ComicOptions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

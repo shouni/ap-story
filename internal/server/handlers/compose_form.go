@@ -45,10 +45,10 @@ func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, http.StatusOK, "compose.html", "漫画を生成", h.buildComposeFormData(composeComicRequest{}))
 }
 
-// EnqueueComicForm は POST /compose を処理し、フォーム入力から compose_comic ジョブを
-// 投入します。タスク構築・検証は JSON API（EnqueueComic）と共有し、レスポンスだけが
+// createComicForm は POST /jobs を処理し、フォーム入力から compose_comic ジョブを
+// 投入します。タスク構築・検証は JSON API（createComicJSON）と共有し、レスポンスだけが
 // HTML（受付画面 or エラー付きフォーム再表示）になります。
-func (h *Handler) EnqueueComicForm(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createComicForm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return

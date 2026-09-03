@@ -109,7 +109,7 @@ func (s *SlackAdapter) buildContent(task domain.Task) *notify.Body {
 }
 
 // resultPageURL は、ジョブの結果を確認できる Web 画面の URL とリンクラベルを返します。
-// 漫画生成・再生成は作品詳細画面（/history/{jobID}）、デザインシート単体生成は
+// 漫画生成・再生成は作品詳細画面（/jobs/{jobID}）、デザインシート単体生成は
 // state が comics/ に存在しないため、生成結果が表示されるキャラクターページ
 // （/characters/{characterID}、複数キャラクター合成時は一覧）へ誘導します。
 func (s *SlackAdapter) resultPageURL(task domain.Task) (string, string) {
@@ -128,7 +128,7 @@ func (s *SlackAdapter) resultPageURL(task domain.Task) (string, string) {
 		return "", ""
 	}
 
-	if resultURL := notify.JoinURL(s.serviceURL, "/history", task.JobID); resultURL != "" {
+	if resultURL := notify.JoinURL(s.serviceURL, "/jobs", task.JobID); resultURL != "" {
 		return resultURL, "History Detail"
 	}
 	return "", ""
