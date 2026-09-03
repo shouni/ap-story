@@ -86,17 +86,17 @@ func splitVisualCues(raw string) []string {
 	return cues
 }
 
-// DesignSheetForm は GET /design-sheets を処理し、キャラクター単体のデザインシート
+// ComposeDesignSheetForm は GET /compose/design-sheet を処理し、キャラクター単体のデザインシート
 // 生成フォームを表示します。既存の作品（jobID）に紐づかない単発生成です。
 // クエリパラメータ ?character_id=xxx で選択済み状態にできます
 // （/characters/{characterID} の「新規生成」ボタンから遷移する際に使用）。
-func (h *Handler) DesignSheetForm(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ComposeDesignSheetForm(w http.ResponseWriter, r *http.Request) {
 	preselected := r.URL.Query()["character_id"]
 	h.render(w, r, http.StatusOK, "design_sheet_form.html", "デザインシートを生成", h.buildDesignSheetFormData(preselected))
 }
 
 // designSheetTaskParams は generate_design_sheet ジョブ構築の入力です。
-// Web フォーム（POST /design-sheets）と JSON API（POST /api/design-sheets）で共有します。
+// Web フォーム（POST /jobs（command=generate_design_sheet））と JSON API（POST /jobs（command=generate_design_sheet））で共有します。
 type designSheetTaskParams struct {
 	CharacterIDs         []string
 	AspectRatio          string
@@ -155,9 +155,9 @@ func (h *Handler) resolveDesignSheetSeed(characterIDs []string, explicit *int64)
 	return char.Seed
 }
 
-// EnqueueDesignSheetForm は POST /design-sheets を処理し、フォーム入力から
+// createDesignSheetForm は POST /jobs（command=generate_design_sheet） を処理し、フォーム入力から
 // generate_design_sheet ジョブを投入します。
-func (h *Handler) EnqueueDesignSheetForm(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createDesignSheetForm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return

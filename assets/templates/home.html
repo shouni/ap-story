@@ -8,7 +8,7 @@
         <a href="/compose" class="btn btn-primary btn-sm">
             <i class="bi bi-book me-1"></i>漫画を生成
         </a>
-        <a href="/design-sheets" class="btn btn-outline-primary btn-sm">
+        <a href="/compose/design-sheet" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-palette me-1"></i>デザインシートを生成
         </a>
     </div>
@@ -17,7 +17,7 @@
 <section>
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h2 class="h4 mb-0"><i class="bi bi-collection me-2"></i>最新の作品</h2>
-        <a href="/history" class="btn btn-outline-secondary btn-sm">
+        <a href="/jobs" class="btn btn-outline-secondary btn-sm">
             すべて表示
         </a>
     </div>
@@ -27,7 +27,7 @@
         <div class="list-group-item list-group-item-action p-3 position-relative" id="history-item-{{.JobID}}">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div class="flex-grow-1">
-                    <a href="/history/{{.JobID}}" class="text-decoration-none text-dark d-block stretched-link">
+                    <a href="/jobs/{{.JobID}}" class="text-decoration-none text-dark d-block stretched-link">
                         <h3 class="h6 mb-1 fw-bold">{{if .Title}}{{.Title}}{{else}}(無題){{end}}</h3>
                     </a>
                     <div class="text-muted small">

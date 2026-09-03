@@ -1,9 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/shouni/ap-story/internal/domain"
@@ -11,8 +15,8 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// composeComicRequest は POST /api/comics のリクエストボディです。
-// Web フォーム（POST /compose）も同じ入力項目を共有します。
+// composeComicRequest は POST /jobs（command=compose_comic）の JSON 本文です。
+// フォームも同じ入力項目を共有します。
 type composeComicRequest struct {
 	SourceURL  string `json:"source_url"`
 	SourceText string `json:"source_text"`
@@ -89,14 +93,75 @@ func (h *Handler) validateChoices(task domain.Task) error {
 	return nil
 }
 
-// EnqueueComic は POST /api/comics を処理し、compose_comic ジョブを投入します。
-// jobID はサーバー側で新規採番し、レスポンスとして返します。
-func (h *Handler) EnqueueComic(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		respond.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
+// JobCreate は、新しいジョブを投入します（POST /jobs）。
+//
+// 入口は 1 本で、本文の形と command で分かれます。JSON は機械（MCP サーバー）、フォームは
+// 画面で、どちらも command が compose_comic（既定）なら作品、generate_design_sheet なら
+// デザインシートのジョブになります。読み取りと応答の形だけが違い、採番・検証・投入は同じ経路です。
+func (h *Handler) JobCreate(w http.ResponseWriter, r *http.Request) {
+	if isJSONBody(r) {
+		h.createJobJSON(w, r)
 		return
 	}
+	h.createJobForm(w, r)
+}
 
+// createJobJSON は JSON 本文の command を見て、作品かデザインシートかへ振り分けます。
+//
+// 本文は 1 度しか読めないので、command を覗いてから同じバイト列を読み直させます。
+func (h *Handler) createJobJSON(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxCreateJobBody))
+	if err != nil {
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	var head struct {
+		Command domain.TaskCommand `json:"command"`
+	}
+	if err := json.Unmarshal(body, &head); err != nil {
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	switch head.Command {
+	case "", domain.TaskCommandComposeComic:
+		h.createComicJSON(w, r)
+	case domain.TaskCommandGenerateDesignSheet:
+		h.createDesignSheetJSON(w, r)
+	default:
+		respond.ErrorJSON(w, r, http.StatusBadRequest, fmt.Sprintf("command は %s / %s のいずれかです",
+			domain.TaskCommandComposeComic, domain.TaskCommandGenerateDesignSheet))
+	}
+}
+
+// createJobForm はフォームの command を見て、作品かデザインシートかへ振り分けます。
+func (h *Handler) createJobForm(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	switch command := domain.TaskCommand(strings.TrimSpace(r.PostFormValue("command"))); command {
+	case "", domain.TaskCommandComposeComic:
+		h.createComicForm(w, r)
+	case domain.TaskCommandGenerateDesignSheet:
+		h.createDesignSheetForm(w, r)
+	default:
+		http.Error(w, fmt.Sprintf("command は %s / %s のいずれかです",
+			domain.TaskCommandComposeComic, domain.TaskCommandGenerateDesignSheet), http.StatusBadRequest)
+	}
+}
+
+// maxCreateJobBody は POST /jobs の JSON 本文の上限です。入力は短い文字列と選択肢だけです。
+const maxCreateJobBody = 64 << 10
+
+// isJSONBody は、本文が JSON かどうかを Content-Type で判定します。
+func isJSONBody(r *http.Request) bool {
+	return strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json")
+}
+
+// createComicJSON は JSON 本文から compose_comic ジョブを投入します（POST /jobs）。
+// jobID はサーバー側で新規採番し、レスポンスとして返します。
+func (h *Handler) createComicJSON(w http.ResponseWriter, r *http.Request) {
 	var req composeComicRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respond.ErrorJSON(w, r, http.StatusBadRequest, "invalid JSON body")
@@ -134,5 +199,7 @@ func (h *Handler) enqueueAndRespond(w http.ResponseWriter, r *http.Request, task
 		return
 	}
 
+	// Location は進捗のポーリング先です。本文を読まなくても次に叩く URL が分かります。
+	w.Header().Set("Location", "/jobs/"+task.JobID)
 	respond.JSON(w, r, http.StatusAccepted, enqueueResponse{Status: "queued", JobID: task.JobID})
 }

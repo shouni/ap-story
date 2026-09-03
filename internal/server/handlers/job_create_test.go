@@ -19,10 +19,10 @@ func TestEnqueueComicSuccess(t *testing.T) {
 	h := newTestHandler(t, q)
 
 	body := `{"source_text": "元文章", "script_mode": "default"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -55,10 +55,10 @@ func TestEnqueueComicRejectsMissingSource(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`{}`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -74,29 +74,13 @@ func TestEnqueueComicRejectsInvalidJSON(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`not json`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`not json`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestEnqueueComicRejectsWrongMethod(t *testing.T) {
-	t.Parallel()
-
-	q := &fakeTaskQueue{}
-	h := newTestHandler(t, q)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/comics", nil)
-	rec := httptest.NewRecorder()
-
-	h.EnqueueComic(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
 }
 
@@ -106,10 +90,10 @@ func TestEnqueueComicReturns500OnQueueFailure(t *testing.T) {
 	q := &fakeTaskQueue{err: context.DeadlineExceeded}
 	h := newTestHandler(t, q)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{"source_text": "x"}`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`{"source_text": "x"}`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
@@ -160,10 +144,10 @@ func TestEnqueueComicCarriesModelAndModeChoices(t *testing.T) {
 
 	body := `{"source_text": "元文章", "script_mode": "alt", "style_mode": "watercolor",
 		"text_model": "gemini-alt", "image_model": "image-alt"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -194,10 +178,10 @@ func TestEnqueueComicRejectsUnknownChoices(t *testing.T) {
 			q := &fakeTaskQueue{}
 			h := newTestHandler(t, q)
 
-			req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(body))
+			req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(body))
 			rec := httptest.NewRecorder()
 
-			h.EnqueueComic(rec, req)
+			h.createComicJSON(rec, req)
 
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -217,10 +201,10 @@ func TestEnqueueComicFillsInDefaultModels(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{"source_text": "元文章"}`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`{"source_text": "元文章"}`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -241,7 +225,7 @@ func TestComicOptionsListsChoices(t *testing.T) {
 	h := newTestHandler(t, &fakeTaskQueue{})
 
 	rec := httptest.NewRecorder()
-	h.ComicOptions(rec, httptest.NewRequest(http.MethodGet, "/api/comic-options", nil))
+	h.ComicOptions(rec, httptest.NewRequest(http.MethodGet, "/comic-options", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -279,9 +263,9 @@ func TestEnqueueRecordsQueuedStatusBeforeEnqueueing(t *testing.T) {
 	q := &fakeTaskQueue{onEnqueue: func() { order = append(order, "enqueue") }}
 	h := newTestHandlerWithJobStatus(t, q, status)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/comics", bytes.NewBufferString(`{"source_text": "元文章"}`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`{"source_text": "元文章"}`))
 	rec := httptest.NewRecorder()
-	h.EnqueueComic(rec, req)
+	h.createComicJSON(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())

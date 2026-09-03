@@ -25,16 +25,16 @@ func TestServeHistoryRendersItemsWithPaging(t *testing.T) {
 		},
 	}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
-	req := httptest.NewRequest(http.MethodGet, "/history?page=2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs?page=2", nil)
 	rec := httptest.NewRecorder()
 
-	h.Comics(rec, req)
+	h.JobList(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"作品A", "/history/job-1", "js-delete-history"} {
+	for _, want := range []string{"作品A", "/jobs/job-1", "js-delete-history"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
 		}
@@ -72,9 +72,9 @@ func TestServeDetailsRendersStateWithImageLinks(t *testing.T) {
 	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/jobs/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.Comic(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -83,9 +83,9 @@ func TestServeDetailsRendersStateWithImageLinks(t *testing.T) {
 	for _, want := range []string{
 		"テスト作品",
 		"ch01: 第一章",
-		"/api/comics/job-1/images/images/panel_ch01-p01.png",
-		"/api/comics/job-1/images/images/comic_page_1.png",
-		"/api/characters/images/zundamon/job-1.png",
+		"/jobs/job-1/images/images/panel_ch01-p01.png",
+		"/jobs/job-1/images/images/comic_page_1.png",
+		"/characters/images/zundamon/job-1.png",
 		"zundamon: なのだ！",
 		"そして時は動き出す",
 		"未生成", // 画像なしの ch01-p02
@@ -100,10 +100,10 @@ func TestServeDetailsReturns404ForMissingJob(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, &fakeComicRepository{states: map[string]*kitcomic.MangaState{}})
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-x", "", "jobID", "job-x")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/jobs/job-x", "", "jobID", "job-x")
 	rec := httptest.NewRecorder()
 
-	h.Comic(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -126,9 +126,9 @@ func renderDetail(t *testing.T, state *kitcomic.MangaState) string {
 	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/jobs/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.Comic(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -352,9 +352,9 @@ func TestServeDetailsOrdersPagesByNumber(t *testing.T) {
 	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/history/job-1", "", "jobID", "job-1")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/jobs/job-1", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.Comic(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)

@@ -28,9 +28,9 @@ func TestServeCharactersRendersRosterWithMasterReferenceThumbnail(t *testing.T) 
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Zundamon", "/characters/zundamon",
-		"/api/characters/reference/zundamon/default.png", // マスター参照画像がサムネイルに使われる
+		"/characters/reference/zundamon/default.png", // マスター参照画像がサムネイルに使われる
 		"Metan", "/characters/metan",
-		"/api/characters/reference/metan/default.png",
+		"/characters/reference/metan/default.png",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -61,10 +61,10 @@ func TestServeCharacterDetailRendersReferencesAndHistoryNewestFirst(t *testing.T
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Zundamon",
-		"/api/characters/reference/zundamon/default.png", // マスター参照画像
-		"/api/characters/images/zundamon/job-2.png",      // 生成履歴（新しい順）
-		"/api/characters/images/zundamon/job-1.png",
-		"/design-sheets?character_id=zundamon",
+		"/characters/reference/zundamon/default.png", // マスター参照画像
+		"/characters/images/zundamon/job-2.png",      // 生成履歴（新しい順）
+		"/characters/images/zundamon/job-1.png",
+		"/compose/design-sheet?character_id=zundamon",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -86,8 +86,8 @@ func TestServeCharacterDetailRendersMultipleReferenceAspectRatios(t *testing.T) 
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"/api/characters/reference/metan/default.png",
-		"/api/characters/reference/metan/16x9.png",
+		"/characters/reference/metan/default.png",
+		"/characters/reference/metan/16x9.png",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -164,7 +164,7 @@ func TestServeCharacterDetailCapsHistoryWithLinkToFullList(t *testing.T) {
 	if strings.Contains(body, "job-03.png") {
 		t.Errorf("body should not contain entries beyond the cap")
 	}
-	if !strings.Contains(body, "/characters/zundamon/history") {
+	if !strings.Contains(body, "/characters/zundamon/design-sheets") {
 		t.Errorf("body missing link to full history page")
 	}
 	if !strings.Contains(body, "15件") {
@@ -181,10 +181,10 @@ func TestServeCharacterHistoryRendersAllEntries(t *testing.T) {
 		},
 	}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/zundamon/history", "", "characterID", "zundamon")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/zundamon/design-sheets", "", "characterID", "zundamon")
 	rec := httptest.NewRecorder()
 
-	h.ServeCharacterHistory(rec, req)
+	h.CharacterDesignSheets(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -200,7 +200,7 @@ func TestDeleteCharacterDesignDeletesViaRepository(t *testing.T) {
 
 	repo := &fakeComicRepository{}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
-	req := httptest.NewRequest(http.MethodDelete, "/api/characters/zundamon/images/job-1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/characters/zundamon/design-sheets/job-1", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("characterID", "zundamon")
 	rctx.URLParams.Add("jobID", "job-1")
@@ -222,7 +222,7 @@ func TestDeleteCharacterDesignReturns404ForUnknownCharacter(t *testing.T) {
 
 	repo := &fakeComicRepository{}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
-	req := httptest.NewRequest(http.MethodDelete, "/api/characters/unknown/images/job-1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/characters/unknown/design-sheets/job-1", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("characterID", "unknown")
 	rctx.URLParams.Add("jobID", "job-1")

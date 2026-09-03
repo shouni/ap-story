@@ -16,8 +16,8 @@ import (
 // defaultHistoryPageSize は履歴一覧のデフォルトページサイズです。
 const defaultHistoryPageSize = 20
 
-// DeleteComic は DELETE /api/comics/{jobID} を処理し、指定ジョブの成果物一式を削除します。
-func (h *Handler) DeleteComic(w http.ResponseWriter, r *http.Request) {
+// JobDelete は DELETE /jobs/{jobID} を処理し、指定ジョブの成果物一式を削除します。
+func (h *Handler) JobDelete(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, "invalid job id")

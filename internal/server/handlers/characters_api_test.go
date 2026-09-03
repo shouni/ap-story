@@ -46,7 +46,7 @@ func TestGetCharacterDetailReturnsReferencesAndHistory(t *testing.T) {
 		},
 	}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/characters/zundamon", "", "characterID", "zundamon")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/zundamon", "", "characterID", "zundamon")
 	rec := httptest.NewRecorder()
 
 	req.Header.Set("Accept", "application/json")
@@ -71,7 +71,7 @@ func TestGetCharacterDetailReturns404ForUnknownCharacter(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler(t, &fakeTaskQueue{})
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/characters/unknown", "", "characterID", "unknown")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/unknown", "", "characterID", "unknown")
 	rec := httptest.NewRecorder()
 
 	req.Header.Set("Accept", "application/json")

@@ -10,7 +10,7 @@ import (
 
 func characterImageRequest(t *testing.T, wildcard string) *http.Request {
 	t.Helper()
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/characters/images/"+wildcard, "", "unused", "")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/characters/images/"+wildcard, "", "unused", "")
 	chi.RouteContext(req.Context()).URLParams.Add("*", wildcard)
 	return req
 }
@@ -23,7 +23,7 @@ func TestRedirectCharacterImageSuccess(t *testing.T) {
 
 	req := characterImageRequest(t, "zundamon/job-1.png")
 	rec := httptest.NewRecorder()
-	h.RedirectCharacterImage(rec, req)
+	h.CharacterImage(rec, req)
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusFound, rec.Body.String())
@@ -40,7 +40,7 @@ func TestRedirectCharacterImageRejectsPathTraversal(t *testing.T) {
 	h := newTestHandler(t, &fakeTaskQueue{})
 	req := characterImageRequest(t, "../../../etc/passwd")
 	rec := httptest.NewRecorder()
-	h.RedirectCharacterImage(rec, req)
+	h.CharacterImage(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -53,7 +53,7 @@ func TestRedirectCharacterImageRejectsEmptyPath(t *testing.T) {
 	h := newTestHandler(t, &fakeTaskQueue{})
 	req := characterImageRequest(t, "")
 	rec := httptest.NewRecorder()
-	h.RedirectCharacterImage(rec, req)
+	h.CharacterImage(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)

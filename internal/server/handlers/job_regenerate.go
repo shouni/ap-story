@@ -12,11 +12,11 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// RegenerateComic は POST /api/comics/{jobID}/regenerate を処理し、指定ジョブに対する
+// JobRegenerate は POST /jobs/{jobID}/regenerate を処理し、指定ジョブに対する
 // 再生成コマンド（regenerate_chapter_script / generate_design_sheet / regenerate_panel /
 // regenerate_page）を投入します。jobID は必ず URL パスから取得し、リクエストボディの
-// job_id は無視します（新規ジョブの投入は POST /api/comics を使ってください）。
-func (h *Handler) RegenerateComic(w http.ResponseWriter, r *http.Request) {
+// job_id は無視します（新規ジョブの投入は POST /jobs を使ってください）。
+func (h *Handler) JobRegenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		respond.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -37,7 +37,7 @@ func (h *Handler) RegenerateComic(w http.ResponseWriter, r *http.Request) {
 	task.CreatedAt = time.Now().UTC()
 
 	if task.Command == domain.TaskCommandComposeComic {
-		respond.ErrorJSON(w, r, http.StatusBadRequest, "compose_comic is not a regenerate command; use POST /api/comics instead")
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "compose_comic is not a regenerate command; use POST /jobs instead")
 		return
 	}
 

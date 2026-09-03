@@ -10,7 +10,8 @@
 </div>
 {{end}}
 
-<form method="post" action="/design-sheets" class="card shadow-sm">
+<form method="post" action="/jobs" class="card shadow-sm">
+    <input type="hidden" name="command" value="generate_design_sheet">
     <div class="card-body">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 

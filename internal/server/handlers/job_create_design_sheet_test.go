@@ -18,10 +18,10 @@ func TestEnqueueDesignSheetSuccess(t *testing.T) {
 	h := newTestHandler(t, q)
 
 	body := `{"character_ids": ["zundamon"], "aspect_ratio": "1:1"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueDesignSheet(rec, req)
+	h.createDesignSheetJSON(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -54,10 +54,10 @@ func TestEnqueueDesignSheetRejectsMissingCharacterIDs(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", bytes.NewBufferString(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`{}`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueDesignSheet(rec, req)
+	h.createDesignSheetJSON(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -71,27 +71,13 @@ func TestEnqueueDesignSheetRejectsInvalidJSON(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler(t, &fakeTaskQueue{})
-	req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", bytes.NewBufferString(`not json`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`not json`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueDesignSheet(rec, req)
+	h.createDesignSheetJSON(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestEnqueueDesignSheetRejectsWrongMethod(t *testing.T) {
-	t.Parallel()
-
-	h := newTestHandler(t, &fakeTaskQueue{})
-	req := httptest.NewRequest(http.MethodGet, "/api/design-sheets", nil)
-	rec := httptest.NewRecorder()
-
-	h.EnqueueDesignSheet(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
 }
 
@@ -101,10 +87,10 @@ func TestEnqueueDesignSheetReturns500OnQueueFailure(t *testing.T) {
 	q := &fakeTaskQueue{err: context.DeadlineExceeded}
 	h := newTestHandler(t, q)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", bytes.NewBufferString(`{"character_ids": ["zundamon"]}`))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", bytes.NewBufferString(`{"character_ids": ["zundamon"]}`))
 	rec := httptest.NewRecorder()
 
-	h.EnqueueDesignSheet(rec, req)
+	h.createDesignSheetJSON(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)

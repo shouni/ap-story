@@ -24,10 +24,10 @@ var (
 	errInvalidImagePath  = errors.New("invalid image path")
 )
 
-// RedirectComicImage は GET /api/comics/{jobID}/images/* を処理し、指定された画像
+// JobImage は GET /jobs/{jobID}/images/* を処理し、指定された画像
 // （デザインシート・パネル・ページ）の GCS 署名 URL へ 302 リダイレクトします。
 // 画像バイト列そのものはアプリから配信しません。
-func (h *Handler) RedirectComicImage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JobImage(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, "invalid job id")

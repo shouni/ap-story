@@ -12,10 +12,10 @@ func TestDesignSheetFormRendersCharacterList(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler(t, &fakeTaskQueue{})
-	req := httptest.NewRequest(http.MethodGet, "/design-sheets", nil)
+	req := httptest.NewRequest(http.MethodGet, "/compose/design-sheet", nil)
 	rec := httptest.NewRecorder()
 
-	h.DesignSheetForm(rec, req)
+	h.ComposeDesignSheetForm(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -32,10 +32,10 @@ func TestDesignSheetFormRendersModelOptions(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler(t, &fakeTaskQueue{})
-	req := httptest.NewRequest(http.MethodGet, "/design-sheets", nil)
+	req := httptest.NewRequest(http.MethodGet, "/compose/design-sheet", nil)
 	rec := httptest.NewRecorder()
 
-	h.DesignSheetForm(rec, req)
+	h.ComposeDesignSheetForm(rec, req)
 
 	body := rec.Body.String()
 	for _, want := range []string{`name="model_override"`, "image-model", "image-alt"} {
@@ -47,10 +47,10 @@ func TestDesignSheetFormRendersModelOptions(t *testing.T) {
 
 func postDesignSheetForm(t *testing.T, h *Handler, values url.Values) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/design-sheets", strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose/design-sheet", strings.NewReader(values.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
-	h.EnqueueDesignSheetForm(rec, req)
+	h.createDesignSheetForm(rec, req)
 	return rec
 }
 
@@ -170,9 +170,9 @@ func TestEnqueueDesignSheetRejectsUnknownModelOverride(t *testing.T) {
 		h := newTestHandler(t, q)
 
 		body := `{"character_ids":["zundamon"],"model_override":"gemini-not-configured"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader(body))
 		rec := httptest.NewRecorder()
-		h.EnqueueDesignSheet(rec, req)
+		h.createDesignSheetJSON(rec, req)
 
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -242,9 +242,9 @@ func TestDesignSheetDefaultsAspectRatio(t *testing.T) {
 		q := &fakeTaskQueue{}
 		h := newTestHandler(t, q)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/design-sheets", strings.NewReader(`{"character_ids":["zundamon"]}`))
+		req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader(`{"character_ids":["zundamon"]}`))
 		rec := httptest.NewRecorder()
-		h.EnqueueDesignSheet(rec, req)
+		h.createDesignSheetJSON(rec, req)
 
 		if rec.Code != http.StatusAccepted {
 			t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusAccepted, rec.Body.String())

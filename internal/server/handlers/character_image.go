@@ -21,17 +21,17 @@ const characterImagePrefix = "character"
 // デザインシート（characterImagePrefix）とは別管理です。
 const characterReferenceImagePrefix = "character-reference"
 
-// RedirectCharacterImage は GET /api/characters/images/* を処理し、AI生成の
+// CharacterImage は GET /characters/images/* を処理し、AI生成の
 // デザインシート（gs://{bucket}/character/... 配下）の GCS 署名 URL へ 302 リダイレクトします。
 // comics/{jobID}/ 配下のパネル・ページ画像とは異なり jobID を経由しません。
-func (h *Handler) RedirectCharacterImage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CharacterImage(w http.ResponseWriter, r *http.Request) {
 	h.redirectCharacterAsset(w, r, characterImagePrefix)
 }
 
-// RedirectCharacterReferenceImage は GET /api/characters/reference/* を処理し、
+// CharacterReferenceImage は GET /characters/reference/* を処理し、
 // キャラクターのマスター参照画像（gs://{bucket}/character-reference/... 配下）の
 // GCS 署名 URL へ 302 リダイレクトします。
-func (h *Handler) RedirectCharacterReferenceImage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CharacterReferenceImage(w http.ResponseWriter, r *http.Request) {
 	h.redirectCharacterAsset(w, r, characterReferenceImagePrefix)
 }
 

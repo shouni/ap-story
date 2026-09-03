@@ -45,11 +45,11 @@ GCS に永続化します。ブラウザは **Google OAuth セッション**、A
 
 漫画生成は多段・長時間（数分〜十数分）のため、すべて Cloud Tasks 経由の非同期ジョブです。
 
-1. `POST /api/comics` がジョブ ID を採番し、Cloud Tasks にタスクを enqueue して**即座に jobID を返す**
+1. `POST /jobs` がジョブ ID を採番し、Cloud Tasks にタスクを enqueue して**即座に jobID を返す**
 2. Worker（`POST /tasks/generate`）がタスクを受け、go-comic-kit の操作を実行して
    **state（`comic_state.json`）を GCS に保存**する
-3. クライアントは `GET /api/comics/{jobID}/status`（ジョブ状態）と
-   `GET /api/comics/{jobID}`（state の読み出し）で進捗・結果を確認する
+3. クライアントは `GET /jobs/{jobID}`（ジョブ状態）と
+   `GET /jobs/{jobID}`（state の読み出し）で進捗・結果を確認する
 
 冪等性は、Cloud Tasks の **task name にジョブ ID + 工程を含めて重複 enqueue を排除**し、
 state の保存は「常に上書き・常に最新」（go-comic-kit `store.Save` の仕様）で担保しています。
@@ -95,18 +95,18 @@ gs://{STORY_BUCKET}/
 単体生成ジョブの state は `design-jobs/` 側に保存されるため `comics/` の列挙に現れず、ID の列挙・
 ページングは state を読まずに完結します（state を読むのは選択されたページの分だけ）。単体生成の
 履歴は `/characters/{characterID}` 側で確認します。画像はアプリから直接配信せず、
-**GCS 署名 URL へ 302 リダイレクト**します（パネル・ページは `/api/comics/{jobID}/images/*`、
-デザインシート生成履歴は `/api/characters/images/*`）。jobID は必ず検証・サニタイズした
+**GCS 署名 URL へ 302 リダイレクト**します（パネル・ページは `/jobs/{jobID}/images/*`、
+デザインシート生成履歴は `/characters/images/*`）。jobID は必ず検証・サニタイズした
 ものだけを HTTP 入力・GCS パス生成の両方で使います。
 
 キャラクターのマスター参照画像（characters.json の `reference_url` / `reference_urls`、AI 生成では
 なく人手で用意した正典画像）はバケット直下の `character-reference/{characterID}/...` に置き、
-`character/`（AI 生成履歴）とはディレクトリを分けています。こちらは `/api/characters/reference/*`
+`character/`（AI 生成履歴）とはディレクトリを分けています。こちらは `/characters/reference/*`
 経由で配信します。
 
 ### 台本の校正
 
-セリフの手直しは `GET/PUT /api/comics/{jobID}/script` で行います（画面は作品詳細の「台本」タブ）。
+セリフの手直しは `GET/PUT /jobs/{jobID}/script` で行います（画面は作品詳細の「台本」タブ）。
 台本の再生成（`regenerate_chapter_script`）は章まるごと書き直すので1行の校正には使えず、
 コマの構成ごと変わって生成済みのコマ画像との対応が壊れます。
 
@@ -144,7 +144,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 ## 🎨 モードとモデルの選択
 
 生成ジョブには4つの選択が乗ります。フォームの `<select>` と JSON API で同じ一覧を使い、
-一覧に無い値は投入時に弾かれます（`GET /api/comic-options` で取得できます）。
+一覧に無い値は投入時に弾かれます（`GET /comic-options` で取得できます）。
 
 | 選択 | 出どころ | 内容 |
 |---|---|---|
@@ -165,7 +165,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 1. `/compose` で原稿を投入する。台本モード・画風モード・モデルを選んで「台本を生成」。
    **このフォームは章立てとネームまでしか作らない。** 押した時点では章立てが未実行で、
    何コマになるか分からないため、画像の開始はコマ数が見えている作品詳細に任せる。
-2. `/history/{jobID}` で台本を確認する。問題なければ**画像モデルを選んで「コマを生成」**。作品全体でも、
+2. `/jobs/{jobID}` で台本を確認する。問題なければ**画像モデルを選んで「コマを生成」**。作品全体でも、
    章カードから1章だけでも始められる。途中で失敗しても**「続きのコマを生成」が未生成分だけを埋める**。
 3. コマが揃うと、同じ場所のボタンが**「ページを合成」に変わる**。ページはコマを並べた合成物なので、
    コマの出来を見てから合成へ進む（崩れたコマから2Kのページを作ると払い直しになる）。
@@ -177,7 +177,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 
 ## 🌐 HTTP エンドポイント
 
-`/api/*` はブラウザセッションまたは M2M（OIDC Bearer）のいずれかで呼び出せます。ブラウザ向けの
+`/jobs/*` と `/characters/*` はブラウザセッションまたは M2M（OIDC Bearer）のいずれかで呼び出せます。ブラウザ向けの
 画面（HTML）は `html/template` + go:embed（静的アセットは `/static/*`）で
 本リポジトリ内に実装しています。画面のハンドラは JSON API とコアロジックを共有し、
 レスポンス形式（HTML/JSON）だけが異なります。
@@ -186,27 +186,27 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 |---|---|---|
 | `GET /auth/login`, `GET /auth/callback` | Google OAuth | ログインフロー（gcp-kit auth.Handler） |
 | `GET /` | セッション or M2M | Home 画面（直近の作品を数件表示。未認証時は `/auth/login` へリダイレクト） |
-| `GET /compose`, `POST /compose` | セッション | 台本生成フォームの表示・投入（受付画面を返す。台本モード・画風モード・テキストモデルを選択できる。画像モデルは作品詳細で選ぶ） |
-| `GET /design-sheets`, `POST /design-sheets` | セッション | デザインシート単体生成フォームの表示・投入（job_id は自動採番。`?character_id=`で事前選択可、画風モード・画像モデル・参照画像URL・見た目特徴の上書きに対応） |
+| `GET /compose`, `POST /jobs` | セッション | 台本生成フォームの表示・投入（受付画面を返す。台本モード・画風モード・テキストモデルを選択できる。画像モデルは作品詳細で選ぶ） |
+| `GET /compose/design-sheet`, `POST /jobs`（`command=generate_design_sheet`） | セッション | デザインシート単体生成フォームの表示・投入（job_id は自動採番。`?character_id=`で事前選択可、画風モード・画像モデル・参照画像URL・見た目特徴の上書きに対応） |
 | `GET /characters` | セッション | キャラクター一覧（マスター参照画像のサムネイル付き） |
 | `GET /characters/{characterID}` | セッション | キャラクター詳細（上段: サイズ/アスペクト比ごとのマスター参照画像、下段: デザインシート生成履歴の最新12件+削除ボタン。新しい順、合成生成は対象外） |
-| `GET /characters/{characterID}/history` | セッション | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
-| `GET /history` | セッション or M2M | 作品一覧。`Accept: application/json` なら state の列挙（ページング）、ブラウザなら一覧画面 |
-| `GET /history/{jobID}` | セッション or M2M | 作品詳細。JSON なら `comic_state.json` の内容、ブラウザなら詳細画面 |
+| `GET /characters/{characterID}/design-sheets` | セッション | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
+| `GET /jobs` | セッション or M2M | 作品一覧。`Accept: application/json` なら state の列挙（ページング）、ブラウザなら一覧画面 |
+| `GET /jobs/{jobID}` | セッション or M2M | 作品詳細。JSON なら `comic_state.json` の内容、ブラウザなら詳細画面 |
 | `GET /static/*` | なし | CSS/JS 静的アセット。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
-| `GET /api/comic-options` | セッション or M2M | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
-| `POST /api/comics` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
-| `GET /api/comics/{jobID}/script` | セッション or M2M | 台本の読み出し（章の見出しと各コマのセリフだけ。生成記録やプロンプトは含まない） |
-| `PUT /api/comics/{jobID}/script` | セッション or M2M | 台本の保存（セリフのみ差し替え。合成し直すべきページを `affected_pages` で返す） |
-| `POST /api/comics/{jobID}/regenerate` | セッション or M2M | 再生成ジョブの投入（command + パラメータ） |
-| `GET /api/comics/{jobID}/images/*` | セッション or M2M | パネル・ページ画像への署名 URL リダイレクト |
-| `POST /api/design-sheets` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・style_mode・model_override・reference_url_override・visual_cues_override は任意） |
+| `GET /comic-options` | セッション or M2M | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
+| `POST /jobs` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
+| `GET /jobs/{jobID}/script` | セッション or M2M | 台本の読み出し（章の見出しと各コマのセリフだけ。生成記録やプロンプトは含まない） |
+| `PUT /jobs/{jobID}/script` | セッション or M2M | 台本の保存（セリフのみ差し替え。合成し直すべきページを `affected_pages` で返す） |
+| `POST /jobs/{jobID}/regenerate` | セッション or M2M | 再生成ジョブの投入（command + パラメータ） |
+| `GET /jobs/{jobID}/images/*` | セッション or M2M | パネル・ページ画像への署名 URL リダイレクト |
+| `POST /jobs（`command=generate_design_sheet`）` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・style_mode・model_override・reference_url_override・visual_cues_override は任意） |
 | `GET /characters` | セッション or M2M | キャラクター一覧（id・name・reference_url を返す。画像 URL は gs:// のまま） |
 | `GET /characters/{characterID}` | セッション or M2M | キャラクター詳細（マスター参照画像 + 生成履歴全件、新しい順） |
-| `GET /api/characters/images/*` | セッション or M2M | デザインシート生成履歴の画像への署名 URL リダイレクト（作品非依存） |
-| `GET /api/characters/reference/*` | セッション or M2M | キャラクターのマスター参照画像への署名 URL リダイレクト |
-| `DELETE /api/characters/{characterID}/images/{jobID}` | セッション or M2M | デザインシート生成履歴1件の削除（単体生成ジョブなら state も削除、作品ジョブは state 内の参照のみ除去） |
-| `DELETE /api/comics/{jobID}` | セッション or M2M | ジョブ成果物の削除 |
+| `GET /characters/images/*` | セッション or M2M | デザインシート生成履歴の画像への署名 URL リダイレクト（作品非依存） |
+| `GET /characters/reference/*` | セッション or M2M | キャラクターのマスター参照画像への署名 URL リダイレクト |
+| `DELETE /characters/{characterID}/design-sheets/{jobID}` | セッション or M2M | デザインシート生成履歴1件の削除（単体生成ジョブなら state も削除、作品ジョブは state 内の参照のみ除去） |
+| `DELETE /jobs/{jobID}` | セッション or M2M | ジョブ成果物の削除 |
 | `POST /tasks/generate` | Cloud Tasks OIDC | Worker: コマンド実行 |
 | `GET /health` | なし | ヘルスチェック |
 
@@ -248,7 +248,7 @@ go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit �
 | | `ap-story`（web） | `ap-story-worker` |
 |---|---|---|
 | `SERVER_ROLE` | `web` | `worker` |
-| 提供するルート | `/api/*`, `/auth/*` | `/tasks/generate` |
+| 提供するルート | `/jobs/*`, `/characters/*`, `/auth/*` | `/tasks/generate` |
 | 公開 | あり | **なし**（ingress と Cloud Run の IAM で遮断） |
 | ingress | `all` | **`internal`**（到達経路を Cloud Tasks に限定） |
 | memory / cpu | 512Mi / 1 | 1Gi / 2 |

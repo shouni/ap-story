@@ -10,7 +10,7 @@ import (
 
 func regenerateRequest(t *testing.T, body string) *http.Request {
 	t.Helper()
-	return httptestRequestWithURLParam(t, http.MethodPost, "/api/comics/job-1/regenerate", body, "jobID", "job-1")
+	return httptestRequestWithURLParam(t, http.MethodPost, "/jobs/job-1/regenerate", body, "jobID", "job-1")
 }
 
 func TestRegenerateComicChapterScript(t *testing.T) {
@@ -22,7 +22,7 @@ func TestRegenerateComicChapterScript(t *testing.T) {
 	body := `{"command": "regenerate_chapter_script", "chapter_id": "ch01"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -47,7 +47,7 @@ func TestRegenerateComicDesignSheet(t *testing.T) {
 	body := `{"command": "generate_design_sheet", "character_ids": ["zundamon", "metan"], "aspect_ratio": "9:16"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -66,7 +66,7 @@ func TestRegenerateComicPanelWithSeed(t *testing.T) {
 	body := `{"command": "regenerate_panel", "panel_id": "ch01-p01", "seed": 42}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -88,7 +88,7 @@ func TestRegenerateComicPanelWithEditPrompt(t *testing.T) {
 	body := `{"command": "regenerate_panel", "panel_id": "ch01-p01", "edit_prompt": "表情を笑顔に変える"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -107,7 +107,7 @@ func TestRegenerateComicPage(t *testing.T) {
 	body := `{"command": "regenerate_page", "page": 2}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -127,7 +127,7 @@ func TestRegenerateComicJobIDComesFromURLNotBody(t *testing.T) {
 	body := `{"command": "regenerate_page", "page": 1, "job_id": "spoofed-job"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -146,7 +146,7 @@ func TestRegenerateComicRejectsComposeCommand(t *testing.T) {
 	body := `{"command": "compose_comic", "source_text": "x"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -162,10 +162,10 @@ func TestRegenerateComicRejectsInvalidJobIDInURL(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	req := httptestRequestWithURLParam(t, http.MethodPost, "/api/comics/../escape/regenerate",
+	req := httptestRequestWithURLParam(t, http.MethodPost, "/jobs/../escape/regenerate",
 		`{"command": "regenerate_page", "page": 1}`, "jobID", "../escape")
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -185,7 +185,7 @@ func TestRegenerateComicRejectsMissingRequiredField(t *testing.T) {
 	body := `{"command": "regenerate_panel"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -198,9 +198,9 @@ func TestRegenerateComicRejectsWrongMethod(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	req := httptestRequestWithURLParam(t, http.MethodGet, "/api/comics/job-1/regenerate", "", "jobID", "job-1")
+	req := httptestRequestWithURLParam(t, http.MethodGet, "/jobs/job-1/regenerate", "", "jobID", "job-1")
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
@@ -217,7 +217,7 @@ func TestRegenerateComicAcceptsRenderComic(t *testing.T) {
 	// 既存の regenerate エンドポイントがそのまま受け付ける。
 	req := regenerateRequest(t, `{"command": "render_comic"}`)
 	rec := httptest.NewRecorder()
-	h.RegenerateComic(rec, req)
+	h.JobRegenerate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -239,7 +239,7 @@ func TestRegenerateComicPanelWithSeedAndEditPrompt(t *testing.T) {
 
 		req := regenerateRequest(t, `{"command": "regenerate_panel", "panel_id": "ch01-p01", "seed": 12345}`)
 		rec := httptest.NewRecorder()
-		h.RegenerateComic(rec, req)
+		h.JobRegenerate(rec, req)
 
 		if rec.Code != http.StatusAccepted {
 			t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -255,7 +255,7 @@ func TestRegenerateComicPanelWithSeedAndEditPrompt(t *testing.T) {
 
 		req := regenerateRequest(t, `{"command": "regenerate_panel", "panel_id": "ch01-p01", "edit_prompt": "表情を笑顔に"}`)
 		rec := httptest.NewRecorder()
-		h.RegenerateComic(rec, req)
+		h.JobRegenerate(rec, req)
 
 		if rec.Code != http.StatusAccepted {
 			t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -283,7 +283,7 @@ func TestRegenerateRejectsUnknownChoices(t *testing.T) {
 			h := newTestHandler(t, q)
 
 			rec := httptest.NewRecorder()
-			h.RegenerateComic(rec, regenerateRequest(t, body))
+			h.JobRegenerate(rec, regenerateRequest(t, body))
 
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())

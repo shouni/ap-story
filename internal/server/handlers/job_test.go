@@ -82,14 +82,14 @@ func TestComicErrorFollowsTheRequestedFormat(t *testing.T) {
 
 	h := newTestHandler(t, &fakeTaskQueue{})
 
-	req := httptest.NewRequest(http.MethodGet, "/history/bad", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/bad", nil)
 	req.Header.Set("Accept", "application/json")
 	ctx := chi.NewRouteContext()
 	ctx.URLParams.Add("jobID", "../etc/passwd")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, ctx))
 	rec := httptest.NewRecorder()
 
-	h.Comic(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)

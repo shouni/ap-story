@@ -89,38 +89,37 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		if h.Web != nil {
 			// 未認証アクセスは session.Handler が /auth/login へリダイレクトする。
 			r.Get("/", h.Web.Home)
+			// 入力フォームは JSON の対応物を持たない画面なので、資源とは別に置きます。
 			r.Get("/compose", h.Web.ComposeForm)
-			r.Post("/compose", h.Web.EnqueueComicForm)
-			r.Get("/design-sheets", h.Web.DesignSheetForm)
-			r.Post("/design-sheets", h.Web.EnqueueDesignSheetForm)
+			r.Get("/compose/design-sheet", h.Web.ComposeDesignSheetForm)
+			r.Get("/comic-options", h.Web.ComicOptions)
 
-			// 人と機械が同じものを見る経路です。ルートは 1 本で、表現は Accept が
-			// 決めます（handlers/negotiated.go）。
+			// ジョブが主リソースです。作品（compose_comic）とデザインシート
+			// （generate_design_sheet）は同じ記録の command が違うだけなので、投入から削除まで
+			// 同じ /jobs/{jobID} で指します（public-docs の URL 命名規約）。人と機械は同じ
+			// ルートを Accept と本文の形で使い分けます。
+			r.Route("/jobs", func(r chi.Router) {
+				r.Post("/", h.Web.JobCreate)
+				r.Get("/", h.Web.JobList)
+				r.Get("/{jobID}", h.Web.Job)
+				r.Delete("/{jobID}", h.Web.JobDelete)
+				r.Get("/{jobID}/script", h.Web.JobScript)
+				r.Put("/{jobID}/script", h.Web.JobScriptUpdate)
+				r.Post("/{jobID}/regenerate", h.Web.JobRegenerate)
+				r.Get("/{jobID}/images/*", h.Web.JobImage)
+			})
+
+			// キャラクターは作品をまたいで再利用される別の資源です。デザインシートの
+			// 成果物はこちらに並びます。images / reference は固定の語なので、chi は
+			// {characterID} より先に照合します。
 			r.Route("/characters", func(r chi.Router) {
 				r.Get("/", h.Web.Characters)
+				r.Get("/images/*", h.Web.CharacterImage)
+				r.Get("/reference/*", h.Web.CharacterReferenceImage)
 				r.Get("/{characterID}", h.Web.Character)
-				r.Get("/{characterID}/history", h.Web.ServeCharacterHistory)
+				r.Get("/{characterID}/design-sheets", h.Web.CharacterDesignSheets)
+				r.Delete("/{characterID}/design-sheets/{jobID}", h.Web.DeleteCharacterDesign)
 			})
-			r.Route("/history", func(r chi.Router) {
-				r.Get("/", h.Web.Comics)
-				r.Get("/{jobID}", h.Web.Comic)
-			})
-
-			// 機械にしか無い操作です。対応する画面がありません。
-			r.Post("/api/design-sheets", h.Web.EnqueueDesignSheet)
-			r.Route("/api/comics", func(r chi.Router) {
-				r.Post("/", h.Web.EnqueueComic)
-				r.Delete("/{jobID}", h.Web.DeleteComic)
-				r.Get("/{jobID}/script", h.Web.GetComicScript)
-				r.Put("/{jobID}/script", h.Web.UpdateComicScript)
-				r.Post("/{jobID}/regenerate", h.Web.RegenerateComic)
-				r.Get("/{jobID}/images/*", h.Web.RedirectComicImage)
-				r.Get("/{jobID}/status", h.Web.JobStatus)
-			})
-			r.Get("/api/comic-options", h.Web.ComicOptions)
-			r.Get("/api/characters/images/*", h.Web.RedirectCharacterImage)
-			r.Get("/api/characters/reference/*", h.Web.RedirectCharacterReferenceImage)
-			r.Delete("/api/characters/{characterID}/images/{jobID}", h.Web.DeleteCharacterDesign)
 		}
 	})
 

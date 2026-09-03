@@ -8,7 +8,7 @@
         <a href="/characters/{{.Data.CharacterID}}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>キャラクター詳細へ戻る
         </a>
-        <a href="/design-sheets?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
+        <a href="/compose/design-sheet?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i>新規生成
         </a>
     </div>
@@ -41,7 +41,7 @@
 <div class="alert alert-light border text-center py-5">
     <i class="bi bi-inbox display-4 text-muted mb-3 d-block"></i>
     <p class="mb-2">まだ生成履歴がありません。</p>
-    <a href="/design-sheets?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
+    <a href="/compose/design-sheet?character_id={{.Data.CharacterID}}" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg me-1"></i>最初のデザインシートを生成
     </a>
 </div>

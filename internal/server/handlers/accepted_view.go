@@ -25,7 +25,7 @@ func newComposeAcceptedData(jobID string) acceptedData {
 		Icon:          "bi-book-half",
 		Heading:       "台本の生成を開始しました",
 		Message:       "章立てとネームを作っています（数分かかります）。できあがった台本を確認してから、作品詳細で画像生成へ進んでください。",
-		ProgressURL:   "/history/" + jobID,
+		ProgressURL:   "/jobs/" + jobID,
 		ProgressLabel: "台本を確認",
 	}
 }
