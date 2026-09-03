@@ -19,7 +19,7 @@ func setDefaultURLConfigEnv(t *testing.T) {
 }
 
 // WORKER_URL / SERVICE_URL からの導出は worker サービスの URL までを返し、
-// タスクのパスは付けません。継ぎ足すのは投入の直前（domain.WorkerTaskURL）です。
+// タスクのパスは付けません。継ぎ足すのは投入の直前（tasks.Config.WorkerPath）です。
 func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
 	tests := []struct {
 		name       string

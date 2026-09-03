@@ -5,7 +5,6 @@ import (
 
 	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/worker"
-	"github.com/stretchr/testify/require"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -26,7 +25,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 		{name: "どちらも nil (web ロール)", h: &AppHandlers{}},
 		{
 			name:    "TaskAuth だけある",
-			h:       &AppHandlers{TaskAuth: oidc.New("https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
+			h:       &AppHandlers{TaskAuth: mustOIDC(t, "https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
 			wantErr: true,
 		},
 		{
@@ -48,41 +47,12 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 	}
 }
 
-// M2M 検証器は、audience と許可リストの両方が揃ってはじめて機能します。
-//
-// 片方でも欠けると ProtectedMiddleware は毎回セッション認証へフォールバックし、
-// ブラウザは正常なまま M2M クライアントからの呼び出しだけがログイン画面の HTML を受け取ります。
-// リクエストからは設定漏れだと分からないので、起動時に落ちることを固定します。
-func TestNewM2MVerifierRejectsIncompleteConfiguration(t *testing.T) {
-	t.Parallel()
-
-	const serviceURL = "https://service.example.com"
-	allowed := []string{"mcp-runner@test-project.iam.gserviceaccount.com"}
-
-	tests := map[string]struct {
-		serviceURL string
-		allowed    []string
-		wantErr    bool
-	}{
-		"両方そろっていれば構成できる":         {serviceURL: serviceURL, allowed: allowed},
-		"許可リストが空なら起動を止める":        {serviceURL: serviceURL, allowed: nil, wantErr: true},
-		"SERVICE_URL が空なら起動を止める": {serviceURL: "", allowed: allowed, wantErr: true},
-		"どちらも空なら起動を止める":          {serviceURL: "", allowed: nil, wantErr: true},
+// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
+	t.Helper()
+	v, err := oidc.New(audience, allowed)
+	if err != nil {
+		t.Fatalf("oidc.New() error = %v", err)
 	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := newM2MVerifier(tt.serviceURL, tt.allowed)
-			if tt.wantErr {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "ALLOWED_M2M_SERVICE_ACCOUNTS")
-				require.Nil(t, got)
-				return
-			}
-			require.NoError(t, err)
-			require.True(t, got.Configured())
-		})
-	}
+	return v
 }

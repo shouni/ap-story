@@ -24,16 +24,13 @@ var _ domain.TaskQueue = (*TaskEnqueuer)(nil)
 // 生成されたインスタンスは内部で gRPC コネクションを保持するため、シングルトンとして
 // 再利用し、アプリケーション終了時に Close してください。
 func NewTaskEnqueuer(ctx context.Context, cfg *config.Config) (*TaskEnqueuer, error) {
-	taskURL, err := domain.WorkerTaskURL(cfg.Tasks.WorkerURL)
-	if err != nil {
-		return nil, err
-	}
 
 	taskCfg := tasks.Config{
 		ProjectID:  cfg.GCP.ProjectID,
 		LocationID: cfg.GCP.LocationID,
 		QueueID:    cfg.Tasks.QueueID,
-		WorkerURL:  taskURL,
+		WorkerURL:  cfg.Tasks.WorkerURL,
+		WorkerPath: domain.WorkerTaskPath,
 		// タスクに指定する caller SA です。トークンを生成して付与するのは Cloud Tasks で、
 		// このプロセスが署名するわけではありません。受信側が受け付ける許可リスト
 		// （Tasks.AllowedServiceAccounts）とは別物なので取り違えないこと。

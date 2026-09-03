@@ -2,10 +2,9 @@
 package server
 
 import (
-	"io/fs"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -13,6 +12,7 @@ import (
 	"github.com/shouni/gcp-kit/cloudlog"
 	"github.com/shouni/gcp-kit/cloudrun"
 	"github.com/shouni/go-serve-kit/secureheaders"
+	"github.com/shouni/go-serve-kit/staticfiles"
 
 	"github.com/shouni/ap-story/assets"
 	"github.com/shouni/ap-story/internal/builder"
@@ -69,10 +69,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 
 	// --- 2. 認証関連エンドポイント (OAuth2 フロー) ---
 	if h.Auth != nil {
-		r.Route("/auth", func(r chi.Router) {
-			r.Get("/login", h.Auth.Login)
-			r.Get("/callback", h.Auth.Callback)
-		})
+		r.Handle("/auth/*", h.Auth.Routes()) // login / callback / logout
 	}
 
 	// --- 3. 認証が必要なルート (API 本体 + Web UI 画面。画面は Home から段階的に追加していく) ---
@@ -144,41 +141,17 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	})
 }
 
-// setupStaticRoutes は、埋め込み済みの静的ファイル（CSS/JS）を /static/* で配信します。
-func setupStaticRoutes(r chi.Router) {
-	staticFS, err := fs.Sub(assets.StaticFiles, "static")
-	if err != nil {
-		slog.Error("static assets are unavailable", "error", err)
-		return
-	}
-
-	fileServer := http.StripPrefix("/static/", http.FileServer(http.FS(staticFS)))
-	r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", cacheControlFor(r.URL.Path))
-		fileServer.ServeHTTP(w, r)
-	}))
-}
-
-// vendorPathPrefix より下は第三者製の配布物で、パスにバージョンが入っています
-// （assets/static/vendor/bootstrap-5.3.8 など）。更新すれば必ず別の URL になるので、
-// 再検証させる理由がありません。
-const vendorPathPrefix = "/static/vendor/"
-
-const (
-	// ownAssetCacheControl は自前の CSS / JS 用です。URL を変えずに中身が変わるため短命にします。
-	ownAssetCacheControl = "public, max-age=300, must-revalidate"
-	// vendorCacheControl は vendorPathPrefix 配下用です。
-	vendorCacheControl = "public, max-age=31536000, immutable"
-)
-
-// cacheControlFor は、静的ファイルのパスに応じた Cache-Control を返します。
+// setupStaticRoutes は、埋め込み済みの静的ファイルを /static/* で配信します。
+// Cache-Control の判断（自前は短命、vendor は不変）とディレクトリ一覧の抑止は
+// go-serve-kit の staticfiles が持ちます。
 //
-// //go:embed した FileServer は Last-Modified も ETag も出せない（embed の ModTime が
-// ゼロ値のため net/http が両方を省く）ので、期限が切れた時点で必ず全体を取り直します。
-// バージョン付きの vendor を分けているのは、その再取得を無くすためです。
-func cacheControlFor(path string) string {
-	if strings.HasPrefix(path, vendorPathPrefix) {
-		return vendorCacheControl
+// 認証の外側に置きます。スタイルシートにログインを求める理由が無く、
+// 未認証で表示されるログイン画面からも参照されるためです。
+func setupStaticRoutes(r chi.Router) {
+	files, err := staticfiles.New(staticfiles.Config{FS: assets.StaticFiles, Dir: "static"})
+	if err != nil {
+		// 埋め込んだ定数の取り違えなので、リクエストを受ける前に止めます。
+		panic(fmt.Sprintf("static assets: %v", err))
 	}
-	return ownAssetCacheControl
+	r.Handle("/static/*", files)
 }
