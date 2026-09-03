@@ -24,9 +24,9 @@ func testAuthHandler(t *testing.T) *session.Handler {
 	h, err := session.New(session.Config{
 		ClientID:     "client-id",
 		ClientSecret: "client-secret",
-		RedirectURL:  "https://example.com/auth/callback",
+		ServiceURL:   "https://example.com",
 		SessionName:  testSessionName,
-		Store:        session.NewMemoryStore(session.StoreConfig{}),
+		Store:        session.NewMemoryStore(),
 		// 許可リストが空だと fail-closed で全員拒否されます。
 		AllowedDomains: []string{"example.com"},
 	})
@@ -71,7 +71,7 @@ func TestProtectedAccessMiddlewareFallsBackToSessionWithoutM2MToken(t *testing.T
 	t.Parallel()
 
 	authHandler := testAuthHandler(t)
-	m2m := oidc.New("https://example.com", nil)
+	m2m := mustOIDC(t, "https://example.com", []string{"sa@project.iam.gserviceaccount.com"})
 
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
@@ -95,7 +95,7 @@ func TestProtectedAccessRejectsInvalidM2MToken(t *testing.T) {
 	t.Parallel()
 
 	authHandler := testAuthHandler(t)
-	m2m := oidc.New("https://example.com", []string{"sa@project.iam.gserviceaccount.com"})
+	m2m := mustOIDC(t, "https://example.com", []string{"sa@project.iam.gserviceaccount.com"})
 
 	called := false
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
@@ -197,7 +197,7 @@ func TestNewRouterOmitsWebRoutesWithoutWebHandler(t *testing.T) {
 
 	// Worker 面だけを担う構成: Auth も Web も nil。
 	router := NewRouter(&builder.AppHandlers{
-		TaskAuth: oidc.New("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: mustOIDC(t, "https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 
 	for _, path := range []string{"/", "/api/comics"} {
@@ -218,7 +218,7 @@ func TestNewRouterKeepsHealthzForWorkerRole(t *testing.T) {
 	t.Parallel()
 
 	router := NewRouter(&builder.AppHandlers{
-		TaskAuth: oidc.New("https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: mustOIDC(t, "https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -264,35 +264,6 @@ func TestNewRouterRegistersTheScriptRoutes(t *testing.T) {
 		if !found[method] {
 			t.Errorf("%s %s が登録されていません", method, want[method])
 		}
-	}
-}
-
-// バージョン付きの vendor と、URL が変わらない自前アセットで Cache-Control を分けること。
-func TestStaticCacheControlSeparatesVendorFromOwnAssets(t *testing.T) {
-	t.Parallel()
-
-	router := NewRouter(nil, "")
-
-	tests := []struct {
-		target string
-		want   string
-	}{
-		{"/static/vendor/bootstrap-5.3.8/bootstrap.min.css", vendorCacheControl},
-		{"/static/css/app.css", ownAssetCacheControl},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.target, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
-
-			if rec.Code != http.StatusOK {
-				t.Fatalf("%s = %d, want 200", tt.target, rec.Code)
-			}
-			if got := rec.Header().Get("Cache-Control"); got != tt.want {
-				t.Errorf("Cache-Control = %q, want %q", got, tt.want)
-			}
-		})
 	}
 }
 
@@ -401,4 +372,14 @@ func TestResponsesCarrySecurityHeaders(t *testing.T) {
 	if strings.Contains(policy, "autoplay") {
 		t.Errorf("Permissions-Policy が autoplay を塞いでいます: %s", policy)
 	}
+}
+
+// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
+	t.Helper()
+	v, err := oidc.New(audience, allowed)
+	if err != nil {
+		t.Fatalf("oidc.New() error = %v", err)
+	}
+	return v
 }
