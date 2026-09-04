@@ -6,309 +6,328 @@
 [![Platform](https://img.shields.io/badge/Platform-Cloud%20Run-blue?logo=google-cloud)](https://cloud.google.com/run)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 概要 (About) - 原稿から章立て・ネーム・コマ・ページまで一本で
+## 🚀 概要 (About) - 台本を確認してから、コマとページに絵を入れる
 
-**AP Story** は、[go-comic-kit](https://github.com/shouni/go-comic-kit) を用いた
-**MCP 対応の漫画生成オーケストレータサービス**（Cloud Run + Cloud Tasks）です。
+**AP Story** は、原稿から漫画を生成する Cloud Run + Cloud Tasks 上のサービスです。
 
-原稿（URL / テキスト）から「章立て → ネーム → キャラクターデザインシート → パネル →
-ページ」を非同期ジョブとして生成し、成果物と状態ドキュメント（`comic_state.json`）を
-GCS に永続化します。ブラウザは **Google OAuth セッション**、AI エージェント（Claude 等）は
-**サービスアカウントの OIDC**（M2M）のいずれかで同一の JSON API を呼び出せ、パネル単位の
-再生成（シード振り直し・編集指示）まで対応します。この JSON API は MCP サーバー経由でも
-公開しており、Claude などのエージェントから直接呼び出せます。
+原稿（URL またはテキスト）を読み込み、[go-comic-kit](https://github.com/shouni/go-comic-kit) の
+操作で「章立て → ネーム（台本）→ コマ画像 → ページ画像」を非同期ジョブとして生成します。
+成果物と状態ドキュメント（`comic_state.json`）は GCS に置き、ジョブの進行状況
+（`queued` / `running` / `succeeded` / `failed`）は同じプレフィックスの `status.json` に記録します。
 
-## ✨ 特徴 (Features)
+* **台本と画像は別の工程です。** Web フォームは章立てとネームまでを作り、画像の生成は作品詳細で
+  コマ数を見てから始めます。
+* **途中から再開できます。** state は工程の切れ目ごとに保存され、`render_comic` は未生成の
+  コマ・ページだけを埋めます。
+* **コマ・ページを個別に直せます。** シードの振り直しと編集指示（「表情を笑顔に」）を
+  ジョブとして投入します。
+* **台本のセリフは画面と API から直せます。** 直したセリフは、対象ページを合成し直すと絵に載ります。
+* **人と機械が同じ URL を使います。** ブラウザは Google OAuth のセッション、AI エージェントは
+  サービスアカウントの OIDC（M2M）で、同じルートを `Accept` と本文の形で使い分けます。
+  同じ API を MCP ゲートウェイ経由でも呼び出せます。
 
-* **🔁 非同期ジョブ + 再生成**: 生成はすべて Cloud Tasks 経由。`comic_state.json` が
-  唯一の真実源で、「12パネル中3番だけシードを振り直して再生成」「表情だけ編集指示で修正」が
-  ジョブとして投入できます。
-* **📝 台本ゲート**: Web フォームは**台本までしか作りません**。章立て・ネームを確認してから
-  画像生成へ進めます。コマ数ぶんの画像生成は高価なため、確信が持てない原稿ではこの2段構えが有効です。
-* **⏭️ 途中から再開**: state は工程の切れ目ごとに保存され、失敗時もそこまでの成果を残します。
-  `render_comic` は未生成のコマ・ページだけを埋めるため、失敗したジョブを最初から作り直しません。
-* **🔐 Google OAuth + M2M の二本立て**: 人間はブラウザから Google アカウントでログインして
-  API を呼び出せ、AI エージェントはサービスアカウントの OIDC（M2M）で同じ API を呼び出せます
-  （[gcp-kit](https://github.com/shouni/gcp-kit) の認証基盤を利用）。
-* **🧬 キャラクターの一貫性**: デザインシートを同一性アンカーとして、go-comic-kit の
-  3-Factor Consistency Control（Seed / 参照アセット / VisualCues）で維持します。
-* **📣 Slack 通知 + Cloud Build**: ジョブの完了・失敗を Slack Webhook で通知（任意設定）。
-  `cloudbuild.yaml` で単一の Cloud Run サービスとしてビルド・デプロイします。
+1つのイメージを `SERVER_ROLE` で **Web 面（公開）と Worker 面（非公開）の2サービス**として
+デプロイします（`cloudbuild.yaml`）。
 
-## 🏗️ アーキテクチャ
+---
 
-生成ロジック（台本・デザインシート・パネル・ページ）はすべて
-[go-comic-kit](https://github.com/shouni/go-comic-kit) の操作セットに委譲し、ap-story は
-**ジョブ管理・非同期実行・履歴・API/MCP 公開**に責務を絞ります。
+## 📦 使い方
 
-### 非同期ジョブモデル
+### 1. 環境設定
 
-漫画生成は多段・長時間（数分〜十数分）のため、すべて Cloud Tasks 経由の非同期ジョブです。
+`ValidateEssentialConfig` はロールごとに必要なものだけを検証します。
 
-1. `POST /jobs` がジョブ ID を採番し、Cloud Tasks にタスクを enqueue して**即座に jobID を返す**
-2. Worker（`POST /tasks/generate`）がタスクを受け、go-comic-kit の操作を実行して
-   **state（`comic_state.json`）を GCS に保存**する
-3. クライアントは `GET /jobs/{jobID}`（ジョブ状態）と
-   `GET /jobs/{jobID}`（state の読み出し）で進捗・結果を確認する
+**どのロールでも必須**
 
-冪等性は、Cloud Tasks の **task name にジョブ ID + 工程を含めて重複 enqueue を排除**し、
-state の保存は「常に上書き・常に最新」（go-comic-kit `store.Save` の仕様）で担保しています。
+| 変数名 | 説明 |
+| --- | --- |
+| `SERVER_ROLE` | `web` / `worker` / `both`（`both` はローカル開発用）。**未設定・未知の値は起動時エラー**です。担当する面だけを組み立て、ルートもその面のものだけを登録します。 |
+| `GCP_PROJECT_ID` | GCP Project ID。Gemini は Vertex AI 経由で呼びます。ローカル実行では ADC が必要です。 |
+| `GCP_LOCATION_ID` | Cloud Tasks キューのリージョン（例: `asia-northeast1`）。既定値は無く、未設定なら起動時にエラーになります。 |
+| `STORY_BUCKET` | 成果物・state・進行状況を置く GCS バケット**名**（`gs://` は付けません。付いていれば外します）。 |
 
-`compose_comic` の各工程は済んでいる分を飛ばすため、再配信による再実行は未了分だけを進めます
-（`compose_comic` はジョブ ID を新規採番したときにしか投入されないので、state が既にある
-= 再実行、と判断できます）。最初からやり直すと、保存済みの生成物を捨てて画像生成のコストを
-二重に払うことになります。
+**Web 面（`web` / `both`）で必須**
 
-ただし `compose_comic` 以外は task name に投入時刻を含めて、重複排除が効く範囲を
-「同じ対象へ同じ秒に届いた投入」— つまり呼び出し元の再試行のような、まとめてよい重複だけに
-絞っています。`render_comic` は「失敗したところから再開する」ため、`regenerate_*` と
-`generate_design_sheet` は「気に入らないからもう一度」のため、いずれも同じ対象へ何度も
-投げ直す前提の操作です。対象だけで名前を決めると、その投げ直しが ALREADY_EXISTS として
-黙って捨てられます。Cloud Tasks の重複排除は**完了後もしばらく効き続け**（公称1時間、実際は
-それより長引きます）、gcp-kit はこれを成功として扱うので、呼び出し元には 202 が返り、
-ジョブ状態は誰も処理しないまま `queued` で残ります。エラーが出ないぶん気づきにくく、
-実際に同じコマの再生成が数時間にわたって空振りし続けたことがあります。
+| 変数名 | 説明 |
+| --- | --- |
+| `GEMINI_MODELS` | 台本（章立て・章台本）のモデル。**カンマ区切りで先頭が既定**、一覧がフォームの選択肢と投入時の許可リストになります。既定値は持ちません。worker は読みません（ジョブが自分のモデル名を運びます）。 |
+| `IMAGE_MODELS` | 画像（デザインシート・コマ・ページ）のモデル。扱いは `GEMINI_MODELS` と同じです。 |
+| `CLOUD_TASKS_QUEUE_ID` | 投入先のキュー名。 |
+| `WORKER_URL` | worker **サービス**の URL。パスは含めません。 |
+| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | タスクに載せる caller SA。**トークンを発行するのは Cloud Tasks** であって、このプロセスが署名するわけではありません。 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth のクライアント。 |
+| `SESSION_FIRESTORE_DATABASE` / `SESSION_FIRESTORE_COLLECTION` | セッションを置く Firestore（既定はどちらも `sessions`）。Firestore はセッションにだけ使い、ジョブの進行状況は GCS にあります。 |
+| `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可する相手（カンマ区切り）。**どちらも空だと起動しません。** |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | 機械（MCP ゲートウェイなど）が OIDC Bearer で叩くときに許可する SA（カンマ区切り）。空だと起動しません。 |
 
-`compose_comic` だけは投入のたびにジョブ ID を新規採番するため名前がもともと投入ごとに
-変わり、決定的な名前が排除できるのは同一リクエストの再送だけなので、時刻を含めていません。
+**Worker 面（`worker` / `both`）で必須**
 
-### GCS レイアウト
+| 変数名 | 説明 |
+| --- | --- |
+| `TASK_AUDIENCE_URL` | OIDC 検証の audience。未設定なら `SERVICE_URL` を使います。web/worker を分けた場合は**呼び先である worker の URL** です。 |
+| `ALLOWED_TASK_SERVICE_ACCOUNTS` | 受け付ける caller SA（カンマ区切り）。**投入側**の SA を指定します。web/worker で実行 SA を分けるため、worker には「他人の SA」が並びます。 |
+| `TASK_DISPATCH_DEADLINE` | Cloud Tasks がワーカーの応答を待つ上限（例: `30m`。Cloud Tasks の上限も `30m`）。**既定値は無く、未設定だと起動時に落ちます。** |
+| `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→コマ→ページの工程列全体）の上限。**既定値は無く、未設定・無制限・`TASK_DISPATCH_DEADLINE` 以上のいずれも起動時に拒否されます。** |
+
+worker の実行時間を決める値は 3 つあり、この大小関係を守ります。実効上限は**いちばん小さい値**です。
+
+```
+PIPELINE_TIMEOUT  <  TASK_DISPATCH_DEADLINE  <=  Cloud Run の timeout
+    (アプリ)              (タスク)                  (サービス)
+```
+
+3 つともアプリ側に既定値は無く、値を決めるのはインフラ側の Terraform だけです。
+
+**任意**
+
+| 変数名 | 説明 |
+| --- | --- |
+| `SERVICE_URL` / `PORT` | 公開 URL と待ち受けポート (Default: `http://localhost:8080` / `8080`)。`SERVICE_URL` は OAuth のリダイレクト先・M2M 認証の audience・Slack 通知リンクの生成元を兼ねるため、**worker にも web の URL** を設定します。 |
+| `CHARACTERS_JSON_PATH` | go-character-kit の `characters.json`（GCS またはローカル）。未設定なら go-character-kit 埋め込みの既定キャラクター定義を使います。 |
+| `IMAGE_ASPECT_RATIO` | コマ・ページ・デザインシート共通の比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。 |
+| `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | 生成画像の解像度（`1K` / `2K`）。未設定ならコマ `1K`、ページ・シート `2K`。 |
+| `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | 章数・章あたりのコマ数・ページあたりのコマ数の上限。未設定なら go-comic-kit の既定。 |
+| `MAX_CONCURRENCY` | 一括生成の並列数（既定 `1` = 逐次）。 |
+| `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限 (Default: `10s`、`0` で無制限)。**スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まります。** `compose_comic` は既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分なので、上げるときは上の 3 段に収まるかを先に確認してください。 |
+| `REQUEST_TIMEOUT` | 外部 AI 呼び出し1回あたりの上限 (Default: `5m`)。画像生成1枚に数十秒かかるため、`2m` を下回ると起動時に警告が出ます。 |
+| `SLACK_WEBHOOK_URL` | 完了・失敗の通知先。未設定なら通知は無効になります。worker 面だけが使います。 |
+
+> 環境変数が持つのは**デプロイ先が決める設定**だけです。原稿・モード・モデルといった
+> 作品ごとに変わる値は、タスクのペイロード（JSON）で渡し、`comic_state.json` に記録されます。
+
+### 2. 起動
+
+```bash
+go run .        # SERVER_ROLE が必須
+```
+
+`SERVER_ROLE` が担う面だけを組み立てます。
+
+| ロール | 組み立てるもの | 公開されるルート |
+| --- | --- | --- |
+| `web` | 投入フォーム・作品とキャラクターの画面・Cloud Tasks への投入・セッション用 Firestore | `/`, `/compose/*`, `/comic-options`, `/jobs/*`, `/characters/*`, `/auth/*` |
+| `worker` | パイプライン（go-comic-kit + Vertex AI + GCS + 通知） | `POST /tasks/generate` |
+| `both` | 両方（ローカル開発用） | 上記すべて |
+
+本番では 1 つのイメージを 2 つの Cloud Run サービスとしてデプロイします（`cloudbuild.yaml`）。
+worker は ingress を `internal` にして到達経路を Cloud Tasks に限定し、実行 SA も web と分けます。
+SA と IAM の定義はインフラ側の Terraform にあります。
+
+`SERVER_ROLE=both` で `go run .` すると画面は確認できますが、**Cloud Tasks は localhost へ
+配送できないため、投入してもワーカーは動きません。** ロジックの確認は `go test ./... -race` で行ってください。
+
+### 3. HTTP エンドポイント
+
+**認証は 1 つです。** `auth.Protected` が OIDC の Bearer とセッションの両方を通すため、
+同じ URL を人も機械も叩けます。`GET /health` と `/static/*` だけが認証の外側で、
+ロールに関係なく登録されます。
+
+| メソッド | パス | 用途 |
+| --- | --- | --- |
+| `GET` | `/health` | ヘルスチェック（`/healthz` は Cloud Run の既定ドメイン側で予約パス扱いになりコンテナまで届かないため使いません）。認証不要 |
+| `GET` | `/static/*` | 埋め込みの CSS / JS と `vendor/` 配下の Bootstrap / Bootstrap Icons。認証不要。`vendor/` は `public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
+| `GET` | `/auth/login` `/auth/callback` `/auth/logout` | Google OAuth のログイン・コールバック・ログアウト |
+| `GET` | `/` | Home 画面（直近の作品を数件表示） |
+| `GET` | `/compose` | 台本生成フォーム。台本モード・画風モード・テキストモデルを選びます。**画像モデルは作品詳細で選びます** |
+| `GET` | `/compose/design-sheet` | デザインシート単体生成フォーム。`?character_id=` で事前選択できます |
+| `GET` | `/comic-options` | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
+| `POST` | `/jobs` | ジョブを投入。本文がフォームなら画面、JSON なら機械です。`command` は `compose_comic`（省略時）か `generate_design_sheet`。ジョブ ID はサーバーが採番します。受付は `202` と `Location: /jobs/{jobID}` |
+| `GET` | `/jobs` | 作品（`compose_comic` のジョブ）を新しい順に。`?page=`（1 ページ 20 件）。ブラウザには一覧画面、`Accept: application/json` には state の列挙 |
+| `GET` | `/jobs/{jobID}` | ジョブ 1 件。投入から削除まで同じ URL です。ブラウザには詳細画面（コマ・ページの生成ボタン、台本タブ、個別の再生成）。JSON には進行状況と、state が読めれば `comic` に `comic_state.json` の内容。デザインシートのジョブは進行状況だけです |
+| `DELETE` | `/jobs/{jobID}` | 成果物をまとめて削除（`204`）。画面の削除ボタンも fetch で DELETE を送ります |
+| `GET` | `/jobs/{jobID}/script` | 台本のうち編集できる部分（章の見出しと各コマのセリフ）だけを返します。生成記録やプロンプトは含みません |
+| `PUT` | `/jobs/{jobID}/script` | 台本の保存。差し替えられるのはセリフの文面・話者・種別だけで、**コマの追加・削除・並べ替えは拒否します。** 合成し直すべきページを `affected_pages` で返します。ジョブが `queued` / `running` の間は `409` |
+| `POST` | `/jobs/{jobID}/regenerate` | 再生成ジョブの投入（`compose_comic` 以外の `command` とパラメータ）。`job_id` は URL のものを使い、本文の値は無視します。`202` と `Location` |
+| `GET` | `/jobs/{jobID}/images/*` | コマ・ページ画像への署名付き URL リダイレクト（302） |
+| `GET` | `/characters` | キャラクター一覧。ブラウザにはマスター参照画像のサムネイル付き、JSON には id・name・reference_url（画像 URL は `gs://` のまま） |
+| `GET` | `/characters/{characterID}` | キャラクター詳細。ブラウザにはサイズ / アスペクト比ごとのマスター参照画像と、デザインシート生成履歴の最新 12 件。JSON には生成履歴の全件（新しい順） |
+| `GET` | `/characters/{characterID}/design-sheets` | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
+| `DELETE` | `/characters/{characterID}/design-sheets/{jobID}` | デザインシート生成履歴 1 件の削除。単体生成ジョブなら state も削除、作品ジョブは state 内の参照だけを除きます |
+| `GET` | `/characters/images/*` | デザインシート生成履歴の画像への署名付き URL リダイレクト |
+| `GET` | `/characters/reference/*` | キャラクターのマスター参照画像への署名付き URL リダイレクト |
+| `POST` | `/tasks/generate` | Cloud Tasks 専用のワーカー。OIDC 検証を通らないリクエストは 401、`SERVER_ROLE=web` では**ルートごと登録されない**ため 404 |
+
+**同じリソースはルートも 1 本です。** 表現は `Accept` で決まり、`application/json` を送れば
+JSON が、ブラウザの `Accept` なら画面が返ります。パスの切り方は public-docs の URL 命名規約に従います。
+
+**副作用のあるメソッドには CSRF トークンが要ります。** フォームは `csrf_token` の hidden で、
+画面の JS は `X-CSRF-Token` ヘッダーで送ります。OIDC Bearer で認証した機械はこの検証に入らず、
+代わりに `ALLOWED_M2M_SERVICE_ACCOUNTS` で呼び出し元を絞ります。
+
+台本モード・画風モード・モデルの検証（`GET /comic-options` の一覧に無い値は 400）は、
+画面も API も同じ関数を通ります。
+
+**画面での生成の進め方**
+
+1. `/compose` で原稿を投入し、台本モード・画風モード・テキストモデルを選んで「台本を生成」。
+   **このフォームは章立てとネームまでしか作りません**（`stop_after_script` が常に付きます）。
+2. `/jobs/{jobID}` で台本を確認し、**画像モデルを選んで「コマを生成」**。作品全体でも、章カードから
+   1 章だけでも始められます。途中で失敗しても「続きのコマを生成」が未生成分だけを埋めます。
+3. コマが揃うと、同じ場所のボタンが「ページを合成」に変わります。
+4. 気に入らないコマ・ページは詳細画面から個別に直します。シャッフル（`bi-shuffle`）はシードを
+   振り直し、鉛筆（`bi-pencil`）は指示で部分編集します（生成済み画像が入力になるため、未生成の
+   コマには表示されません）。章見出しの「台本を再生成」はその章のネームだけを作り直します
+   （コマは作り直しになります）。
+5. セリフの手直しは「台本」タブで行います。保存すると合成し直すべきページ番号が返るので、
+   そのページを「ページを合成」で作り直します。
+
+### 4. タスクのペイロード
+
+Worker が受けるタスクは `command` で分岐します。各コマンドは「state をロード →
+go-comic-kit の操作を実行 → state を保存」の形で、`render_comic` は生成済みのコマ・ページを飛ばします。
+
+| `command` | 何をするか | 必須フィールド |
+| --- | --- | --- |
+| `compose_comic` | 章立て → 各章の台本 → 全コマ → 全ページ。`stop_after_script` で台本までで止まる。デザインシートは含まない | `source_url` または `source_text` |
+| `render_comic` | 未生成のコマ・ページだけを生成。台本確認後の続行と、失敗・打ち切りからの再開を兼ねる。`chapter_id` でその章だけ、`stop_after_panels` でコマまでに絞れる | `job_id` |
+| `regenerate_chapter_script` | 1 章の台本を作り直す（後続のコマ・ページは別途再生成） | `job_id`, `chapter_id` |
+| `generate_design_sheet` | キャラクターデザインシートを生成 | `character_ids` |
+| `regenerate_panel` | コマ 1 つを生成 / 再生成 | `job_id`, `panel_id` |
+| `regenerate_page` | ページ 1 つを合成 / 再合成 | `job_id`, `page` |
+
+| フィールド | 説明 |
+| --- | --- |
+| `command` | 上の 6 つのいずれか。`POST /jobs` は `compose_comic`（省略可）と `generate_design_sheet`、`POST /jobs/{jobID}/regenerate` はそれ以外を受け付けます。 |
+| `job_id` | ジョブの識別子。`POST /jobs` ではサーバーが採番し、`regenerate` では URL のものを使います。成果物の置き場もこれで決まります。 |
+| `source_url` / `source_text` | `compose_comic` の原稿。どちらか 1 つ。 |
+| `script_mode` / `style_mode` | 台本モード（`assets/prompts/outline`・`chapter` の `.md`、ファイル名がモード名）と画風モード（`assets/prompts/styles.json`）。一覧は `GET /comic-options`。 |
+| `text_model` | 台本を書くモデル。空なら `GEMINI_MODELS` の先頭。`POST /jobs` の JSON では `image_model` も受け付け、タスクの `model_override` になります。 |
+| `model_override` | コマ・ページ・デザインシートを描くモデル。空なら `IMAGE_MODELS` の先頭。**最初の画像生成で作品に記録され、以降は既定になります。** |
+| `stop_after_script` / `stop_after_panels` | 台本まで / コマまでで止める。フォームからの `compose_comic` は常に前者が付きます。 |
+| `chapter_id` / `panel_id` / `page` | 対象の章（`ch01`）/ コマ（`ch01-p03`）/ ページ番号（1 始まり）。 |
+| `character_ids`, `aspect_ratio`, `layout`, `reference_url_override`, `visual_cues_override` | `generate_design_sheet` の入力。`aspect_ratio` の既定は `16:9`。上書き 2 つは単一キャラクター指定時だけ効きます。 |
+| `seed` / `edit_prompt` / `prompt_override` | `regenerate_panel` / `regenerate_page` / `generate_design_sheet` の生成条件。`seed` を省くと前回の生成条件を再利用し、`edit_prompt` を付けると生成済み画像を入力にした編集になります。 |
+
+台本モード・画風モード・モデルの選択は `comic_state.json` に記録され、**あとから走らせるジョブが
+引き継ぎます。** 台本確認後の `render_comic`、章の台本の作り直し、コマ・ページの再生成はいずれも
+記録された選択を使うため、1 つの作品が途中から別のモデル・別の画風になることはありません。
+
+```json
+{
+  "command": "compose_comic",
+  "source_url": "https://example.com/story",
+  "script_mode": "default",
+  "style_mode": "default",
+  "text_model": "<GEMINI_MODELS のいずれか>",
+  "image_model": "<IMAGE_MODELS のいずれか>",
+  "stop_after_script": true
+}
+```
+
+```json
+{
+  "command": "regenerate_panel",
+  "panel_id": "ch01-p03",
+  "edit_prompt": "表情を笑顔にする"
+}
+```
+
+**GCS レイアウト**
 
 ```
 gs://{STORY_BUCKET}/
 ├── comics/{jobID}/                    # 作品ジョブごとのプレフィックス
-│   ├── comic_state.json               # MangaState（唯一の真実源。履歴・詳細はこれを読む）
+│   ├── comic_state.json               # MangaState（履歴・詳細はこれを読む）
+│   ├── status.json                    # 進行状況（queued / running / succeeded / failed）
 │   └── images/
-│       ├── panel_{panelID}.png        # パネル画像（パネルIDに紐づく安定パス・上書き）
+│       ├── panel_{panelID}.png        # コマ画像（コマ ID に紐づく安定パス・上書き）
 │       └── comic_page_{N}.png         # ページ画像
 ├── design-jobs/{jobID}/
 │   └── comic_state.json               # デザインシート単体生成ジョブの state（画像は character/ 側）
-└── character/{tag}/{jobID}.png        # デザインシート（作品に依存しない共有アセット）
+├── character/{tag}/{jobID}.png        # デザインシート（作品に依存しない共有アセット）
+└── character-reference/{characterID}/... # 人手で用意したマスター参照画像
 ```
 
-キャラクターのデザインシートは特定の作品（ジョブ）に属さない共有アセットのため、
-`comics/{jobID}/` の外（バケット直下の `character/`）に置きます。`{tag}` はキャラクターID
-（合成シートの場合は複数ID連結）、`{jobID}` は生成呼び出しごとに一意なので、同じキャラクターへの
-再生成が過去の生成結果を上書きしません。
-
-履歴一覧は `comics/*/comic_state.json` の列挙（ページング + TTL キャッシュ）です。デザインシート
-単体生成ジョブの state は `design-jobs/` 側に保存されるため `comics/` の列挙に現れず、ID の列挙・
-ページングは state を読まずに完結します（state を読むのは選択されたページの分だけ）。単体生成の
-履歴は `/characters/{characterID}` 側で確認します。画像はアプリから直接配信せず、
-**GCS 署名 URL へ 302 リダイレクト**します（パネル・ページは `/jobs/{jobID}/images/*`、
-デザインシート生成履歴は `/characters/images/*`）。jobID は必ず検証・サニタイズした
-ものだけを HTTP 入力・GCS パス生成の両方で使います。
-
-キャラクターのマスター参照画像（characters.json の `reference_url` / `reference_urls`、AI 生成では
-なく人手で用意した正典画像）はバケット直下の `character-reference/{characterID}/...` に置き、
-`character/`（AI 生成履歴）とはディレクトリを分けています。こちらは `/characters/reference/*`
-経由で配信します。
-
-### 台本の校正
-
-セリフの手直しは `GET/PUT /jobs/{jobID}/script` で行います（画面は作品詳細の「台本」タブ）。
-台本の再生成（`regenerate_chapter_script`）は章まるごと書き直すので1行の校正には使えず、
-コマの構成ごと変わって生成済みのコマ画像との対応が壊れます。
-
-やり取りするのは state 全体ではなく、章の見出しと各コマのセリフだけです。生成記録
-（`GenerationRecord`）やページ成果物は生成の結果であって入力ではないので、編集の経路に乗せません。
-差し替えられるのはセリフの文面・話者・種別だけで、**コマの追加・削除・並べ替えは拒否します**
-（`panel_id` の並びが生成済みのコマ画像との対応そのものだからです）。
-
-**保存はゴールではありません。** セリフはページ合成のときに画像モデルが描き込むので
-（`prompts/page.go` の `TEXT_TO_RENDER`）、保存しただけでは絵は古い文字のままです。直した文字を
-絵に載せるには対象ページを合成し直す必要があり、そのページ番号を `affected_pages` で返します。
-逆にコマ画像は作り直さずに済みます（コマは `No speech bubbles, no text` で生成されているため）。
-
-state の保存は「常に上書き・常に最新」で、go-comic-kit の store は条件付き書き込み
-（GCS の `ifGenerationMatch`）の口を持ちません。そのため生成ジョブと編集が重なると、
-後から書いたほうが勝って先の変更が痕跡なく消えます。防ぎようがないので、実行中
-（queued / running）のジョブがある間は編集を 409 で断ります。状態が記録されていない作品は
-素通しします（状態を追えないことを理由に止めると、状態記録より前に作られた作品が
-永久に直せなくなるためです）。
-
-## 📋 パイプラインコマンド（Task.command）
-
-Worker が受けるタスクはコマンドで分岐します。各コマンドは「state をロード →
-go-comic-kit の操作を実行 → state を保存」の形で、go-comic-kit の冪等な操作と1対1です。
-
-| command | 実行する go-comic-kit 操作 | 入力パラメータ |
-|---|---|---|
-| `compose_comic` | 全工程: GenerateOutline → 各章 GenerateChapterScript → GenerateAllPanels → ComposeAllPages（デザインシートは含まない。単体生成 `generate_design_sheet` で別途作成）。`stop_after_script` を指定すると台本までで止まる | source_url / source_text, script_mode, style_mode, text_model, image_model, stop_after_script |
-| `render_comic` | GenerateAllPanels → ComposeAllPages（生成済みは飛ばす）。台本確認後の続行と、失敗・打ち切りからの再開を兼ねる。`chapter_id` でその章だけ、`stop_after_panels` でコマまでに絞れる（画像はいちばん高価な工程なので、1章・1段階ずつ試してから進める） | job_id, chapter_id（任意）, stop_after_panels（任意） |
-| `regenerate_chapter_script` | GenerateChapterScript（1章。後続のパネル・ページは別途再生成） | job_id, chapter_id |
-| `generate_design_sheet` | GenerateDesignSheet | job_id（省略時は state なしの単発生成）, character_ids, aspect_ratio, layout, style_mode, model_override, seed |
-| `regenerate_panel` | GeneratePanel | job_id, panel_id, seed / edit_prompt / prompt_override |
-| `regenerate_page` | ComposePage | job_id, page, seed / edit_prompt |
-
-## 🎨 モードとモデルの選択
-
-生成ジョブには4つの選択が乗ります。フォームの `<select>` と JSON API で同じ一覧を使い、
-一覧に無い値は投入時に弾かれます（`GET /comic-options` で取得できます）。
-
-| 選択 | 出どころ | 内容 |
-|---|---|---|
-| 台本モード | `assets/prompts/outline`・`chapter` の `.md` | 章立てとネームの語り口。ファイル名がモード名 |
-| 画風モード | `assets/prompts/styles.json` | コマ・ページの画風（`style`）、デザインシート用の画風（`design_style`）、その画風で避けたいもの（`negative`）の3点セット |
-| テキストモデル | `GEMINI_MODELS` | 台本を書くモデル |
-| 画像モデル | `IMAGE_MODELS` | コマ・ページを描くモデル。**選ぶのは作品詳細**（台本の時点ではコマ数も絵柄も分からないため）。最初の画像生成で作品に記録され、以降は既定になる |
-
-選択は `comic_state.json` に記録され、**あとから走らせるジョブが引き継ぎます**。台本確認後の
-`render_comic`、章の台本の作り直し、コマ・ページの再生成はいずれも記録された選択を使うため、
-1つの作品が途中から別のモデル・別の画風になることはありません。
-
-画風とネガティブプロンプトを1件にまとめてあるのは、対で決まるからです。モノクロの画風を
-選んだときに共通側が `monochrome` を禁止していると、指定同士が正面から衝突します。
-
-## ✍️ 生成フロー（Web UI）
-
-1. `/compose` で原稿を投入する。台本モード・画風モード・モデルを選んで「台本を生成」。
-   **このフォームは章立てとネームまでしか作らない。** 押した時点では章立てが未実行で、
-   何コマになるか分からないため、画像の開始はコマ数が見えている作品詳細に任せる。
-2. `/jobs/{jobID}` で台本を確認する。問題なければ**画像モデルを選んで「コマを生成」**。作品全体でも、
-   章カードから1章だけでも始められる。途中で失敗しても**「続きのコマを生成」が未生成分だけを埋める**。
-3. コマが揃うと、同じ場所のボタンが**「ページを合成」に変わる**。ページはコマを並べた合成物なので、
-   コマの出来を見てから合成へ進む（崩れたコマから2Kのページを作ると払い直しになる）。
-4. 気に入らないコマ・ページは詳細画面から個別に直す。
-   * **シャッフル**（<code>bi-shuffle</code>）: シードを振り直して別の絵にする。
-   * **鉛筆**（<code>bi-pencil</code>）: 「表情を笑顔に」のような指示で、構図を保ったまま部分編集する
-     （生成済み画像が入力になるため、未生成のコマには表示されない）。
-   * 章見出しの**「台本を再生成」**: その章のネームだけを作り直す（コマは作り直しになる）。
-
-## 🌐 HTTP エンドポイント
-
-`/jobs/*` と `/characters/*` はブラウザセッションまたは M2M（OIDC Bearer）のいずれかで呼び出せます。ブラウザ向けの
-画面（HTML）は `html/template` + go:embed（静的アセットは `/static/*`）で
-本リポジトリ内に実装しています。画面のハンドラは JSON API とコアロジックを共有し、
-レスポンス形式（HTML/JSON）だけが異なります。
-
-| メソッド/パス | 認証 | 内容 |
-|---|---|---|
-| `GET /auth/login`, `GET /auth/callback` | Google OAuth | ログインフロー（gcp-kit auth.Handler） |
-| `GET /` | セッション or M2M | Home 画面（直近の作品を数件表示。未認証時は `/auth/login` へリダイレクト） |
-| `GET /compose`, `POST /jobs` | セッション | 台本生成フォームの表示・投入（受付画面を返す。台本モード・画風モード・テキストモデルを選択できる。画像モデルは作品詳細で選ぶ） |
-| `GET /compose/design-sheet`, `POST /jobs`（`command=generate_design_sheet`） | セッション | デザインシート単体生成フォームの表示・投入（job_id は自動採番。`?character_id=`で事前選択可、画風モード・画像モデル・参照画像URL・見た目特徴の上書きに対応） |
-| `GET /characters` | セッション | キャラクター一覧（マスター参照画像のサムネイル付き） |
-| `GET /characters/{characterID}` | セッション | キャラクター詳細（上段: サイズ/アスペクト比ごとのマスター参照画像、下段: デザインシート生成履歴の最新12件+削除ボタン。新しい順、合成生成は対象外） |
-| `GET /characters/{characterID}/design-sheets` | セッション | デザインシート生成履歴の全件表示（新しい順、削除ボタン付き） |
-| `GET /jobs` | セッション or M2M | 作品一覧。`Accept: application/json` なら state の列挙（ページング）、ブラウザなら一覧画面 |
-| `GET /jobs/{jobID}` | セッション or M2M | 作品詳細。JSON なら `comic_state.json` の内容、ブラウザなら詳細画面 |
-| `GET /static/*` | なし | CSS/JS 静的アセット。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
-| `GET /comic-options` | セッション or M2M | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
-| `POST /jobs` | セッション or M2M | compose_comic ジョブの投入（jobID を返す。script_mode・style_mode・text_model・image_model は任意で、省略時は既定で埋まる） |
-| `GET /jobs/{jobID}/script` | セッション or M2M | 台本の読み出し（章の見出しと各コマのセリフだけ。生成記録やプロンプトは含まない） |
-| `PUT /jobs/{jobID}/script` | セッション or M2M | 台本の保存（セリフのみ差し替え。合成し直すべきページを `affected_pages` で返す） |
-| `POST /jobs/{jobID}/regenerate` | セッション or M2M | 再生成ジョブの投入（command + パラメータ） |
-| `GET /jobs/{jobID}/images/*` | セッション or M2M | パネル・ページ画像への署名 URL リダイレクト |
-| `POST /jobs（`command=generate_design_sheet`）` | セッション or M2M | generate_design_sheet ジョブの投入（jobID は自動採番。character_ids は必須、aspect_ratio・layout・style_mode・model_override・reference_url_override・visual_cues_override は任意） |
-| `GET /characters` | セッション or M2M | キャラクター一覧（id・name・reference_url を返す。画像 URL は gs:// のまま） |
-| `GET /characters/{characterID}` | セッション or M2M | キャラクター詳細（マスター参照画像 + 生成履歴全件、新しい順） |
-| `GET /characters/images/*` | セッション or M2M | デザインシート生成履歴の画像への署名 URL リダイレクト（作品非依存） |
-| `GET /characters/reference/*` | セッション or M2M | キャラクターのマスター参照画像への署名 URL リダイレクト |
-| `DELETE /characters/{characterID}/design-sheets/{jobID}` | セッション or M2M | デザインシート生成履歴1件の削除（単体生成ジョブなら state も削除、作品ジョブは state 内の参照のみ除去） |
-| `DELETE /jobs/{jobID}` | セッション or M2M | ジョブ成果物の削除 |
-| `POST /tasks/generate` | Cloud Tasks OIDC | Worker: コマンド実行 |
-| `GET /health` | なし | ヘルスチェック |
-
-## ⚙️ 環境変数
-
-| 変数 | 内容 |
-|---|---|
-| `PORT` | HTTP ポート（Cloud Run 既定 8080） |
-| `SERVER_ROLE` | **必須**。プロセスが担う役割。`web` / `worker` / `both`。未設定と未知の値は起動時エラーです。詳細は「web / worker の分離」を参照 |
-| `SERVICE_URL` | 自サービスの**公開** URL。OAuth のリダイレクト先、M2M 認証の audience、Slack 通知リンクの生成元を兼ねるため、worker にも**非公開の worker 自身ではなく web の URL** を設定する |
-| `WORKER_URL` | worker **サービス**の URL。パスは含めません |
-| `STORY_BUCKET` | 成果物・state の GCS バケット |
-| `CHARACTERS_JSON_PATH` | go-character-kit の characters.json（GCS/ローカル、任意。未設定時は go-character-kit 埋め込みの既定キャラクター定義を使用） |
-| `GEMINI_MODELS` | 台本生成（章立て・章台本）のモデル。カンマ区切りで先頭が既定、全体がフォームの選択肢と投入時の許可リスト。**web で必須**（worker は読みません。ジョブが自分のモデル名を運びます） |
-| `IMAGE_MODELS` | 画像生成（デザインシート・パネル・ページ）のモデル。扱いは `GEMINI_MODELS` と同じで、**web で必須** |
-| `IMAGE_ASPECT_RATIO` | パネル・ページ・デザインシート共通の比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。**3つで1つの設定**なのは、揃っていないと参照画像によるブレ抑制が黙って無効になるためです |
-| `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | 生成画像の解像度（`1K` / `2K`）。未設定ならパネル 1K・ページ/シート 2K。1コマごとに費用が効くのでデプロイ側で選べます |
-| `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | go-comic-kit Config の台本・ページ割り制御 |
-| `MAX_CONCURRENCY` | 一括生成の並列数（既定 1 = 逐次）。上げる場合は `RATE_INTERVAL` も見直すこと |
-| `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限（既定 10s、0 で無制限）。スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まる |
-| `REQUEST_TIMEOUT` | 外部 AI 呼び出し1回あたりの上限（既定 5m）。画像生成1枚に数十秒かかるため短くしすぎないこと |
-| `TASK_DISPATCH_DEADLINE` | Cloud Tasks がワーカーの応答を待つ上限。**既定値は無く、worker では未設定だと起動時に落ちます**（例: `30m`） |
-| `PIPELINE_TIMEOUT` | ワーカータスク1件（台本→パネル→ページの工程列全体）の上限。`REQUEST_TIMEOUT` が1回の API 呼び出しの上限であるのに対し、こちらは列全体を包みます。**既定値は無く、worker では未設定・無制限・`TASK_DISPATCH_DEADLINE` 以上のいずれも起動時に拒否されます** |
-| `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトとリージョン |
-| `CLOUD_TASKS_QUEUE_ID` | Cloud Tasks キュー名。タスクを投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
-| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。投入するのは web 面だけなので `SERVER_ROLE=worker` では不要 |
-| `ALLOWED_TASK_SERVICE_ACCOUNTS` | worker が**受け付ける** caller SA の許可リスト（カンマ区切り、worker では必須）。web と worker で実行 SA を分けている場合、worker が受け付けるべき発行元は自分自身ではなく **web 側の SA**（`ap-story-web-runner`） |
-| `TASK_AUDIENCE_URL` | OIDC トークンの audience。web/worker を分けた場合は**呼び先である worker の URL**（Cloud Run の IAM が不一致を 403 で弾く） |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ブラウザ Google OAuth ログイン |
-| `SESSION_FIRESTORE_DATABASE` / `SESSION_FIRESTORE_COLLECTION` | セッションを置く Firestore（既定はどちらも `sessions`）。**ジョブ状態用とは別のデータベースを指します** |
-| `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可するメール/ドメイン（カンマ区切り、いずれか必須） |
-| `ALLOWED_M2M_SERVICE_ACCOUNTS` | M2M 呼び出しを許可する SA（カンマ区切り）。`web` 面では必須で、未設定だと起動に失敗します |
-| `SLACK_WEBHOOK_URL` | 完了通知（任意）。worker 面のみ使用 |
-
-## 🔀 web / worker の分離
-
-本番では 1 つのイメージを 2 つの Cloud Run サービスとしてデプロイし、`SERVER_ROLE` で役割を切り替えます（`cloudbuild.yaml`）。
-
-| | `ap-story`（web） | `ap-story-worker` |
-|---|---|---|
-| `SERVER_ROLE` | `web` | `worker` |
-| 提供するルート | `/jobs/*`, `/characters/*`, `/auth/*` | `/tasks/generate` |
-| 公開 | あり | **なし**（ingress と Cloud Run の IAM で遮断） |
-| ingress | `all` | **`internal`**（到達経路を Cloud Tasks に限定） |
-| memory / cpu | 512Mi / 1 | 1Gi / 2 |
-| concurrency / timeout | 20 / 300s | 10 / 1800s |
-| 実行 SA | `ap-story-web-runner` | `ap-story-worker-runner` |
-| シークレット | OAuth 4 点 | `SLACK_WEBHOOK_URL` のみ |
-
-worker の実行時間の上限を決める値は 3 つあり、この大小関係を守ります。
-
-```
-PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
-    (アプリ)          (タスク)                (サービス)
-```
-
-3 つともアプリ側に既定値はありません。値を決めるのはデプロイ設定（Terraform）だけで、
-同じ数字がコードとデプロイ設定の 2 箇所に現れないようにしています。
-
-実効上限を決めるのは**いちばん小さい値**です。dispatch deadline を Terraform で指定し忘れると
-Cloud Tasks 側の既定 10 分が効き、Cloud Run の timeout が何であれ 10 分でワーカーが
-打ち切られます。worker 面はこれを起動時に検査します（`TASK_DISPATCH_DEADLINE`）。
-
-**この大小関係は起動時に強制されます**（`config.validatePipelineTimeout`）。等号も無制限も
-拒否するのは、打ち切りが Cloud Tasks 側から来るとプロセスごと止められ、失敗の記録も部分保存も
-Slack 通知も走らないまま、`max_attempts = 1` の `story-queue` は再試行しないため、ジョブが
-`running` のまま残るためです。記録・通知・部分保存はいずれも打ち切られた context から
-切り離して行っています（`gcp-kit/worker.Lifecycle` が Finish に切り離した ctx を渡す。部分保存は `internal/pipeline/pipeline.go` の `partialSaveTimeout`）。
-
-3 段の値はデプロイ設定（Terraform）が唯一の出どころで、逆転していないことは
-デプロイ時の `precondition` でも検査しています。
-
-`RATE_INTERVAL` を上げるときはこの 3 段に収まるかを先に確認してください。`compose_comic` は
-既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分です。dispatch deadline の上限が
-30 分なので、タイムアウトを伸ばして対処する余地はほとんどありません。
-
-`SERVER_ROLE=both` にすると 1 プロセスが両方の面を提供します。`go run ./main.go` で画面は
-確認できますが、**パイプラインは走りません。Cloud Tasks は localhost へ配送できないため、
-投入してもワーカーは動きません**。ロジックの確認は `go test ./... -race` で行ってください。
-
-`SERVER_ROLE` に既定値は無く、未設定なら起動時に落ちます。未設定を `both` とみなすと、本番の
-環境変数が 1 つ欠けただけで公開 web に `/tasks/generate` が復活するためです。
-
-分離する理由は 3 つあります。
-
-1. **デプロイ設定を役割ごとに最適化できる** — 漫画生成は数分〜数十分かかるため worker は長い timeout が要りますが、その上限を Web 面にまで課す必要はありません
-2. **ログとメトリクスが役割ごとに読める** — Cloud Run の組み込みメトリクスはサービス単位です
-3. **タスク受付口を非公開にできる** — 同居していると `/tasks/generate` が公開サービス上に存在し、防御はアプリ内の OIDC 検証だけになります。分離後は Cloud Run の IAM がコンテナに届く前に弾きます
-
-役割ごとに構築される依存も変わります。
-
-- `SERVER_ROLE=web` — Cloud Tasks の投入クライアントを構築します。go-comic-kit の Operations（Vertex AI クライアント）・Slack Notifier・Worker パイプラインは構築しません。生成を実行するのは worker 面だけなので、`ap-story-web-runner` は `aiplatform.user` も `SLACK_WEBHOOK_URL` へのアクセス権も持ちません
-- `SERVER_ROLE=worker` — OAuth ハンドラと投入クライアントを構築しません。Cloud Tasks の検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります
-
-キャラクター定義（`characters.json`）は一覧・デザインシート画面が使うため、役割によらず読み込みます。
-
-worker が受け付ける caller SA は `ALLOWED_TASK_SERVICE_ACCOUNTS` で指定します。タスクに指定される caller SA は web 側（`ap-story-web-runner`）なので、worker 側に必要なのは「その SA からを受け付ける」という設定です。トークンを生成して付与するのは Cloud Tasks であって、web ではありません。
-
-SA と IAM の定義はデプロイ設定（Terraform）側にあります。
+`{tag}` はキャラクター ID（合成シートの場合は複数 ID の連結）、`{jobID}` は生成呼び出しごとに
+一意なので、同じキャラクターへの再生成が過去の結果を上書きしません。履歴一覧は
+`comics/*/comic_state.json` の列挙で、デザインシート単体生成ジョブは `/characters/{characterID}` 側に
+現れます。画像はアプリから直接配信せず、署名付き URL へ 302 リダイレクトします。
 
 ---
 
-### 📜 ライセンス (License)
+## 🔄 処理シーケンス図
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 利用者
+    participant Web as Web 面 (公開)
+    participant Tasks as Cloud Tasks
+    participant Worker as Worker 面 (非公開)
+    participant Gemini as Vertex AI
+    participant Store as GCS
+    participant Slack as Slack
+
+    Note over User, Slack: 1. 台本を作る (command=compose_comic, stop_after_script)
+    User->>Web: POST /jobs （原稿・台本モード・画風モード・テキストモデル）
+    Web->>Web: ジョブ ID を採番
+    Web->>Store: status.json に queued を記録
+    Note right of Web: **enqueue より先に**。逆だと Worker が 1 つ前の succeeded を読んで投入を捨てます
+    Web->>Tasks: enqueue(Task)
+    Web-->>User: 202 受付（Location: /jobs/{jobID}）
+    Tasks->>Worker: POST /tasks/generate (OIDC)
+    Worker->>Store: status.json を読み、running を記録
+    Worker->>Gemini: 章立て → 各章の台本
+    Gemini-->>Worker: 章とコマ（セリフ・構図）
+    Worker->>Store: comic_state.json を書く
+    Note right of Worker: **画像はまだ作りません**
+    Worker->>Store: succeeded を記録（題名付き）
+    Worker->>Slack: 完了通知（詳細画面のリンク付き）
+
+    Note over User, Slack: 2. 台本を確認し、コマとページを作る (command=render_comic)
+    User->>Web: GET /jobs/{jobID}
+    Web->>Store: comic_state.json を読む
+    Web-->>User: 台本を表示（コマ数と画像モデルの選択）
+    User->>Web: POST /jobs/{jobID}/regenerate （render_comic, model_override）
+    Web->>Store: queued を記録
+    Web->>Tasks: enqueue(Task)
+    Web-->>User: 202 受付
+    Tasks->>Worker: POST /tasks/generate (OIDC)
+    Worker->>Store: comic_state.json を読む
+    loop 未生成のコマごと（RATE_INTERVAL 間隔）
+        Worker->>Gemini: コマ画像を生成
+        Worker->>Store: panel_{panelID}.png を書く
+    end
+    Worker->>Store: comic_state.json を書く
+    loop 未生成のページごと
+        Worker->>Gemini: ページを合成
+        Worker->>Store: comic_page_{N}.png を書く
+    end
+    Worker->>Store: comic_state.json を書く
+    Note right of Worker: 途中で失敗しても、そこまでの state を保存してから失敗を記録します
+    Worker->>Store: succeeded を記録
+    Worker->>Slack: 完了通知
+
+    Note over User, Slack: 3. 見る・直す
+    User->>Web: GET /jobs/{jobID}/images/comic_page_1.png
+    Web-->>User: 302 → 署名付き URL
+    User->>Store: 署名付き URL で直接取得
+    User->>Web: POST /jobs/{jobID}/regenerate （regenerate_panel + edit_prompt）
+    Note right of Web: 同じ順序（queued → enqueue → 202）で Worker がコマ 1 つを描き直します
+```
+
+## 🌳 プロジェクト構成ツリー図
+
+```text
+ap-story/
+├── main.go                  # エントリポイント（サーバー起動）
+├── Dockerfile               # scratch イメージ（静的バイナリのみ）
+├── cloudbuild.yaml          # ビルドして2サービスへデプロイ
+├── assets/                  # 埋め込み（prompts/outline・chapter の *.md、prompts/styles.json、templates/*.html、static/）
+└── internal/
+    ├── config/              # 環境変数の読み込みとロール別検証
+    ├── server/              # chi ルーター・グレースフルシャットダウン
+    │   └── handlers/        #   Web 面（投入フォーム・作品とキャラクターの画面・台本の編集・画像のリダイレクト）
+    ├── domain/              # Task と command・ジョブ ID・進行状況・ポート定義（Pipeline / TaskQueue / ComicRepository / Notifier / JobStatusStore）
+    ├── app/                 # DI コンテナ
+    ├── builder/             # 外部依存とハンドラーの組み立て（ロール別）
+    ├── repository/          # comic_state.json と status.json の読み書き・履歴一覧・削除
+    ├── pipeline/            # ワーカー本体。pipeline.go の Runner が Lifecycle を組み、planner.go が command から工程列を決め、各工程は step_*.go
+    └── adapters/            # go-comic-kit の Operations / Cloud Tasks / Slack / characters.json / プロンプト（prompts/）
+```
+
+---
+
+## 📜 ライセンス (License)
 
 * このプロジェクトは [MIT License](https://opensource.org/licenses/MIT) の下で公開されています。
