@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"runtime/pprof"
 	"strings"
 	"time"
 
+	"github.com/shouni/gcp-kit/worker"
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-utils/slogctx"
@@ -84,44 +84,58 @@ func New(deps Dependencies) (*Runner, error) {
 	return &Runner{deps: deps}, nil
 }
 
-// Execute は gcp-kit/worker.TaskExecutor に適合するためのエントリーポイントです。
-// 終端状態（succeeded / failed）の記録と通知は recordOutcome が一手に行います。
+// Execute は worker.TaskExecutor を満たします。
+//
+// ジョブの一生（再配信ガード → 検証 → 実行 → 結末の記録）は gcp-kit/worker.Lifecycle が
+// 持ち、ここはそれぞれの中身だけを渡します（public-docs のワーカー規約）。panic の回復、
+// 実行時間の上限、結末の記録の ctx の切り離しはライブラリ側の仕事で、ここには書きません。
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
-	// 以降このジョブから出るログすべてに job_id / command を載せ、
-	// 各ステップのログを 1 ジョブ単位で追えるようにする。
-	ctx = slogctx.With(ctx,
-		slog.String("job_id", task.JobID),
-		slog.String("command", string(task.Command)),
-	)
+	return r.lifecycle().Execute(ctx, task)
+}
 
-	// ログの相関に加えて、pprof のゴルーチンラベルにも同じ値を載せます。
-	// Go 1.27 以降、ラベルは**パニックのトレースバックの見出し行にも出る**ため、
-	// 落ちたときにどのジョブだったかがスタックだけで分かります。slogctx は
-	// panic の経路では効かないので、そこを埋めるのがこちらの役目です。
-	// ラベルは子ゴルーチン（並列生成など）へも継承されます。
-	ctx = pprof.WithLabels(ctx, pprof.Labels("job_id", task.JobID, "command", string(task.Command)))
-	pprof.SetGoroutineLabels(ctx)
-
-	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
-	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
-	// 画像生成コストがそのまま二重に発生します。
-	// 未完了ならここで running を記録する。入力検証より前に置くことで、全試行が
-	// Attempts に載り、どのジョブも必ず running を経由して終端に至る。
-	// OutputDir は検証に依存しないので先に解決する（解決できなければ記録は判定だけ）。
-	outputDir, _ := domain.JobOutputDir(r.deps.Bucket, task.JobID)
+// lifecycle は、ジョブの一生の各段にこのアプリの中身を当てはめます。
+func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, string] {
+	// 記録先は Dependencies から毎回引きます。テストが Runner をリテラルで組み立てても
+	// 記録が効くようにするためで、Recorder の生成は軽い。
 	status := newStatusRecorder(r.deps.JobStatus)
-	done, err := status.begin(ctx, &task, outputDir)
-	if err != nil {
-		// 状態を読めない。判断できないので再配信に委ねる。
-		return err
+	return worker.Lifecycle[domain.Task, string]{
+		// 以降このジョブから出るログすべてに job_id / command を載せ、
+		// 各ステップのログを 1 ジョブ単位で追えるようにする。
+		Prepare: func(ctx context.Context, task domain.Task) context.Context {
+			return slogctx.With(ctx,
+				slog.String("job_id", task.JobID),
+				slog.String("command", string(task.Command)),
+			)
+		},
+		Labels: func(task domain.Task) map[string]string {
+			return map[string]string{"job_id": task.JobID, "command": string(task.Command)}
+		},
+		Begin: func(ctx context.Context, task domain.Task) (bool, error) {
+			return r.begin(ctx, status, task)
+		},
+		// 依頼そのものが不正なら、配り直しても同じ行で落ちます（Lifecycle が Permanent に包みます）。
+		Validate: func(task domain.Task) error { return task.ValidateSubmission() },
+		Run: func(ctx context.Context, task domain.Task) (string, error) {
+			return r.run(ctx, &task)
+		},
+		Finish: func(ctx context.Context, task domain.Task, title string, cause error) error {
+			return r.recordOutcome(ctx, &task, status, title, cause)
+		},
+		Timeout: r.deps.Timeout,
 	}
-	if done {
-		slog.InfoContext(ctx, "skipping already completed job")
-		return nil
-	}
+}
 
-	title, err := r.run(ctx, &task)
-	return r.recordOutcome(ctx, &task, status, title, err)
+// begin は、Cloud Tasks の再配信で完了済みジョブを作り直さないためのガードです。
+//
+// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
+// 画像生成コストがそのまま二重に発生します。未完了ならここで running を記録します。
+// 入力検証より前に置くことで、全試行が Attempts に載り、どのジョブも必ず running を
+// 経由して終端に至ります。OutputDir は検証に依存しないので先に解決します
+// （解決できなければ記録は判定だけ）。状態を読めなければ判断できないので、実行せずに
+// エラーを返します。
+func (r *Runner) begin(ctx context.Context, status statusRecorder, task domain.Task) (bool, error) {
+	outputDir, _ := domain.JobOutputDir(r.deps.Bucket, task.JobID)
+	return status.begin(ctx, &task, outputDir)
 }
 
 // Run はタスクのコマンドに応じたステップ列を順に実行し、成果物だけを残します。
@@ -129,27 +143,20 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 // 状態の記録・通知・再配信ガードは行いません。それらは Cloud Tasks worker の入口である
 // Execute の担当で、Run は生成そのものを同期実行して結果を確かめたい場合の本体メソッドです。
 func (r *Runner) Run(ctx context.Context, task *domain.Task) error {
+	if err := task.ValidateSubmission(); err != nil {
+		return fmt.Errorf("invalid task: %w", err)
+	}
 	_, err := r.run(ctx, task)
 	return err
 }
 
 // run はステップ列の実行本体です。成功時は記録用のタイトルを返します。
 //
-// 実行時間の上限は、画像生成が応答しなくなった場合に Cloud Run のインスタンスを
-// 占有し続けないためのものです。締切はステップの実行にだけ被せ、呼び出し元の ctx には
-// 影響させません。ctx を上書きすると、打ち切られた直後の終端記録まで期限切れの
-// context で行うことになり、いちばん記録が要る場面で残りません。
+// 実行時間の上限（画像生成が応答しなくなった場合に Cloud Run のインスタンスを占有し
+// 続けないためのもの）は Lifecycle が Run にだけ被せるので、ここには書きません。
+// 入力の検証も Lifecycle の Validate が済ませています。
 func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 	runCtx := ctx
-	if r.deps.Timeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, r.deps.Timeout)
-		defer cancel()
-	}
-
-	if err := task.ValidateSubmission(); err != nil {
-		return "", fmt.Errorf("invalid task: %w", err)
-	}
 
 	outputDir, err := domain.JobOutputDir(r.deps.Bucket, task.JobID)
 	if err != nil {
@@ -189,24 +196,15 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 	return "", nil
 }
 
-// recordOutcome は終端状態の記録と通知を、成功・失敗の別なく同じ経路で行います。
+// recordOutcome は終端状態の記録と通知を、成功・失敗の別なく同じ経路で行います
+// （Lifecycle の Finish）。
 //
-// 記録も通知も呼び出し元の context から切り離して行います。理由は savePartialResults と
-// 同じで、打ち切りこそが終端の理由である場面（PIPELINE_TIMEOUT の発火、Cloud Tasks の
-// dispatch deadline 超過によるリクエストのキャンセル）では ctx は既に期限切れだからです。
-// そのまま使うと状態は running のまま固着し、story-queue は max_attempts = 1 なので
-// 再試行も来ません。記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように
-// 見えます。これは失敗だけでなく、期限や切断と前後して完了したジョブの「成功」の
-// 記録にもそのまま当てはまります。
-func (r *Runner) recordOutcome(
-	ctx context.Context,
-	task *domain.Task,
-	status statusRecorder,
-	title string,
-	cause error,
-) error {
-	outcomeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), outcomeReportTimeout)
-	defer cancel()
+// 打ち切りこそが終端の理由である場面（PIPELINE_TIMEOUT の発火、Cloud Tasks の
+// dispatch deadline 超過によるリクエストのキャンセル）では呼び出し元の ctx は既に
+// 期限切れです。切り離しは Lifecycle が行い、成功と失敗のどちらもここを通るので、
+// 片方だけ切り離し忘れる書き方が表現できません。
+func (r *Runner) recordOutcome(ctx context.Context, task *domain.Task, status statusRecorder, title string, cause error) error {
+	outcomeCtx := ctx
 
 	if cause != nil {
 		status.markFailed(outcomeCtx, task, cause)
@@ -228,10 +226,6 @@ func (r *Runner) recordOutcome(
 // partialSaveTimeout は、失敗時の保存に許す時間です。
 // 呼び出し元の context から切り離して使うため、短く区切ります。
 const partialSaveTimeout = 30 * time.Second
-
-// outcomeReportTimeout は、終端状態（succeeded / failed）の記録と通知に許す時間です。
-// partialSaveTimeout と同じく、呼び出し元の context から切り離して使います。
-const outcomeReportTimeout = 30 * time.Second
 
 // savePartialResults は、ステップが失敗した時点までの成果を保存します。
 //

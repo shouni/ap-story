@@ -274,8 +274,7 @@ Cloud Tasks 側の既定 10 分が効き、Cloud Run の timeout が何であれ
 拒否するのは、打ち切りが Cloud Tasks 側から来るとプロセスごと止められ、失敗の記録も部分保存も
 Slack 通知も走らないまま、`max_attempts = 1` の `story-queue` は再試行しないため、ジョブが
 `running` のまま残るためです。記録・通知・部分保存はいずれも打ち切られた context から
-切り離して行っています（`internal/pipeline/runner.go` の `failureReportTimeout` と
-`partialSaveTimeout`）。
+切り離して行っています（`gcp-kit/worker.Lifecycle` が Finish に切り離した ctx を渡す。部分保存は `internal/pipeline/pipeline.go` の `partialSaveTimeout`）。
 
 3 段の値はデプロイ設定（Terraform）が唯一の出どころで、逆転していないことは
 デプロイ時の `precondition` でも検査しています。
