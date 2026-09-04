@@ -21,6 +21,15 @@ var ErrStateNotFound = errors.New("comic state not found")
 // ハンドラーはこれを 502（または 500）へマップし、原因をログへ残してください。
 var ErrStateUnavailable = errors.New("comic state unavailable")
 
+// Pipeline は、Task 1 件を最後まで処理する実行面です。
+//
+// 実体は internal/pipeline の Runner で、worker 面だけが持ちます。Web 面では nil の
+// ままなので、組み立て側はこの型で変数を宣言してください（具象のポインタ型で宣言して
+// から代入すると、nil のまま入れても interface としては非 nil になります）。
+type Pipeline interface {
+	Execute(ctx context.Context, task Task) error
+}
+
 // TaskQueue は非同期キューを抽象化します。
 type TaskQueue interface {
 	Enqueue(ctx context.Context, task Task) error

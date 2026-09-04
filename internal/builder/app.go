@@ -17,7 +17,6 @@ import (
 	"github.com/shouni/ap-story/internal/app"
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
-	"github.com/shouni/ap-story/internal/pipeline"
 	"github.com/shouni/ap-story/internal/repository"
 )
 
@@ -70,10 +69,14 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	// （ap-story-web-runner には aiplatform.user も SLACK_WEBHOOK_URL への
 	// アクセス権も無く、持たせる理由がありません）。
 	//
-	// どちらもポインタなので、Web 面では nil のまま Container に入ります。
+	// どちらも Web 面では nil のまま Container に入ります。
 	// Pipeline を参照するのは BuildHandlers の ServesWorker 分岐だけです。
+	//
+	// pipelineRunner を具象の *pipeline.Runner ではなく domain.Pipeline で宣言するのは、
+	// nil のポインタを interface のフィールドへ代入すると、中身が nil でも
+	// interface 自体は非 nil になり、Web 面での nil 判定が効かなくなるためです。
 	var ops *ports.Operations
-	var pipelineRunner *pipeline.Runner
+	var pipelineRunner domain.Pipeline
 	if cfg.Server.Role.ServesWorker() {
 		builtOps, opsErr := buildOperations(ctx, cfg, store, httpClient, characters)
 		if opsErr != nil {

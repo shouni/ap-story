@@ -49,6 +49,8 @@ type Runner struct {
 	deps Dependencies
 }
 
+var _ domain.Pipeline = (*Runner)(nil)
+
 // New は依存を検証して Runner を生成します。必須依存が欠けている場合はエラーを返し、
 // 実行時ではなく起動時に構成ミスを検出します。
 func New(deps Dependencies) (*Runner, error) {

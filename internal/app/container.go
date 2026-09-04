@@ -13,7 +13,6 @@ import (
 
 	"github.com/shouni/ap-story/internal/config"
 	"github.com/shouni/ap-story/internal/domain"
-	"github.com/shouni/ap-story/internal/pipeline"
 	"github.com/shouni/gcp-kit/auth/session"
 )
 
@@ -26,7 +25,7 @@ type Container struct {
 	// go-comic-kit の全操作（章立て・章台本・デザインシート・パネル・ページ）
 	Ops *ports.Operations
 	// Pipeline は Task のコマンドに応じて Ops の操作を実行する Worker パイプラインです。
-	Pipeline *pipeline.Runner
+	Pipeline domain.Pipeline
 	// TaskQueue は非同期ジョブ（Task）を Cloud Tasks に投入します。
 	TaskQueue domain.TaskQueue
 	// SessionStore はログインセッションの保存先です。web 面だけが持ちます。
