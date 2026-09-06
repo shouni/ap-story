@@ -158,9 +158,9 @@ func (t Task) validateComposeComicSubmission() error {
 var referenceImageURLPattern = regexp.MustCompile(`(?i)^(https?://|gs://)\S+\.(png|jpe?g|webp|gif)$`)
 
 // validateReferenceURLOverride は参照画像URL（上書き・任意）の形式を検証します。
-// 実際に画像かどうかの最終判定はダウンロード後にワーカー側（gemini-image-kit の
-// MIME判定）で行われるため、ここでは明らかに不正な値をフォーム送信時点で早期に
-// 弾く軽量チェックに留めます。空文字（未指定）は許可します。
+// 実際に画像かどうかの最終判定はダウンロード後にワーカー側（go-comic-kit が
+// 取得した内容から判定する MIME type）で行われるため、ここでは明らかに不正な値を
+// フォーム送信時点で早期に弾く軽量チェックに留めます。空文字（未指定）は許可します。
 func validateReferenceURLOverride(url string) error {
 	url = strings.TrimSpace(url)
 	if url == "" {

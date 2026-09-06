@@ -25,7 +25,7 @@ func TestDesignPromptBuildsSingleSubject(t *testing.T) {
 	if !strings.Contains(negative, "Do not include") {
 		t.Errorf("negative prompt = %q, want instruction-style exclusion list", negative)
 	}
-	// gemini-image-kit はネガティブプロンプトを平文としてプロンプトに連結するため、
+	// imagegen はネガティブプロンプトを平文としてプロンプトに連結するため、
 	// 欠陥語彙（extra fingers 等）はかえって崩れを誘発する。含まれないことを保証する。
 	for _, defect := range []string{"extra fingers", "fused fingers", "extra limbs", "malformed"} {
 		if strings.Contains(negative, defect) {

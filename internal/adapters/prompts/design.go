@@ -42,7 +42,7 @@ This sheet is the canonical identity reference that every downstream panel, page
 - Render absolutely no text, labels, arrows, color swatches, logos, or annotations of any kind.`
 
 	// designNegativePrompt はデザインシートに含めたくない要素の指定です。
-	// 注意: gemini-image-kit はこれを負条件付けとしてではなく "[Negative Prompt]" 見出し付きの
+	// 注意: genai-kit の imagegen はこれを負条件付けとしてではなく "[Negative Prompt]" 見出し付きの
 	// 平文としてプロンプト末尾に連結するだけなので、"extra limbs" や "fused fingers" のような
 	// 欠陥語彙を並べると通常のプロンプトトークンとして作用し、かえってその崩れを誘発します。
 	// そのため解剖学的な品質はシステムプロンプト側で肯定形で指示し、ここでは
