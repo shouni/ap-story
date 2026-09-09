@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/firestore v1.25.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/shouni/gcp-kit v1.17.0
+	github.com/shouni/gcp-kit v1.17.1
 	github.com/shouni/genai-kit v1.2.0
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-comic-kit v1.8.0
@@ -14,7 +14,7 @@ require (
 	github.com/shouni/go-job-kit v1.3.1
 	github.com/shouni/go-notify v1.4.0
 	github.com/shouni/go-prompt-kit v1.7.0
-	github.com/shouni/go-remote-io v1.11.2
+	github.com/shouni/go-remote-io v1.11.3
 	github.com/shouni/go-serve-kit v1.1.0
 	github.com/shouni/go-utils v1.7.1
 	github.com/shouni/netarmor v1.4.0
