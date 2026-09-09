@@ -7,7 +7,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/shouni/gcp-kit v1.17.1
-	github.com/shouni/genai-kit v1.2.0
+	github.com/shouni/genai-kit v1.3.0
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-comic-kit v1.8.0
 	github.com/shouni/go-http-kit v1.11.0
