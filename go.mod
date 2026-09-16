@@ -6,16 +6,16 @@ require (
 	cloud.google.com/go/firestore v1.25.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/shouni/gcp-kit v1.17.2
-	github.com/shouni/genai-kit v1.3.0
+	github.com/shouni/gcp-kit v1.17.3
+	github.com/shouni/genai-kit v1.3.1
 	github.com/shouni/go-character-kit v1.3.0
-	github.com/shouni/go-comic-kit v1.8.0
+	github.com/shouni/go-comic-kit v1.8.2
 	github.com/shouni/go-http-kit v1.11.1
-	github.com/shouni/go-job-kit v1.3.1
-	github.com/shouni/go-notify v1.4.0
+	github.com/shouni/go-job-kit v1.3.3
+	github.com/shouni/go-notify v1.4.1
 	github.com/shouni/go-prompt-kit v1.7.1
-	github.com/shouni/go-remote-io v1.11.4
-	github.com/shouni/go-serve-kit v1.1.0
+	github.com/shouni/go-remote-io v1.11.5
+	github.com/shouni/go-serve-kit v1.2.0
 	github.com/shouni/go-utils v1.7.1
 	github.com/shouni/netarmor v1.4.1
 	github.com/stretchr/testify v1.12.1
@@ -32,7 +32,7 @@ require (
 	cloud.google.com/go/iam v1.13.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
-	cloud.google.com/go/storage v1.67.0 // indirect
+	cloud.google.com/go/storage v1.67.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.37.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.61.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.61.0 // indirect
@@ -67,11 +67,11 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/api v0.297.0 // indirect
 	google.golang.org/genai v1.71.0 // indirect
 	google.golang.org/genproto v0.0.0-20260831171406-18b4a7587f8a // indirect
