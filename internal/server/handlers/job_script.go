@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -84,8 +83,7 @@ func (h *Handler) JobScriptUpdate(w http.ResponseWriter, r *http.Request) {
 	// 実行中ジョブとの競合の窓を、何も変えない要求のためにわざわざ開くことになります。
 	if change.ChangedLines > 0 {
 		if err := h.repository.SaveState(r.Context(), jobID, state); err != nil {
-			slog.ErrorContext(r.Context(), "failed to save comic script", "error", err, "job_id", jobID)
-			respond.ErrorJSON(w, r, http.StatusInternalServerError, "failed to save script")
+			respond.ServerErrorJSON(w, r, http.StatusInternalServerError, err, "failed to save comic script", "job_id", jobID)
 			return
 		}
 	}

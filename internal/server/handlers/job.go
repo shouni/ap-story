@@ -23,8 +23,7 @@ func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 	page := parseHistoryPage(r)
 	historyPage, err := h.repository.ListHistoryPage(r.Context(), page, defaultHistoryPageSize)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to list comic history", "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to list comic history")
 		return
 	}
 
@@ -165,8 +164,7 @@ func (h *Handler) Character(w http.ResponseWriter, r *http.Request) {
 	if respond.WantsJSON(w, r) {
 		history, err := h.repository.ListCharacterDesignHistory(r.Context(), characterID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to list character design history", "character_id", characterID, "error", err)
-			respond.Error(w, r, http.StatusInternalServerError, "internal server error")
+			respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to list character design history", "character_id", characterID)
 			return
 		}
 		respond.JSON(w, r, http.StatusOK, characterDetailResponse{

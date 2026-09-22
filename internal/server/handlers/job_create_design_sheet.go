@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/shouni/go-serve-kit/respond"
@@ -37,8 +36,7 @@ func (h *Handler) createDesignSheetJSON(w http.ResponseWriter, r *http.Request) 
 
 	task, err := h.newDesignSheetTask(params)
 	if err != nil {
-		slog.Error("failed to generate job id", "error", err)
-		respond.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ServerErrorJSON(w, r, http.StatusInternalServerError, err, "failed to generate job id")
 		return
 	}
 

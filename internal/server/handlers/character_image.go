@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"log/slog"
 	"net/http"
 	"path"
 	"strings"
@@ -48,8 +47,7 @@ func (h *Handler) redirectCharacterAsset(w http.ResponseWriter, r *http.Request,
 	objectURI := remoteio.BuildURI(remoteio.SchemeGCS, h.bucket, objectPath)
 	signedURL, err := h.signer.SignURL(r.Context(), objectURI, http.MethodGet, signedURLExpiration)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to generate signed URL", "object_path", objectPath, "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to generate signed URL", "object_path", objectPath)
 		return
 	}
 
