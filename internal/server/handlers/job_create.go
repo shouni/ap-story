@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -170,8 +169,7 @@ func (h *Handler) createComicJSON(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.newComposeTask(req)
 	if err != nil {
-		slog.Error("failed to generate job id", "error", err)
-		respond.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ServerErrorJSON(w, r, http.StatusInternalServerError, err, "failed to generate job id")
 		return
 	}
 
@@ -194,8 +192,7 @@ func (h *Handler) enqueueAndRespond(w http.ResponseWriter, r *http.Request, task
 	// 1つ前の succeeded を読んで投入が黙って捨てられます（recordQueuedStatus 参照）。
 	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
-		slog.Error("failed to enqueue task", "job_id", task.JobID, "command", task.Command, "error", err)
-		respond.ErrorJSON(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ServerErrorJSON(w, r, http.StatusInternalServerError, err, "failed to enqueue task", "job_id", task.JobID, "command", task.Command)
 		return
 	}
 

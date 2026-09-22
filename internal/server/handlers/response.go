@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/shouni/ap-story/internal/domain"
@@ -21,6 +20,5 @@ func writeStateError(w http.ResponseWriter, r *http.Request, jobID string, err e
 		respond.ErrorJSON(w, r, http.StatusNotFound, "comic not found")
 		return
 	}
-	slog.ErrorContext(r.Context(), "failed to load comic state", "job_id", jobID, "error", err)
-	respond.ErrorJSON(w, r, http.StatusBadGateway, "failed to load comic state")
+	respond.ServerErrorJSON(w, r, http.StatusBadGateway, err, "failed to load comic state", "job_id", jobID)
 }

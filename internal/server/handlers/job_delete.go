@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,8 +24,7 @@ func (h *Handler) JobDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repository.DeleteHistory(r.Context(), jobID); err != nil {
-		slog.ErrorContext(r.Context(), "failed to delete comic history", "job_id", jobID, "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to delete comic history", "job_id", jobID)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
