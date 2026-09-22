@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/shouni/gcp-kit v1.18.1
 	github.com/shouni/genai-kit v1.3.3
-	github.com/shouni/go-character-kit v1.3.0
+	github.com/shouni/go-character-kit v1.3.1
 	github.com/shouni/go-comic-kit v1.9.0
 	github.com/shouni/go-http-kit v1.13.0
 	github.com/shouni/go-job-kit v1.4.0
