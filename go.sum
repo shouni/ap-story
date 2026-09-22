@@ -143,8 +143,8 @@ github.com/shouni/genai-kit v1.3.3 h1:ByjwxlzoUqyn5YEzpKID6LAKqSM17SVP/HAnOI6nS3
 github.com/shouni/genai-kit v1.3.3/go.mod h1:SWKpmBJzmaTvbY4TQFWOW3fA6SVlIOWd69IYqUu4Rns=
 github.com/shouni/go-character-kit v1.3.0 h1:hVX6aPRZELLulNGDRPGR6lgzlrWQsNDorrNF/8BfDLk=
 github.com/shouni/go-character-kit v1.3.0/go.mod h1:y0xe3U+Jk1zF4t1+KbxQ/ADgbMbzcDyhfj47NRSOpYE=
-github.com/shouni/go-comic-kit v1.8.6 h1:ZST2X0ls5OB0V9b2D5V5+XRJHyJHgO1dCgbzL0Txk6c=
-github.com/shouni/go-comic-kit v1.8.6/go.mod h1:BQobYufTozdSp+H5xgj2LD2WSj27hYx/s+QsCtJ7I8w=
+github.com/shouni/go-comic-kit v1.9.0 h1:q0Ggu3sFEnTwKz8pIcZxqG9TQirHBCEwA8KRQEEVvfo=
+github.com/shouni/go-comic-kit v1.9.0/go.mod h1:RdkQjXxjN7SRTBW+Swg3eUNpptKQ912QLiy6rvll1m8=
 github.com/shouni/go-http-kit v1.13.0 h1:VEf+ctSYuvVCRHXPaooPBKwGI+STOkkRIYRrGgERSrw=
 github.com/shouni/go-http-kit v1.13.0/go.mod h1:jh/hCYrakDWTFdMxSZPH++TEqDBf1RYEREFLJmYgBe8=
 github.com/shouni/go-job-kit v1.4.0 h1:RCTYgpiiz1wybOyKCMybRhfb9IduZleRpNgRBxGjn48=
