@@ -2,9 +2,6 @@
 package repository
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/shouni/go-comic-kit/asset"
@@ -84,28 +81,4 @@ func formatTime(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
-}
-
-// deletePrefix はプレフィックス配下のオブジェクトをすべて削除します。
-//
-// remoteio の Delete は単一オブジェクトを消すもので、プレフィックスを渡しても
-// 「その名前のオブジェクトは無い」として黙って成功します。ディレクトリという実体が
-// 無いストレージでは、消す側が一覧して 1 つずつ消すしかありません。
-// 以前はプレフィックスをそのまま Delete へ渡しており、本番では何も消えていませんでした。
-func (r *ComicRepository) deletePrefix(ctx context.Context, prefix string) error {
-	var uris []string
-	for entry, err := range r.store.List(ctx, prefix) {
-		if err != nil {
-			return fmt.Errorf("削除対象の一覧取得に失敗しました (%s): %w", prefix, err)
-		}
-		uris = append(uris, entry.URI)
-	}
-
-	var errs []error
-	for _, uri := range uris {
-		if err := r.store.Delete(ctx, uri); err != nil {
-			errs = append(errs, fmt.Errorf("%s の削除に失敗しました: %w", uri, err))
-		}
-	}
-	return errors.Join(errs...)
 }
