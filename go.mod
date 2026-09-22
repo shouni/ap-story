@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/firestore v1.25.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/shouni/gcp-kit v1.18.0
+	github.com/shouni/gcp-kit v1.18.1
 	github.com/shouni/genai-kit v1.3.3
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-comic-kit v1.9.0
@@ -77,6 +77,6 @@ require (
 	google.golang.org/genproto v0.0.0-20260831171406-18b4a7587f8a // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260831171406-18b4a7587f8a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260831171406-18b4a7587f8a // indirect
-	google.golang.org/grpc v1.83.2 // indirect
+	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
