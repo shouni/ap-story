@@ -47,7 +47,13 @@ func (LoadStateStepOptional) Execute(ctx context.Context, pc *Context) error {
 	if err != nil {
 		return err
 	}
-	if manga, err := store.Load(ctx, pc.Reader, statePath); err == nil {
+	// 「無い」と言えるのは ErrNotFound のときだけ。読み取り失敗まで「無い」に倒すと、
+	// 新規に生成した state で既存の記録を上書きします（LoadIfExists がその判定を持つ）。
+	manga, err := store.LoadIfExists(ctx, pc.Reader, statePath)
+	if err != nil {
+		return fmt.Errorf("既存 state の読み込みに失敗しました: %w", err)
+	}
+	if manga != nil {
 		pc.Manga = manga
 		return nil
 	}
@@ -59,7 +65,11 @@ func (LoadStateStepOptional) Execute(ctx context.Context, pc *Context) error {
 	if err != nil {
 		return err
 	}
-	if manga, err := store.Load(ctx, pc.Reader, designStatePath); err == nil {
+	manga, err = store.LoadIfExists(ctx, pc.Reader, designStatePath)
+	if err != nil {
+		return fmt.Errorf("既存 state の読み込みに失敗しました: %w", err)
+	}
+	if manga != nil {
 		pc.Manga = manga
 	}
 	return nil // state 未作成は正常系（新規に作られる）
@@ -82,9 +92,15 @@ func (LoadStateIfExistsStep) Execute(ctx context.Context, pc *Context) error {
 	if err != nil {
 		return err
 	}
-	manga, err := store.Load(ctx, pc.Reader, statePath)
+	// 未作成は正常系（これから作られる）。ただし「無い」と言えるのは ErrNotFound の
+	// ときだけで、読み取り失敗まで「無い」に倒すと、再配信のたびに新品の state で
+	// 保存済みの台本と画像を上書きします。
+	manga, err := store.LoadIfExists(ctx, pc.Reader, statePath)
 	if err != nil {
-		return nil // 未作成は正常系（これから作られる）
+		return fmt.Errorf("既存 state の読み込みに失敗しました: %w", err)
+	}
+	if manga == nil {
+		return nil
 	}
 	pc.Manga = manga
 	slog.InfoContext(ctx, "resuming from existing state",

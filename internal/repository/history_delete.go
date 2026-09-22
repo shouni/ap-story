@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+
+	"github.com/shouni/go-remote-io/remoteio"
 )
 
 // DeleteHistory は指定ジョブの成果物一式（state・デザインシート・画像）を GCS から削除します。
@@ -11,7 +13,7 @@ func (r *ComicRepository) DeleteHistory(ctx context.Context, jobID string) error
 	if err != nil {
 		return err
 	}
-	if err := r.deletePrefix(ctx, outputDir); err != nil {
+	if _, err := remoteio.DeletePrefix(ctx, r.store, outputDir); err != nil {
 		return fmt.Errorf("comic %qの削除に失敗しました: %w", jobID, err)
 	}
 	r.deleteCachedHistory(jobID)

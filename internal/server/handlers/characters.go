@@ -96,9 +96,8 @@ func (h *Handler) DeleteCharacterDesign(w http.ResponseWriter, r *http.Request) 
 	jobID := chi.URLParam(r, "jobID")
 
 	if err := h.repository.DeleteCharacterDesign(r.Context(), characterID, jobID); err != nil {
-		slog.ErrorContext(r.Context(), "failed to delete character design",
-			"character_id", characterID, "job_id", jobID, "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, "failed to delete character design")
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to delete character design",
+			"character_id", characterID, "job_id", jobID)
 		return
 	}
 

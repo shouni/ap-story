@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"slices"
 	"strings"
 	"testing"
@@ -160,7 +161,9 @@ func (m *memStore) writeCount(path string) int { return m.writes[path] }
 func (m *memStore) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	data, ok := m.files[path]
 	if !ok {
-		return nil, io.ErrUnexpectedEOF
+		// remoteio と同じく、不存在は fs.ErrNotExist で包む。以前は io.ErrUnexpectedEOF を
+		// 返しており、「無い」と「読めない」を区別しない実装でもテストが通っていた。
+		return nil, fmt.Errorf("open %s: %w", path, fs.ErrNotExist)
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/shouni/go-comic-kit/asset"
 	"github.com/shouni/go-comic-kit/store"
+	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-story/internal/domain"
 )
@@ -64,7 +65,7 @@ func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID strin
 		return err
 	}
 	if exists, err := r.store.Exists(ctx, designStatePath); err == nil && exists {
-		if err := r.deletePrefix(ctx, designJobDir); err != nil {
+		if _, err := remoteio.DeletePrefix(ctx, r.store, designJobDir); err != nil {
 			return fmt.Errorf("デザインシート単体生成ジョブ %q の state 削除に失敗しました: %w", jobID, err)
 		}
 		return nil

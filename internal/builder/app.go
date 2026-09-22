@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 
-	"cloud.google.com/go/firestore"
 	"github.com/shouni/gcp-kit/auth/session"
 	"github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-http-kit/httpkit"
@@ -110,20 +109,14 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	var sessionStore session.Store
 	if cfg.Server.Role.ServesWeb() {
 		// セッションはジョブ状態とは別のデータベースに置きます（SessionDatabase）。
-		fsClient, fsErr := firestore.NewClientWithDatabase(ctx, cfg.GCP.ProjectID, cfg.Auth.SessionDatabase)
-		if fsErr != nil {
-			return nil, fmt.Errorf("セッション用 Firestore の初期化に失敗しました: %w", fsErr)
-		}
-		resources = append(resources, fsClient)
-		closers = append(closers, fsClient)
-
-		sessionStore, fsErr = session.NewFirestoreStore(session.FirestoreConfig{
-			Client:     fsClient,
-			Collection: cfg.Auth.SessionCollection,
-		})
+		// クライアントの寿命はストアが持つので、Closers にはストアを登録します。
+		owned, fsErr := session.OpenFirestoreStore(ctx, cfg.GCP.ProjectID, cfg.Auth.SessionDatabase, cfg.Auth.SessionCollection)
 		if fsErr != nil {
 			return nil, fmt.Errorf("セッションストアの構築に失敗しました: %w", fsErr)
 		}
+		resources = append(resources, owned)
+		closers = append(closers, owned)
+		sessionStore = owned
 
 		enqueuer, taskErr := buildTaskEnqueuer(ctx, cfg)
 		if taskErr != nil {
