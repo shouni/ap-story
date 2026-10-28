@@ -149,8 +149,8 @@ github.com/shouni/go-notify v1.6.3 h1:amqZkCV31O2ErDChubmseoQJsyqXEZF86Okuk98jGa
 github.com/shouni/go-notify v1.6.3/go.mod h1:rhfC2lX6sPRaFI9NdiLNJW+J6RtLaX8pApI+hEyM4oA=
 github.com/shouni/go-prompt-kit v1.7.1 h1:Vx+NF7iNMyE8xhD5bvfNdOUwfCg9bUEVZ0Ly+mx3pnc=
 github.com/shouni/go-prompt-kit v1.7.1/go.mod h1:8Dl139O5E8VwfD/JtdgLdfgJDpflD6LmhniIyjbBKUQ=
-github.com/shouni/go-remote-io v1.13.9 h1:IvaF9ImbSOIDYdfO+UaYnF2LjJdLs7JCMFfwxMup9Eg=
-github.com/shouni/go-remote-io v1.13.9/go.mod h1:nqMN2J5B1RUNrAgAjWb5dfSRriyqAlM2QPEadia2eAg=
+github.com/shouni/go-remote-io v1.13.10 h1:kdh30TU98/wKp5cdnuQLbnPMgYYQTq1yfPRO8nruYXc=
+github.com/shouni/go-remote-io v1.13.10/go.mod h1:nqMN2J5B1RUNrAgAjWb5dfSRriyqAlM2QPEadia2eAg=
 github.com/shouni/go-serve-kit v1.3.0 h1:7A2CTnTNNPNiyYLtJYzROYWYbUhgvvaRLgA3SlW2+vI=
 github.com/shouni/go-serve-kit v1.3.0/go.mod h1:Mmy3q40YTCejIKYcKqid+7xfQBkcMz/OtdVo1wPAxlQ=
 github.com/shouni/go-utils v1.8.1 h1:70UeJiwW+uIdSojRmTgk+AvZtlYg/43h4W/bRKUahp0=
