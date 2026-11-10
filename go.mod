@@ -8,12 +8,12 @@ require (
 	github.com/shouni/gcp-kit v1.21.2
 	github.com/shouni/genai-kit v1.8.0
 	github.com/shouni/go-character-kit v1.3.1
-	github.com/shouni/go-comic-kit v1.10.11
+	github.com/shouni/go-comic-kit v1.10.13
 	github.com/shouni/go-http-kit v1.13.4
 	github.com/shouni/go-job-kit v1.5.6
-	github.com/shouni/go-notify v1.6.3
+	github.com/shouni/go-notify v1.6.4
 	github.com/shouni/go-prompt-kit v1.7.2
-	github.com/shouni/go-remote-io v1.13.13
+	github.com/shouni/go-remote-io v1.13.14
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
 	github.com/shouni/netarmor v1.4.3
