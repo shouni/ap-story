@@ -7,17 +7,17 @@ import (
 	"github.com/shouni/go-comic-kit/ports"
 )
 
-// AllPagesStep は、pc.Manga の全ページを合成します。compose_comic の一括生成で使います。
-// 並列数は go-comic-kit の Config.MaxConcurrency（MAX_CONCURRENCY）に従います。
+// AllPagesStep composes every page of pc.Manga. It is used by compose_comic's batch generation.
+// Concurrency follows go-comic-kit's Config.MaxConcurrency (MAX_CONCURRENCY).
 type AllPagesStep struct {
-	// SkipGenerated が true の場合、すでに合成済みのページを飛ばします（再開用）。
+	// When SkipGenerated is true, pages already composed are skipped (for resuming).
 	SkipGenerated bool
 }
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (AllPagesStep) Name() string { return "pages" }
 
-// Execute は pc.Manga の全ページを合成します。
+// Execute composes every page of pc.Manga.
 func (s AllPagesStep) Execute(ctx context.Context, pc *Context) error {
 	if pc.Manga == nil {
 		return fmt.Errorf("pages: manga state is nil")
@@ -33,7 +33,7 @@ func (s AllPagesStep) Execute(ctx context.Context, pc *Context) error {
 		ChapterID:     pc.Task.ChapterID,
 		SkipGenerated: s.SkipGenerated,
 	})
-	// パネルと同じく、エラー時も成功分を記録した state を受け取る（AllPanelsStep 参照）。
+	// As with panels, the state recording the successes is received even on error (see AllPanelsStep).
 	if manga != nil {
 		pc.Manga = manga
 	}
@@ -43,14 +43,14 @@ func (s AllPagesStep) Execute(ctx context.Context, pc *Context) error {
 	return nil
 }
 
-// SinglePageStep は、Task.Page の1ページのみ合成/再合成します。
-// regenerate_page で使います。Task の Seed/EditPrompt/PromptOverride を反映します。
+// SinglePageStep composes or recomposes only the page in Task.Page.
+// It is used by regenerate_page and applies the Task's Seed/EditPrompt/PromptOverride.
 type SinglePageStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (SinglePageStep) Name() string { return "page" }
 
-// Execute は Task.Page の1ページのみ合成/再合成します。
+// Execute composes or recomposes only the page in Task.Page.
 func (SinglePageStep) Execute(ctx context.Context, pc *Context) error {
 	opts := ports.GenerateOptions{
 		Seed:           pc.Task.Seed,

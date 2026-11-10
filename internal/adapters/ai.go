@@ -1,5 +1,5 @@
-// Package adapters は、Gemini クライアントの初期化とキャラクター定義の読み込みなど、
-// go-comic-kit と外部サービスをつなぐアダプターを提供します。
+// Package adapters provides the adapters that connect go-comic-kit to external services,
+// such as initialising the Gemini client and loading the character definitions.
 package adapters
 
 import (
@@ -13,19 +13,19 @@ import (
 )
 
 const (
-	// defaultVertexLocationID は Vertex AI のデフォルトロケーションです。
-	// Cloud Tasks 等のリージョン（GCP_LOCATION_ID）とは独立して固定します。
+	// defaultVertexLocationID is the default Vertex AI location.
+	// It is fixed independently of the region of Cloud Tasks and the like (GCP_LOCATION_ID).
 	defaultVertexLocationID = "global"
-	// defaultVertexInitialDelay はリトライ時の初期待ち時間です。
+	// defaultVertexInitialDelay is the initial wait before a retry.
 	defaultVertexInitialDelay = 60 * time.Second
 )
 
-// NewVertexAIAdapter は GCP Vertex AI クライアントを初期化します。
-// go-comic-kit の workflow.Args.AIClient として渡します。Vertex AI モードでは
-// GCS URI を直接参照でき（File API アップロードを省略）、画像生成のコストを抑えられます。
+// NewVertexAIAdapter initialises the GCP Vertex AI client.
+// It is passed as go-comic-kit's workflow.Args.AIClient. In Vertex AI mode GCS URIs
+// can be referenced directly (skipping File API uploads), which keeps image generation cheaper.
 func NewVertexAIAdapter(ctx context.Context, gcp config.GCPConfig) (*gemini.Client, error) {
 	if gcp.ProjectID == "" {
-		return nil, fmt.Errorf("GCP_PROJECT_ID が設定されていません")
+		return nil, fmt.Errorf("GCP_PROJECT_ID is not set")
 	}
 
 	clientConfig := gemini.Config{
@@ -36,7 +36,7 @@ func NewVertexAIAdapter(ctx context.Context, gcp config.GCPConfig) (*gemini.Clie
 
 	aiClient, err := gemini.New(ctx, clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("vertex AI クライアントの初期化に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to initialise the Vertex AI client: %w", err)
 	}
 
 	return aiClient, nil

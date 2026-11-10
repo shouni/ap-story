@@ -9,8 +9,8 @@ import (
 
 const titleSuffix = " - AP Story"
 
-// activeNav はリクエストパスから、ナビゲーションでハイライトすべき項目のキーを返します。
-// layout.html の `{{if eq .ActiveNav "..."}}` と対応します。
+// activeNav returns, from the request path, the key of the navigation item to highlight.
+// It corresponds to `{{if eq .ActiveNav "..."}}` in layout.html.
 func activeNav(path string) string {
 	switch {
 	case strings.HasPrefix(path, "/jobs"):
@@ -24,14 +24,14 @@ func activeNav(path string) string {
 	}
 }
 
-// render は HTML テンプレートを描画してレスポンスに書き込みます。
-// テンプレート実行エラー時に不完全な body を書き出さないよう、一度バッファへ描画してから
-// レスポンスへ書き込みます。CSRF トークンは csrfAutoGenMiddleware がコンテキストへ
-// 格納したものを layout.html の hidden input としてページ全体へ公開します。
+// render renders an HTML template and writes it to the response.
+// So that an incomplete body is never written on a template error, it renders into a buffer first
+// and then writes to the response. The CSRF token stored in the context by csrfAutoGenMiddleware
+// is exposed to the whole page as a hidden input in layout.html.
 func (h *Handler) render(w http.ResponseWriter, r *http.Request, status int, pageName string, title string, data any) {
 	tmpl, ok := h.templates[pageName]
 	if !ok {
-		slog.Error("テンプレートキャッシュに見つかりません", "page", pageName)
+		slog.Error("template not found in the cache", "page", pageName)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -50,7 +50,7 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, status int, pag
 
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout.html", renderData); err != nil {
-		slog.Error("テンプレートの描画に失敗しました", "page", pageName, "error", err)
+		slog.Error("failed to render the template", "page", pageName, "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -58,6 +58,6 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, status int, pag
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if _, err := buf.WriteTo(w); err != nil {
-		slog.Error("レスポンスの書き込みに失敗しました", "error", err)
+		slog.Error("failed to write the response", "error", err)
 	}
 }

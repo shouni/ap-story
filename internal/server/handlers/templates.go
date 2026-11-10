@@ -8,15 +8,15 @@ import (
 	"github.com/shouni/ap-story/assets"
 )
 
-// templateDir は assets パッケージ内でのテンプレートの配置ディレクトリです。
+// templateDir is the directory within the assets package that holds the templates.
 const templateDir = "templates"
 
-// loadTemplateCache は埋め込み済みの HTML テンプレート一式を読み込みます。
-// ページごとのテンプレートファイルに layout.html を関連付けてキャッシュします。
+// loadTemplateCache loads the full set of embedded HTML templates.
+// It associates layout.html with each page's template file and caches them.
 func loadTemplateCache() (map[string]*template.Template, error) {
 	entries, err := fs.ReadDir(assets.Templates, templateDir)
 	if err != nil {
-		return nil, fmt.Errorf("テンプレートディレクトリの読み込みに失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to read the template directory: %w", err)
 	}
 
 	layoutPath := templateDir + "/layout.html"
@@ -30,7 +30,7 @@ func loadTemplateCache() (map[string]*template.Template, error) {
 		pagePath := templateDir + "/" + pageName
 		tmpl, err := template.New(pageName).ParseFS(assets.Templates, layoutPath, pagePath)
 		if err != nil {
-			return nil, fmt.Errorf("テンプレート %s の解析に失敗しました: %w", pageName, err)
+			return nil, fmt.Errorf("failed to parse template %s: %w", pageName, err)
 		}
 		cache[pageName] = tmpl
 	}

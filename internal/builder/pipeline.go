@@ -11,8 +11,8 @@ import (
 	"github.com/shouni/ap-story/internal/pipeline"
 )
 
-// buildPipeline は、Task のコマンドに応じて Ops の操作を実行する Worker パイプライン
-// （pipeline.Runner）を構築します。
+// buildPipeline builds the worker pipeline (pipeline.Runner) that runs the Ops operation
+// selected by the Task's command.
 func buildPipeline(cfg *config.Config, store remoteio.Store, ops *ports.Operations, notifier domain.Notifier, jobStatus domain.JobStatusStore) (*pipeline.Runner, error) {
 	runner, err := pipeline.New(pipeline.Dependencies{
 		Ops:    ops,

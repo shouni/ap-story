@@ -8,33 +8,33 @@ import (
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 )
 
-// MaxDialogueRunes は、1つの吹き出しに許すセリフの上限（文字数）です。
+// MaxDialogueRunes is the limit (in characters) on the dialogue in one speech bubble.
 //
-// 台本プロンプト（assets/prompts/chapter/default.md）が作文に課している「25文字以内、
-// 技術語の説明のみ35文字まで」よりずっと緩い値にしてあります。ここは作文の良し悪しでは
-// なく、ページ合成が破綻する入力を止めるための番人だからです。25文字を実際に超えている
-// セリフは生成済みの台本にも珍しくないので、その基準で弾くと既存の台本を読み込んで
-// 保存し直すだけで失敗します。長すぎるセリフへの注意喚起は画面側の役目です。
+// It is far looser than what the script prompt (assets/prompts/chapter/default.md) asks of the writing,
+// "25 characters or fewer, up to 35 only for explaining technical terms". This is not about good
+// writing; it is a guard that stops input that would break page composition. Dialogue over 25
+// characters is common in generated scripts too, so rejecting on that basis would make reading and
+// re-saving an existing script fail. Warning about overly long dialogue is the screen's job.
 const MaxDialogueRunes = 120
 
-// MaxDialoguesPerPanel は1コマに置ける吹き出しの数です。
-// 台本プロンプトの「1コマの吹き出しは最大3つ」と揃えています。
+// MaxDialoguesPerPanel is the number of speech bubbles one panel can hold.
+// It matches the script prompt's "at most 3 speech bubbles per panel".
 const MaxDialoguesPerPanel = 3
 
-// ScriptDialogue は台本上の1つの発話です。kitcomic.DialogueLine と同じ形ですが、
-// 編集の入出力に使う独立した型として持ちます（state の内部表現が変わっても
-// API の形が引きずられないようにするためです）。
+// ScriptDialogue is one utterance in the script. It has the same shape as kitcomic.DialogueLine but
+// is kept as a separate type for editing input and output (so that a change in the state's
+// internal representation does not drag the API shape along).
 type ScriptDialogue struct {
 	SpeakerID string `json:"speaker_id"`
 	Text      string `json:"text"`
 	Kind      string `json:"kind,omitempty"`
 }
 
-// ScriptPanel は1コマ分の台本です。
+// ScriptPanel is the script for one panel.
 //
-// ChapterID / Page / Shot は編集できません。読み手が「どの章のどのページを直しているのか」
-// を把握するために載せています。ページ番号が要るのは、セリフを直したときに
-// 合成し直す単位がページだからです。
+// ChapterID / Page / Shot cannot be edited. They are included so the reader can tell "which page
+// of which chapter is being fixed". The page number is needed because the page is the unit
+// that gets recomposed when dialogue is fixed.
 type ScriptPanel struct {
 	PanelID   string           `json:"panel_id"`
 	ChapterID string           `json:"chapter_id,omitempty"`
@@ -43,18 +43,18 @@ type ScriptPanel struct {
 	Dialogues []ScriptDialogue `json:"dialogues"`
 }
 
-// ScriptChapter は章の見出しです。台本を通して読むための文脈で、編集対象ではありません。
+// ScriptChapter is a chapter heading: context for reading the script through, not something to edit.
 type ScriptChapter struct {
 	ChapterID string `json:"chapter_id"`
 	Title     string `json:"title,omitempty"`
 	Summary   string `json:"summary,omitempty"`
 }
 
-// ScriptDraft は、作品の台本のうち編集できる部分だけを取り出した表現です。
+// ScriptDraft is the editable part of a work's script.
 //
-// state 全体ではなくこれをやり取りするのは、コマ画像の生成記録（GenerationRecord）や
-// ページ成果物を編集の経路に乗せないためです。それらは生成の結果であって入力ではなく、
-// 手で書き換えられるようにする理由がありません。
+// This travels instead of the whole state so that panel-image generation records (GenerationRecord)
+// and page artifacts never ride the editing path. They are results of generation, not inputs,
+// and there is no reason to let them be rewritten by hand.
 type ScriptDraft struct {
 	JobID    string          `json:"job_id"`
 	Title    string          `json:"title,omitempty"`
@@ -62,7 +62,7 @@ type ScriptDraft struct {
 	Panels   []ScriptPanel   `json:"panels"`
 }
 
-// NewScriptDraft は state から編集可能な台本を取り出します。
+// NewScriptDraft extracts an editable script from a state.
 func NewScriptDraft(state *kitcomic.MangaState) ScriptDraft {
 	if state == nil {
 		return ScriptDraft{}
@@ -101,12 +101,12 @@ func NewScriptDraft(state *kitcomic.MangaState) ScriptDraft {
 	return draft
 }
 
-// ApplyTo は台本の編集内容を state のセリフへ反映します。
+// ApplyTo applies the script edits to the state's dialogue.
 //
-// 差し替わるのは各コマの Dialogues だけです。コマの構成（ID・順序・章・ページ）は
-// 生成済みのコマ画像と1対1で対応しているので、ここで動かせてしまうと state と
-// 画像の対応が壊れます。そのため「送られてきたコマ列が既存と完全に一致すること」を
-// 先に検証し、一致しない要求は部分適用せずに丸ごと拒否します。
+// Only each panel's Dialogues is replaced. The panel structure (ID, order, chapter, page)
+// corresponds one-to-one with the generated panel images, so letting it move here would break
+// the mapping between the state and the images. Therefore "the submitted panel sequence matches
+// the existing one exactly" is checked first, and a mismatching request is rejected whole, never applied in part.
 func (d ScriptDraft) ApplyTo(state *kitcomic.MangaState, knownSpeaker func(string) bool) error {
 	if state == nil {
 		return fmt.Errorf("state is required")
@@ -115,8 +115,8 @@ func (d ScriptDraft) ApplyTo(state *kitcomic.MangaState, knownSpeaker func(strin
 		return fmt.Errorf("パネル数が一致しません（要求 %d、実際 %d）。コマの追加・削除はできません", len(d.Panels), len(state.Panels))
 	}
 
-	// 検証を全件終えてから書き込みます。途中で失敗して一部だけ反映されると、
-	// 呼び出し元から見て「失敗したのに変わっている」状態になるためです。
+	// Writes happen only after every check has passed. Failing midway with only part applied would
+	// leave the caller looking at a state that "changed even though it failed".
 	applied := make([][]kitcomic.DialogueLine, len(state.Panels))
 	for i, panel := range d.Panels {
 		if panel.PanelID != state.Panels[i].ID {
@@ -135,7 +135,7 @@ func (d ScriptDraft) ApplyTo(state *kitcomic.MangaState, knownSpeaker func(strin
 	return nil
 }
 
-// normalizedDialogues は1コマ分のセリフを検証し、state に書ける形へ整えます。
+// normalizedDialogues validates one panel's dialogue and shapes it for writing to the state.
 func (p ScriptPanel) normalizedDialogues(knownSpeaker func(string) bool) ([]kitcomic.DialogueLine, error) {
 	if len(p.Dialogues) > MaxDialoguesPerPanel {
 		return nil, fmt.Errorf("%s: 吹き出しが %d 個あります（1コマ最大 %d 個）", p.PanelID, len(p.Dialogues), MaxDialoguesPerPanel)
@@ -144,8 +144,8 @@ func (p ScriptPanel) normalizedDialogues(knownSpeaker func(string) bool) ([]kitc
 	lines := make([]kitcomic.DialogueLine, 0, len(p.Dialogues))
 	for i, line := range p.Dialogues {
 		text := strings.TrimSpace(line.Text)
-		// 空行は「その吹き出しを消す」意思表示として受け取り、黙って落とします。
-		// 画面から1つ分を消したいときに、配列を組み替えさせずに済ませるためです。
+		// An empty line is taken as the intent to "delete that speech bubble" and dropped silently,
+		// so that removing one from the screen does not require rearranging the array.
 		if text == "" {
 			continue
 		}
@@ -159,9 +159,9 @@ func (p ScriptPanel) normalizedDialogues(knownSpeaker func(string) bool) ([]kitc
 		}
 
 		speaker := strings.TrimSpace(line.SpeakerID)
-		// 未知の話者IDは拒否します。go-comic-kit は台本生成時にこれをナレーションへ
-		// 落としますが、手で編集した内容を黙って別物にすると、直したつもりの行が
-		// 何も言わずナレーションに化けます。書いた本人に返すほうが親切です。
+		// Unknown speaker IDs are rejected. go-comic-kit turns them into narration when generating
+		// a script, but silently turning hand-edited content into something else makes the line
+		// someone meant to fix become narration without a word. Sending it back to its author is kinder.
 		if speaker != "" && knownSpeaker != nil && !knownSpeaker(speaker) {
 			return nil, fmt.Errorf("%s の %d 番目のセリフの話者 %q は登録されていません", p.PanelID, i+1, speaker)
 		}
@@ -179,19 +179,19 @@ func (p ScriptPanel) normalizedDialogues(knownSpeaker func(string) bool) ([]kitc
 	return lines, nil
 }
 
-// ScriptChange は、台本を書き換えた結果どこが変わったかの要約です。
+// ScriptChange summarises what changed as a result of rewriting the script.
 type ScriptChange struct {
-	// ChangedLines は文面・話者・種別のいずれかが変わったセリフの数です。
+	// ChangedLines is the number of dialogue lines whose text, speaker or kind changed.
 	ChangedLines int `json:"changed_lines"`
-	// AffectedPages は変更のあったコマが載っているページ番号（昇順・重複なし）です。
+	// AffectedPages are the page numbers (ascending, no duplicates) holding the changed panels.
 	//
-	// セリフはページ合成のときに画像モデルが描き込むので、保存しただけでは絵は古いままです。
-	// 直した文字を絵に載せるために合成し直す対象がこれで、呼び出し側への申し送りになります。
+	// The image model draws the dialogue in at page composition, so saving alone leaves the art as it was.
+	// These are what must be recomposed to put the fixed text into the art, handed on to the caller.
 	AffectedPages []int `json:"affected_pages"`
 }
 
-// DiffScripts は編集前後の台本を比べ、変更点の要約を返します。
-// コマ列が食い違う場合（ApplyTo が拒否する形）は、対応の取れるコマだけを比べます。
+// DiffScripts compares the script before and after an edit and returns a summary of the changes.
+// When the panel sequences disagree (the shape ApplyTo rejects), only the panels that correspond are compared.
 func DiffScripts(before, after ScriptDraft) ScriptChange {
 	previous := make(map[string][]ScriptDialogue, len(before.Panels))
 	for _, panel := range before.Panels {
@@ -217,8 +217,8 @@ func DiffScripts(before, after ScriptDraft) ScriptChange {
 	return change
 }
 
-// countChangedLines は1コマ分のセリフを突き合わせ、変わった行数を数えます。
-// 行数そのものが増減した場合は、増減分も変更として数えます。
+// countChangedLines compares one panel's dialogue and counts the changed lines.
+// When the number of lines itself changed, the difference counts as changed too.
 func countChangedLines(before, after []ScriptDialogue) int {
 	changed := max(len(after)-len(before), len(before)-len(after))
 	for i := range min(len(before), len(after)) {
@@ -229,8 +229,8 @@ func countChangedLines(before, after []ScriptDialogue) int {
 	return changed
 }
 
-// isKnownDialogueKind は、吹き出しの種別がページ合成プロンプトの扱える値かを返します。
-// 空文字は speech として扱われる（prompts.writePanelDialogues の default 節）ため許可します。
+// isKnownDialogueKind reports whether a speech-bubble kind is a value the page-composition prompt handles.
+// The empty string is treated as speech (the default case of prompts.writePanelDialogues), so it is allowed.
 func isKnownDialogueKind(kind string) bool {
 	switch kind {
 	case "",

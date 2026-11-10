@@ -30,7 +30,7 @@ func TestScriptPromptsBuildOutline(t *testing.T) {
 			t.Errorf("outline prompt missing %q, got: %s", want, out)
 		}
 	}
-	// front matter は選択肢の説明であって、モデルへ送る指示ではありません。
+	// The front matter describes the options; it is not an instruction sent to the model.
 	for _, unwanted := range []string{"use_when", "direction:"} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("outline prompt contains front matter %q, got: %s", unwanted, out)

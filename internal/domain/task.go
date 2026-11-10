@@ -7,83 +7,83 @@ import (
 	"time"
 )
 
-// TaskCommand はパイプラインで実行するジョブ種別です。
-// 各コマンドは go-comic-kit の冪等な操作（ports.OutlineGenerator 等）と1対1で対応します。
+// TaskCommand is the kind of job the pipeline runs.
+// Each command corresponds one-to-one with an idempotent go-comic-kit operation (ports.OutlineGenerator and so on).
 type TaskCommand string
 
 const (
-	// TaskCommandComposeComic は、原稿から章立て・台本・パネル・ページまで一括で生成する
-	// コマンドです。StopAfterScript を指定すると台本までで止まり、続きは
-	// TaskCommandRenderComic で行います。
+	// TaskCommandComposeComic generates everything from the manuscript in one go: chapters, script,
+	// panels and pages. With StopAfterScript it stops after the script, and the rest is done
+	// with TaskCommandRenderComic.
 	TaskCommandComposeComic TaskCommand = "compose_comic"
-	// TaskCommandRenderComic は、既存 state のパネル画像とページ画像だけを生成するコマンドです。
-	// 台本を確認してから画像生成へ進む「続きを生成」と、失敗・打ち切りからの再開を兼ねます。
-	// すでに生成済みのコマ・ページは飛ばすため、何度実行しても未生成分だけが埋まります。
+	// TaskCommandRenderComic generates only the panel and page images of an existing state.
+	// It is both "continue generating" after checking the script and the resume after a failure or cutoff.
+	// Panels and pages already generated are skipped, so however often it runs, only the missing ones are filled.
 	//
-	// chapter_id を添えると、その章のコマ・ページだけを生成します。画像は工程中で
-	// いちばん高価なので、1章で試してから残りへ進めるようにしてあります。
+	// With chapter_id it generates only that chapter's panels and pages. Images are the most
+	// expensive part of the process, so one chapter can be tried before moving on to the rest.
 	TaskCommandRenderComic TaskCommand = "render_comic"
-	// TaskCommandRegenerateChapterScript は、指定章の台本（ネーム）のみを再生成するコマンドです。
+	// TaskCommandRegenerateChapterScript regenerates only the script (name) of the given chapter.
 	TaskCommandRegenerateChapterScript TaskCommand = "regenerate_chapter_script"
-	// TaskCommandGenerateDesignSheet は、キャラクターデザインシートを生成するコマンドです。
-	// job_id は省略可（state を伴わない単発生成）です。
+	// TaskCommandGenerateDesignSheet generates a character design sheet.
+	// job_id is optional (a one-off generation with no state).
 	TaskCommandGenerateDesignSheet TaskCommand = "generate_design_sheet"
-	// TaskCommandRegeneratePanel は、指定パネルの画像を生成/再生成するコマンドです。
+	// TaskCommandRegeneratePanel generates or regenerates the image of the given panel.
 	TaskCommandRegeneratePanel TaskCommand = "regenerate_panel"
-	// TaskCommandRegeneratePage は、指定ページを合成/再合成するコマンドです。
+	// TaskCommandRegeneratePage composes or recomposes the given page.
 	TaskCommandRegeneratePage TaskCommand = "regenerate_page"
 )
 
-// Task は Cloud Tasks 経由で Worker に渡される生成ジョブです。
-// JSON にシリアライズしてタスクのペイロードとして送信します。
+// Task is a generation job handed to the worker through Cloud Tasks.
+// It is serialised to JSON and sent as the task payload.
 type Task struct {
 	Command   TaskCommand `json:"command"`
 	JobID     string      `json:"job_id"`
 	CreatedAt time.Time   `json:"created_at"`
 
-	// --- compose_comic / regenerate_chapter_script 共通（台本生成） ---
-	// SourceURL / SourceText は compose_comic の入力（いずれか必須、排他）です。
+	// --- shared by compose_comic / regenerate_chapter_script (script generation) ---
+	// SourceURL / SourceText are the input of compose_comic (one of them is required; mutually exclusive).
 	SourceURL  string `json:"source_url,omitempty"`
 	SourceText string `json:"source_text,omitempty"`
-	// ScriptMode は台本プロンプトのモード（assets/prompts/outline・chapter の
-	// テンプレート名）です。空文字なら既定モードを使います。
+	// ScriptMode is the script prompt's mode (a template name under assets/prompts/outline and
+	// chapter). Empty means the default mode.
 	ScriptMode string `json:"script_mode,omitempty"`
-	// StyleMode は画風指定の選択（assets/prompts/style のテンプレート名）です。
-	// 空文字なら既定モードを使います。選択した値は state に記録され、
-	// 後続の画像生成ジョブ（render_comic・regenerate 系）が引き継ぎます。
+	// StyleMode selects the art style (a template name under assets/prompts/style).
+	// Empty means the default mode. The chosen value is recorded in the state and inherited
+	// by later image-generation jobs (render_comic and the regenerate ones).
 	StyleMode string `json:"style_mode,omitempty"`
-	// TextModel は台本生成（章立て・章台本）に使う Gemini テキストモデルです。
-	// 空文字なら worker 側の GEMINI_MODELS 先頭を使います。画像側の ModelOverride と対で、
-	// 検証は Web 面が GEMINI_MODELS の許可リストに対して行います。
+	// TextModel is the Gemini text model used for script generation (chapters and chapter scripts).
+	// Empty means the head of GEMINI_MODELS on the worker. It pairs with ModelOverride on the image side,
+	// and the web face validates it against the GEMINI_MODELS allowlist.
 	TextModel string `json:"text_model,omitempty"`
-	// ChapterID は regenerate_chapter_script の対象章です。
+	// ChapterID is the target chapter of regenerate_chapter_script.
 	ChapterID string `json:"chapter_id,omitempty"`
-	// StopAfterScript を指定すると、compose_comic は章立てと台本の生成までで止まります。
-	// 高価な画像生成に進む前に内容を確認するための指定で、続きは render_comic で行います。
+	// With StopAfterScript, compose_comic stops after generating the chapters and the script.
+	// It is for checking the content before moving on to expensive image generation; the rest is done with render_comic.
 	StopAfterScript bool `json:"stop_after_script,omitempty"`
-	// StopAfterPanels を指定すると、render_comic はコマの生成までで止まります。
+	// With StopAfterPanels, render_comic stops after generating the panels.
 	//
-	// ページはコマを並べた合成物なので、コマの出来を見てから進めるための指定です。
-	// コマが全部そろった state に render_comic をもう一度投げると、生成済みのコマは
-	// 飛ばされてページ合成だけが走ります（「ページだけ」の専用コマンドは要りません）。
+	// A page is a composite of the panels, so this lets the panels be checked before moving on.
+	// Sending render_comic again to a state with every panel present skips the generated panels
+	// and runs only page composition (no dedicated "pages only" command is needed).
 	StopAfterPanels bool `json:"stop_after_panels,omitempty"`
 
 	// --- generate_design_sheet ---
 	CharacterIDs []string `json:"character_ids,omitempty"`
 	AspectRatio  string   `json:"aspect_ratio,omitempty"`
 	Layout       string   `json:"layout,omitempty"`
-	// ReferenceURLOverride / VisualCuesOverride は単一キャラクター指定時のみ適用される
-	// その場限りの上書きです（go-comic-kit の DesignOverride に対応）。
+	// ReferenceURLOverride / VisualCuesOverride are one-off overrides applied only when a single
+	// character is chosen (they correspond to go-comic-kit's DesignOverride).
 	ReferenceURLOverride string   `json:"reference_url_override,omitempty"`
 	VisualCuesOverride   []string `json:"visual_cues_override,omitempty"`
 
-	// --- 画像生成系すべて（compose_comic / render_comic / generate_design_sheet / regenerate 系） ---
-	// ModelOverride は、設定済みの画像生成モデル（IMAGE_MODELS 先頭）を差し替えます。
-	// 空文字なら既定のモデルを使います。
+	// --- every image generation (compose_comic / render_comic / generate_design_sheet / the regenerate ones) ---
+	// ModelOverride replaces the configured image model (the head of IMAGE_MODELS).
+	// Empty means the default model.
 	//
-	// デザインシート単体生成だけでなく compose_comic でも使い、そのときはコマ・ページの
-	// 生成モデルになります。選択した値は state に記録され、後続の画像生成ジョブ
-	// （render_comic・regenerate 系）が引き継ぎます。
+	// It is used not only for standalone design sheets but also by compose_comic, where it becomes the
+	// model for panels and pages. The chosen value is recorded in the state and inherited by later
+	// image-generation jobs (render_comic and the regenerate ones).
 	ModelOverride string `json:"model_override,omitempty"`
 
 	// --- regenerate_panel ---
@@ -92,16 +92,16 @@ type Task struct {
 	// --- regenerate_page ---
 	Page int `json:"page,omitempty"`
 
-	// --- regenerate_panel / regenerate_page 共通（go-comic-kit の GenerateOptions に対応） ---
-	// Seed は nil の場合、対象の前回生成条件（GenerationRecord.UsedSeed）を再利用します。
+	// --- shared by regenerate_panel / regenerate_page (corresponds to go-comic-kit's GenerateOptions) ---
+	// When Seed is nil, the previous generation condition of the target (GenerationRecord.UsedSeed) is reused.
 	Seed *int64 `json:"seed,omitempty"`
-	// EditPrompt を指定すると、既存の生成済み画像を入力とした編集モードになります。
+	// With EditPrompt it becomes edit mode, taking the existing generated image as input.
 	EditPrompt string `json:"edit_prompt,omitempty"`
-	// PromptOverride は自動構築されるプロンプトを差し替えます。
+	// PromptOverride replaces the automatically built prompt.
 	PromptOverride string `json:"prompt_override,omitempty"`
 }
 
-// ValidateSubmission は、ジョブ投入前に最低限必要な入力が揃っていることを検証します。
+// ValidateSubmission checks that the minimum input is present before a job is enqueued.
 func (t Task) ValidateSubmission() error {
 	if strings.TrimSpace(t.JobID) == "" {
 		return fmt.Errorf("job_id is required")
@@ -114,9 +114,9 @@ func (t Task) ValidateSubmission() error {
 	case TaskCommandComposeComic:
 		return t.validateComposeComicSubmission()
 	case TaskCommandRenderComic:
-		// 対象は state 全体なので、job_id 以外に必要な入力はありません。
-		// chapter_id は任意で、指定するとその章だけに絞られます（存在しない章は
-		// 実行時に go-comic-kit が ErrNotFound を返します）。
+		// The target is the whole state, so no input besides job_id is needed.
+		// chapter_id is optional and narrows it to that chapter (for a chapter that does not exist,
+		// go-comic-kit returns ErrNotFound at run time).
 		return nil
 	case TaskCommandRegenerateChapterScript:
 		if strings.TrimSpace(t.ChapterID) == "" {
@@ -153,14 +153,14 @@ func (t Task) validateComposeComicSubmission() error {
 	return nil
 }
 
-// referenceImageURLPattern は参照画像URL（上書き・任意）として許容する形式です。
-// http(s):// または gs:// で始まり、画像拡張子で終わる必要があります。
+// referenceImageURLPattern is the accepted format of a reference image URL (an optional override).
+// It must start with http(s):// or gs:// and end with an image extension.
 var referenceImageURLPattern = regexp.MustCompile(`(?i)^(https?://|gs://)\S+\.(png|jpe?g|webp|gif)$`)
 
-// validateReferenceURLOverride は参照画像URL（上書き・任意）の形式を検証します。
-// 実際に画像かどうかの最終判定はダウンロード後にワーカー側（go-comic-kit が
-// 取得した内容から判定する MIME type）で行われるため、ここでは明らかに不正な値を
-// フォーム送信時点で早期に弾く軽量チェックに留めます。空文字（未指定）は許可します。
+// validateReferenceURLOverride validates the format of a reference image URL (an optional override).
+// Whether it really is an image is finally decided on the worker after downloading (from the MIME
+// type go-comic-kit determines from the fetched content), so this is only a light check that rejects
+// obviously invalid values early, at form submission. The empty string (unspecified) is allowed.
 func validateReferenceURLOverride(url string) error {
 	url = strings.TrimSpace(url)
 	if url == "" {
@@ -172,21 +172,21 @@ func validateReferenceURLOverride(url string) error {
 	return nil
 }
 
-// TaskName は Cloud Tasks のタスク名（重複 enqueue 排除キー）を返します。
-// 作り直し系のコマンドでは投入時刻を名前に含めるため、重複排除が効く範囲は
-// 「同じジョブ・同じコマンド・同じ対象へ同じ秒に届いた投入」— つまり Cloud Tasks の
-// at-least-once 配信や呼び出し元の再試行のような、1つにまとめてよい重複だけです。
+// TaskName returns the Cloud Tasks task name (the deduplication key for enqueues).
+// Commands that redo work include the enqueue time in the name, so deduplication applies only to
+// "an enqueue of the same job, command and target arriving in the same second", i.e. only duplicates
+// that may be merged, such as Cloud Tasks' at-least-once delivery or a caller's retry.
 //
-// 対象だけで名前を決めてしまうと、人が結果を見て「気に入らないからもう一度」と
-// 投げ直す再生成が黙って捨てられます。Cloud Tasks は実行済みタスクの名前を公称1時間、
-// 実際にはそれよりずっと長く予約し続け、その間の ALREADY_EXISTS は成功として扱われる
-// （gcp-kit の EnqueueWithName）ため、呼び出し元には 202 が返り、ジョブ状態は
-// 誰も処理しないまま queued で残ります。再生成は納得するまで繰り返す操作なので、
-// 重複を弾くことより取りこぼさないことを優先します。
+// Naming by target alone would silently drop a regeneration that someone resubmits after seeing
+// the result ("I don't like it, once more"). Cloud Tasks keeps the names of executed tasks reserved
+// for a nominal hour, in practice much longer, and ALREADY_EXISTS during that time is treated as success
+// (gcp-kit's EnqueueWithName), so the caller gets 202 and the job status stays queued with
+// nobody processing it. Regeneration is repeated until the result satisfies, so not losing a
+// submission takes priority over rejecting duplicates.
 //
-// ジョブIDは英数字とハイフンのみ（ValidateJobID で検証済み）、ChapterID/PanelID は
-// システム側で "ch01" / "ch01-p03" 形式に採番されるため、追加のサニタイズなしで
-// Cloud Tasks のタスク名文字制約（英数字・ハイフン・アンダースコア）を満たします。
+// Job IDs are alphanumerics and hyphens only (checked by ValidateJobID), and ChapterID/PanelID are
+// minted by the system as "ch01" / "ch01-p03", so they satisfy the Cloud Tasks task-name
+// character constraint (alphanumerics, hyphens, underscores) without further sanitising.
 func (t Task) TaskName() string {
 	parts := []string{t.JobID, string(t.Command)}
 	if target := t.taskTarget(); target != "" {
@@ -198,12 +198,12 @@ func (t Task) TaskName() string {
 	return strings.Join(parts, "-")
 }
 
-// repeatable は、同じ対象へ何度でも投げ直す前提のコマンドかを返します。
+// repeatable reports whether a command is expected to be resubmitted to the same target any number of times.
 //
-// compose_comic だけが該当しません。投入のたびに新しいジョブIDを採番する
-// （handlers.EnqueueComic）ので名前はもともと投入ごとに変わり、決定的な名前が
-// 排除できるのは同一リクエストの再送だけだからです。逆に言えば、これ以降に
-// 追加するコマンドは既定でこちら側 — 取りこぼすより重複するほうが安全です。
+// Only compose_comic is not. It mints a new job ID on every enqueue
+// (handlers.EnqueueComic), so its name already changes per enqueue, and a deterministic
+// name could only deduplicate a resend of the same request. Conversely, any command added
+// from now on belongs on this side by default: a duplicate is safer than a lost submission.
 func (t Task) repeatable() bool {
 	return t.Command != TaskCommandComposeComic
 }

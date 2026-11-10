@@ -10,15 +10,15 @@ import (
 	"github.com/shouni/go-comic-kit/ports"
 )
 
-// OutlineStep は、Task の入力（SourceURL/SourceText）から章立てのみを持つ
-// 新しい MangaState を生成し、pc.Manga にセットします。
+// OutlineStep generates a new MangaState holding only the chapter outline from the Task's input
+// (SourceURL/SourceText) and sets it on pc.Manga.
 type OutlineStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (OutlineStep) Name() string { return "outline" }
 
-// Execute は章立てのみを持つ新しい MangaState を生成します。
-// すでに章立てがある場合（再配信による再実行）は、生成済みの成果を捨てないよう何もしません。
+// Execute generates a new MangaState holding only the chapter outline.
+// When an outline already exists (a re-run from redelivery), it does nothing so as not to discard generated output.
 func (OutlineStep) Execute(ctx context.Context, pc *Context) error {
 	if pc.Manga != nil && len(pc.Manga.Chapters) > 0 {
 		slog.InfoContext(ctx, "outline already exists, skipping", "chapters", len(pc.Manga.Chapters))
@@ -36,31 +36,31 @@ func (OutlineStep) Execute(ctx context.Context, pc *Context) error {
 		return fmt.Errorf("outline: %w", err)
 	}
 	manga.ID = pc.Task.JobID
-	// この作品で選んだモデルを state に控える。台本まで作って後から画像を生成する
-	// 運用や章単位の作り直しでは Task に選択が乗らないため、ここが引き継ぎ元になる
-	// （StyleMode / ScriptMode をキットが記録しているのと同じ理由）。
+	// Note the model chosen for this work in the state. When the script is made first and images later,
+	// or a chapter is remade, the Task carries no choice, so this is where it is inherited from
+	// (the same reason the kit records StyleMode / ScriptMode).
 	manga.TextModel = pc.Task.TextModel
 	manga.ImageModel = pc.Task.ModelOverride
 	pc.Manga = manga
 	return nil
 }
 
-// AllChapterScriptsStep は、pc.Manga の全章についてネーム（パネル群）を生成します。
-// compose_comic の一括生成で使います。
+// AllChapterScriptsStep generates the name (panels) for every chapter of pc.Manga.
+// It is used by compose_comic's batch generation.
 type AllChapterScriptsStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (AllChapterScriptsStep) Name() string { return "chapter_scripts" }
 
-// Execute は pc.Manga の全章についてネームを生成します。
+// Execute generates the name for every chapter of pc.Manga.
 func (AllChapterScriptsStep) Execute(ctx context.Context, pc *Context) error {
 	if pc.Manga == nil {
 		return fmt.Errorf("chapter_scripts: manga state is nil")
 	}
-	// GenerateChapterScript は pc.Manga を書き換えて返すため、章IDを先に固定して列挙する
-	// （ループ中に pc.Manga.Chapters の並びが変わっても対象がぶれないようにする）。
-	// すでにネームがある章は飛ばす。GenerateChapterScript は章のパネルを丸ごと
-	// 置き換えるため、作り直すとそのコマの生成済み画像の記録まで消える。
+	// GenerateChapterScript rewrites pc.Manga and returns it, so fix the chapter IDs first and iterate over them
+	// (so the targets do not shift even if the order of pc.Manga.Chapters changes during the loop).
+	// Chapters that already have a name are skipped. GenerateChapterScript replaces a chapter's panels
+	// whole, so remaking it would also erase the records of those panels' generated images.
 	var chapterIDs []string
 	for _, ch := range pc.Manga.Chapters {
 		if chapterHasPanels(pc.Manga, ch.ID) {
@@ -72,7 +72,7 @@ func (AllChapterScriptsStep) Execute(ctx context.Context, pc *Context) error {
 		return nil
 	}
 
-	// 章立てと全章を同じモデルに書かせる（章ごとに書き手が変わると文体が揃わない）。
+	// Have the same model write the outline and every chapter (a different writer per chapter makes the style uneven).
 	opts := ports.ChapterScriptOptions{Model: pc.textModel()}
 	for _, chapterID := range chapterIDs {
 		manga, err := pc.Ops.ChapterScript.GenerateChapterScript(ctx, pc.Manga, chapterID, opts)
@@ -84,16 +84,16 @@ func (AllChapterScriptsStep) Execute(ctx context.Context, pc *Context) error {
 	return nil
 }
 
-// SingleChapterScriptStep は、Task.ChapterID の1章のみネームを生成/再生成します。
-// regenerate_chapter_script で使います。
+// SingleChapterScriptStep generates or regenerates the name for only the chapter in Task.ChapterID.
+// It is used by regenerate_chapter_script.
 type SingleChapterScriptStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (SingleChapterScriptStep) Name() string { return "chapter_script" }
 
-// Execute は Task.ChapterID の1章のみネームを生成/再生成します。
+// Execute generates or regenerates the name for only the chapter in Task.ChapterID.
 func (SingleChapterScriptStep) Execute(ctx context.Context, pc *Context) error {
-	// 作り直す章だけ別のモデルが書くことにならないよう、state に記録されたモデルを引き継ぐ。
+	// Inherit the model recorded in the state so that the chapter being remade is not written by a different model.
 	opts := ports.ChapterScriptOptions{Model: pc.textModel()}
 	manga, err := pc.Ops.ChapterScript.GenerateChapterScript(ctx, pc.Manga, pc.Task.ChapterID, opts)
 	if err != nil {
@@ -103,7 +103,7 @@ func (SingleChapterScriptStep) Execute(ctx context.Context, pc *Context) error {
 	return nil
 }
 
-// chapterHasPanels は、指定章のネームがすでに生成済みかを返します。
+// chapterHasPanels reports whether the given chapter's name has already been generated.
 func chapterHasPanels(state *comic.MangaState, chapterID string) bool {
 	for i := range state.Panels {
 		if state.Panels[i].ChapterID == chapterID {

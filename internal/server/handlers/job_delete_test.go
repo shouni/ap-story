@@ -73,7 +73,7 @@ func TestGetComicSuccess(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	// 状態と作品は 1 つの文書で、作品は comic の下に入れ子です（jobDocument）。
+	// The status and the comic are one document, with the comic nested under comic (jobDocument).
 	var got struct {
 		JobID string              `json:"job_id"`
 		State string              `json:"state"`
@@ -83,7 +83,7 @@ func TestGetComicSuccess(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if got.JobID != "job-1" || got.State != "succeeded" {
-		t.Errorf("状態が載っていません: %+v", got)
+		t.Errorf("the status is missing: %+v", got)
 	}
 	if got.Comic.ID != "job-1" {
 		t.Errorf("comic.id = %q, want job-1", got.Comic.ID)
@@ -154,10 +154,10 @@ func TestDeleteComicRejectsInvalidJobID(t *testing.T) {
 	}
 }
 
-// 読めなかっただけのジョブを「ありません」と答えないこと。
+// A job that merely could not be read is not answered as "not there".
 //
-// 権限不足や GCS 障害まで 404 にすると、障害の間ずっと全作品が消えたように見え、
-// 呼び出し側は待てば直るのか消えたのかを区別できません。
+// Making missing permissions or a GCS outage a 404 would make every work look deleted for the whole outage,
+// and the caller could not tell whether waiting would fix it or it was gone.
 func TestGetComicDoesNotReturn404WhenStateUnreadable(t *testing.T) {
 	t.Parallel()
 
@@ -171,7 +171,7 @@ func TestGetComicDoesNotReturn404WhenStateUnreadable(t *testing.T) {
 	h.Job(rec, req)
 
 	if rec.Code == http.StatusNotFound {
-		t.Fatalf("status = 404: 読めないだけの作品を「ありません」と答えている: %s", rec.Body.String())
+		t.Fatalf("status = 404: a work that merely cannot be read is answered as \"not there\": %s", rec.Body.String())
 	}
 	if rec.Code != http.StatusBadGateway {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)

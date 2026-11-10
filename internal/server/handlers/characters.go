@@ -10,60 +10,60 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// referenceAspectOrder は character_detail.html でのアスペクト比表示順です。
-// 3:4 を先頭に置くのは、パネルとページがその比率で生成されるためです（go-comic-kit の
-// layout.PanelAspectRatio / PageAspectRatio）。参照画像は生成対象と同じ比率のものが
-// 優先して使われるので、漫画生成に効くのは 3:4 のシートです。
+// referenceAspectOrder is the display order of aspect ratios in character_detail.html.
+// 3:4 comes first because panels and pages are generated at that ratio (go-comic-kit's
+// layout.PanelAspectRatio / PageAspectRatio). A reference image with the same ratio as the target is
+// preferred, so the 3:4 sheet is the one that matters for comic generation.
 var referenceAspectOrder = []string{"3:4", "16:9", "9:16", "1:1"}
 
-// characterListItem は characters.html テンプレートに渡す1キャラクター分のデータです。
+// characterListItem is one character's data passed to the characters.html template.
 type characterListItem struct {
 	ID                string
 	Name              string
 	ThumbnailImageURL string
 }
 
-// characterReferenceImage は character_detail.html に渡す1枚のマスター参照画像です。
+// characterReferenceImage is one master reference image passed to character_detail.html.
 type characterReferenceImage struct {
 	Label    string
 	ImageURL string
 }
 
-// characterHistoryImage は character_detail.html に渡す1件の生成履歴です。
+// characterHistoryImage is one generation record passed to character_detail.html.
 type characterHistoryImage struct {
 	JobID    string
 	ImageURL string
 }
 
-// characterDetailHistoryLimit は詳細画面に表示する生成履歴の最大件数です。
-// これを超える分は /characters/{characterID}/history で確認します。
+// characterDetailHistoryLimit is the maximum number of generation records shown on the detail page.
+// Anything beyond it is seen at /characters/{characterID}/history.
 const characterDetailHistoryLimit = 12
 
-// characterDetailData は character_detail.html テンプレートに渡すデータです。
+// characterDetailData is the data passed to the character_detail.html template.
 type characterDetailData struct {
 	CharacterID string
 	Name        string
-	// References はマスター参照画像（既定 + アスペクト比別）です。生成の入力として
-	// 使われる「正解」の見た目で、AI生成のデザインシート履歴とは別管理です。
+	// References are the master reference images (the default + per aspect ratio). They are the "reference"
+	// look used as generation input, managed separately from the AI-generated design-sheet history.
 	References []characterReferenceImage
-	// History は AI 生成のデザインシート履歴（新しい順、最大 characterDetailHistoryLimit 件）です。
-	// 複数キャラクター合成生成のシートはここには表示されません
-	// （character/{単体キャラクターID}/ 配下にしか記録されないため）。
+	// History is the AI-generated design-sheet history (newest first, at most characterDetailHistoryLimit items).
+	// Sheets generated for several characters together are not shown here
+	// (they are recorded only under character/{single character ID}/).
 	History []characterHistoryImage
-	// HistoryTotal は上限適用前の全履歴件数です。History より大きい場合、
-	// テンプレートは全件表示ページへのリンクを出します。
+	// HistoryTotal is the total history count before the limit. When it is larger than History,
+	// the template links to the page showing everything.
 	HistoryTotal int
 }
 
-// characterHistoryPageData は character_history.html テンプレートに渡すデータです。
+// characterHistoryPageData is the data passed to the character_history.html template.
 type characterHistoryPageData struct {
 	CharacterID string
 	Name        string
 	History     []characterHistoryImage
 }
 
-// CharacterDesignSheets は GET /characters/{characterID}/design-sheets を処理し、
-// AI生成のデザインシート履歴を全件（新しい順）表示します。
+// CharacterDesignSheets handles GET /characters/{characterID}/design-sheets and shows
+// the whole AI-generated design-sheet history (newest first).
 func (h *Handler) CharacterDesignSheets(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	char := h.characters.GetCharacter(characterID)
@@ -85,8 +85,8 @@ func (h *Handler) CharacterDesignSheets(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// DeleteCharacterDesign は DELETE /characters/{characterID}/design-sheets/{jobID} を処理し、
-// 指定キャラクターの生成履歴1件（画像と、単体生成ジョブなら state も）を削除します。
+// DeleteCharacterDesign handles DELETE /characters/{characterID}/design-sheets/{jobID} and deletes
+// one generation record of the character (the image, and the state too for a standalone job).
 func (h *Handler) DeleteCharacterDesign(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	if h.characters.GetCharacter(characterID) == nil {
@@ -104,8 +104,8 @@ func (h *Handler) DeleteCharacterDesign(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// buildCharacterReferences はマスター参照画像（既定 + アスペクト比別、表示順ソート済み）を
-// テンプレート用データへ変換します。
+// buildCharacterReferences converts the master reference images (the default + per aspect ratio, sorted
+// for display) into template data.
 func (h *Handler) buildCharacterReferences(referenceURL string, referenceURLs map[string]string) []characterReferenceImage {
 	var refs []characterReferenceImage
 	if url := h.characterReferenceWebPath(referenceURL); url != "" {
@@ -126,8 +126,8 @@ func (h *Handler) buildCharacterReferences(referenceURL string, referenceURLs ma
 	return refs
 }
 
-// buildCharacterHistoryImages は生成履歴（新しい順、全件）をテンプレート用データへ変換します。
-// 取得失敗時はログを残してエラーを返します（HTTP レスポンスは呼び出し側の責務）。
+// buildCharacterHistoryImages converts the generation history (newest first, everything) into template data.
+// On a failure it logs and returns an error (the HTTP response is the caller's job).
 func (h *Handler) buildCharacterHistoryImages(r *http.Request, characterID string) ([]characterHistoryImage, error) {
 	items, err := h.repository.ListCharacterDesignHistory(r.Context(), characterID)
 	if err != nil {
@@ -145,7 +145,7 @@ func (h *Handler) buildCharacterHistoryImages(r *http.Request, characterID strin
 	return history, nil
 }
 
-// referenceAspectIndex は referenceAspectOrder 内の位置を返します（未知の比率は末尾）。
+// referenceAspectIndex returns the position within referenceAspectOrder (unknown ratios go last).
 func referenceAspectIndex(ratio string) int {
 	for i, r := range referenceAspectOrder {
 		if r == ratio {

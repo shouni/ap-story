@@ -94,7 +94,7 @@ func TestRegenerateComicPanelWithEditPrompt(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if q.lastTask.EditPrompt != "表情を笑顔に変える" {
-		t.Errorf("EditPrompt = %q, want 表情を笑顔に変える", q.lastTask.EditPrompt)
+		t.Errorf("EditPrompt = %q, want %q", q.lastTask.EditPrompt, "表情を笑顔に変える")
 	}
 }
 
@@ -123,7 +123,7 @@ func TestRegenerateComicJobIDComesFromURLNotBody(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	// リクエストボディに紛れ込んだ job_id は無視され、URL の jobID が使われる。
+	// A job_id slipped into the request body is ignored and the URL's jobID is used.
 	body := `{"command": "regenerate_page", "page": 1, "job_id": "spoofed-job"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
@@ -181,7 +181,7 @@ func TestRegenerateComicRejectsMissingRequiredField(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	// regenerate_panel なのに panel_id が無い
+	// regenerate_panel without panel_id
 	body := `{"command": "regenerate_panel"}`
 	req := regenerateRequest(t, body)
 	rec := httptest.NewRecorder()
@@ -213,8 +213,8 @@ func TestRegenerateComicAcceptsRenderComic(t *testing.T) {
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	// 詳細画面の「続きを生成」ボタンが送る内容。専用エンドポイントは設けず、
-	// 既存の regenerate エンドポイントがそのまま受け付ける。
+	// What the detail page's "続きを生成" button sends. There is no dedicated endpoint;
+	// the existing regenerate endpoint accepts it as is.
 	req := regenerateRequest(t, `{"command": "render_comic"}`)
 	rec := httptest.NewRecorder()
 	h.JobRegenerate(rec, req)
@@ -233,7 +233,7 @@ func TestRegenerateComicAcceptsRenderComic(t *testing.T) {
 func TestRegenerateComicPanelWithSeedAndEditPrompt(t *testing.T) {
 	t.Parallel()
 
-	t.Run("シード振り直し", func(t *testing.T) {
+	t.Run("reroll the seed", func(t *testing.T) {
 		q := &fakeTaskQueue{}
 		h := newTestHandler(t, q)
 
@@ -249,7 +249,7 @@ func TestRegenerateComicPanelWithSeedAndEditPrompt(t *testing.T) {
 		}
 	})
 
-	t.Run("指示による編集", func(t *testing.T) {
+	t.Run("edit by instruction", func(t *testing.T) {
 		q := &fakeTaskQueue{}
 		h := newTestHandler(t, q)
 
@@ -261,20 +261,20 @@ func TestRegenerateComicPanelWithSeedAndEditPrompt(t *testing.T) {
 			t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 		}
 		if q.lastTask.EditPrompt != "表情を笑顔に" {
-			t.Errorf("EditPrompt = %q, want 表情を笑顔に", q.lastTask.EditPrompt)
+			t.Errorf("EditPrompt = %q, want %q", q.lastTask.EditPrompt, "表情を笑顔に")
 		}
 	})
 }
 
-// 再生成の経路も許可リストを通ること。compose とデザインシートだけ塞いで
-// ここが空いていると、Cloud Tasks を1往復してから worker で落ちます。
+// The regeneration path also goes through the allowlist. If only compose and design sheets were blocked
+// and this were open, it would fail on the worker after a Cloud Tasks round trip.
 func TestRegenerateRejectsUnknownChoices(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"画像モデル":   `{"command": "regenerate_panel", "panel_id": "ch01-p01", "model_override": "no-such-model"}`,
-		"スタイルモード": `{"command": "generate_design_sheet", "character_ids": ["zundamon"], "style_mode": "no-such-style"}`,
-		"テキストモデル": `{"command": "regenerate_chapter_script", "chapter_id": "ch01", "text_model": "no-such-model"}`,
+		"image model": `{"command": "regenerate_panel", "panel_id": "ch01-p01", "model_override": "no-such-model"}`,
+		"style mode":  `{"command": "generate_design_sheet", "character_ids": ["zundamon"], "style_mode": "no-such-style"}`,
+		"text model":  `{"command": "regenerate_chapter_script", "chapter_id": "ch01", "text_model": "no-such-model"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {

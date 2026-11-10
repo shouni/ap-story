@@ -6,27 +6,27 @@ import (
 	"strings"
 )
 
-// composeFormData は compose.html テンプレートに渡すデータです。
-// エラー時は入力値を保持したままフォームを再表示します。
+// composeFormData is the data passed to the compose.html template.
+// On error the form is shown again with the input kept.
 type composeFormData struct {
 	SourceURL  string
 	SourceText string
 	ScriptMode string
 	StyleMode  string
 	TextModel  string
-	// ScriptModes / StyleModes は台本モード・スタイルモードの選択肢
-	// （assets/prompts 配下のテンプレート）です。
+	// ScriptModes / StyleModes are the options for the script mode and style mode
+	// (templates under assets/prompts).
 	ScriptModes []selectOption
 	StyleModes  []selectOption
-	// TextModels / ImageModels はモデルの選択肢です（先頭が既定）。
-	// 空なら選択欄そのものを出しません。
+	// TextModels / ImageModels are the model options (the head is the default).
+	// When empty, the picker itself is not shown.
 	TextModels   []selectOption
 	ImageModels  []selectOption
 	ErrorMessage string
 }
 
-// buildComposeFormData は入力値を反映したフォーム表示用データを構築します。
-// 初回表示（ゼロ値の req）とエラー再表示で同じ組み立てを通します。
+// buildComposeFormData builds the form display data reflecting the input.
+// The first display (a zero-value req) and the redisplay on error go through the same assembly.
 func (h *Handler) buildComposeFormData(req composeComicRequest) composeFormData {
 	return composeFormData{
 		SourceURL:   req.SourceURL,
@@ -40,14 +40,14 @@ func (h *Handler) buildComposeFormData(req composeComicRequest) composeFormData 
 	}
 }
 
-// ComposeForm は GET /compose を処理し、漫画生成フォームを表示します。
+// ComposeForm handles GET /compose and shows the comic generation form.
 func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, http.StatusOK, "compose.html", "漫画を生成", h.buildComposeFormData(composeComicRequest{}))
 }
 
-// createComicForm は POST /jobs を処理し、フォーム入力から compose_comic ジョブを
-// 投入します。タスク構築・検証は JSON API（createComicJSON）と共有し、レスポンスだけが
-// HTML（受付画面 or エラー付きフォーム再表示）になります。
+// createComicForm handles POST /jobs and enqueues a compose_comic job from the form input.
+// Building and validating the task is shared with the JSON API (createComicJSON); only the response
+// is HTML (the accepted page, or the form shown again with an error).
 func (h *Handler) createComicForm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -60,9 +60,9 @@ func (h *Handler) createComicForm(w http.ResponseWriter, r *http.Request) {
 		ScriptMode: strings.TrimSpace(r.PostFormValue("script_mode")),
 		StyleMode:  strings.TrimSpace(r.PostFormValue("style_mode")),
 		TextModel:  strings.TrimSpace(r.PostFormValue("text_model")),
-		// このフォームは台本までしか作りません。押した時点では章立てが未実行で、
-		// 何コマになるか誰も知らないためです。金額の分からない支払いを承認させない。
-		// 画像はコマ数が見えている作品詳細から始めます（JSON API は最後まで走れます）。
+		// This form only makes the script. When it is pressed, the outline has not run yet and
+		// nobody knows how many panels there will be. Do not have someone approve a payment of unknown size.
+		// Images start from the work's detail page, where the panel count is visible (the JSON API can run to the end).
 		StopAfterScript: true,
 	}
 	formData := h.buildComposeFormData(req)
@@ -87,7 +87,7 @@ func (h *Handler) createComicForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 状態を先に書く（recordQueuedStatus 参照）。
+	// Write the status first (see recordQueuedStatus).
 	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
 		slog.Error("failed to enqueue task", "job_id", task.JobID, "command", task.Command, "error", err)

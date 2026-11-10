@@ -10,19 +10,19 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// TaskEnqueuer は gcp-kit の Cloud Tasks Enqueuer をラップし、Task.TaskName() から
-// 導出した決定的な名前でタスクを投入する domain.TaskQueue の実装です。
-// 同名タスクの重複投入（Cloud Tasks の at-least-once 配信や呼び出し元の再試行によるもの）は
-// ALREADY_EXISTS として成功扱いされ、実際に作られるタスクは1つだけになります。
+// TaskEnqueuer wraps gcp-kit's Cloud Tasks Enqueuer and implements domain.TaskQueue, enqueueing
+// tasks with a deterministic name derived from Task.TaskName().
+// A duplicate enqueue of the same name (from Cloud Tasks' at-least-once delivery or a caller's retry)
+// is treated as success via ALREADY_EXISTS, so only one task is actually created.
 type TaskEnqueuer struct {
 	enqueuer *tasks.Enqueuer[domain.Task]
 }
 
 var _ domain.TaskQueue = (*TaskEnqueuer)(nil)
 
-// NewTaskEnqueuer は Cloud Tasks エンキューアを初期化します。
-// 生成されたインスタンスは内部で gRPC コネクションを保持するため、シングルトンとして
-// 再利用し、アプリケーション終了時に Close してください。
+// NewTaskEnqueuer initialises the Cloud Tasks enqueuer.
+// The instance holds a gRPC connection internally, so reuse it as a singleton
+// and Close it when the application exits.
 func NewTaskEnqueuer(ctx context.Context, cfg *config.Config) (*TaskEnqueuer, error) {
 
 	taskCfg := tasks.Config{
@@ -31,16 +31,16 @@ func NewTaskEnqueuer(ctx context.Context, cfg *config.Config) (*TaskEnqueuer, er
 		QueueID:    cfg.Tasks.QueueID,
 		WorkerURL:  cfg.Tasks.WorkerURL,
 		WorkerPath: domain.WorkerTaskPath,
-		// タスクに指定する caller SA です。トークンを生成して付与するのは Cloud Tasks で、
-		// このプロセスが署名するわけではありません。受信側が受け付ける許可リスト
-		// （Tasks.AllowedServiceAccounts）とは別物なので取り違えないこと。
+		// The caller SA put on the task. Cloud Tasks mints and attaches the token; this
+		// process signs nothing. It is not the allowlist the receiving side accepts
+		// (Tasks.AllowedServiceAccounts); do not confuse the two.
 		ServiceAccountEmail: cfg.TaskCallerServiceAccount(),
 		Audience:            cfg.Tasks.TaskAudienceURL,
-		// ワーカーの実行時間の実効上限です。未指定だと Cloud Tasks の既定 10 分が効き、
-		// worker 側の Cloud Run timeout をいくら長くしてもそこで打ち切られます。
-		// compose_comic は既定値で下限 14 分かかるため、既定のままでは足りません。
-		// PIPELINE_TIMEOUT をこれより短く（本番では 25m）設定して、アプリが自分で先に
-		// 諦められるようにしています。関係は README「web / worker の分離」を参照。
+		// The effective cap on the worker's run time. Unset, Cloud Tasks' default of 10 minutes applies,
+		// and the request is cut there however long the worker's Cloud Run timeout is.
+		// compose_comic takes at least 14 minutes with the defaults, so the default is not enough.
+		// PIPELINE_TIMEOUT is set shorter than this (25m in production) so that the app can give up
+		// on its own first. For how the three relate, see "1. Configuration" in the README.
 		DispatchDeadline: cfg.Tasks.DispatchDeadline,
 	}
 	enqueuer, err := tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
@@ -50,12 +50,12 @@ func NewTaskEnqueuer(ctx context.Context, cfg *config.Config) (*TaskEnqueuer, er
 	return &TaskEnqueuer{enqueuer: enqueuer}, nil
 }
 
-// Enqueue は、task.TaskName() から導出した決定的な名前でタスクを Cloud Tasks に投入します。
+// Enqueue enqueues the task onto Cloud Tasks under a deterministic name derived from task.TaskName().
 func (e *TaskEnqueuer) Enqueue(ctx context.Context, task domain.Task) error {
 	return e.enqueuer.EnqueueWithName(ctx, task.TaskName(), task)
 }
 
-// Close はエンキューアが保持するリソース（gRPC コネクション）を解放します。
+// Close releases the resources the enqueuer holds (the gRPC connection).
 func (e *TaskEnqueuer) Close() error {
 	return e.enqueuer.Close()
 }

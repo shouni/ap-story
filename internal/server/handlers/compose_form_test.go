@@ -77,15 +77,15 @@ func TestEnqueueComicFormRejectsMissingSource(t *testing.T) {
 	}
 }
 
-// このフォームは台本までしか作りません。押した時点では章立てが未実行で、
-// 何コマになるか誰も知らないためです。画像は作品詳細から始めます。
+// This form only makes the script. When it is pressed, the outline has not run yet and
+// nobody knows how many panels there will be. Images start from the work's detail page.
 func TestEnqueueComicFormAlwaysStopsAfterScript(t *testing.T) {
 	t.Parallel()
 
 	q := &fakeTaskQueue{}
 	h := newTestHandler(t, q)
 
-	// 画像まで走らせようとする細工（フォームには無い項目）を送っても効かないこと。
+	// A crafted attempt to run through to the images (a field not in the form) must have no effect.
 	rec := postComposeForm(t, h, url.Values{
 		"source_text":       {"元文章"},
 		"stop_after_script": {""},
@@ -95,7 +95,7 @@ func TestEnqueueComicFormAlwaysStopsAfterScript(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
 	}
 	if !q.lastTask.StopAfterScript {
-		t.Error("フォームからの投入なのに画像生成まで走る指定になっている")
+		t.Error("a form submission is set to run through to image generation")
 	}
 }
 
@@ -109,12 +109,12 @@ func TestComposeFormHasNoWholeRunControl(t *testing.T) {
 	h.ComposeForm(rec, req)
 
 	if strings.Contains(rec.Body.String(), `name="stop_after_script"`) {
-		t.Error("台本までか画像までかを選ばせる操作が残っている（このフォームは台本専用）")
+		t.Error("a control choosing between script-only and through-images remains (this form is script-only)")
 	}
 }
 
-// フォームには台本モード・スタイルモード・テキストモデル・画像モデルの選択欄が出ること。
-// 選択肢が消えると、既定でしか生成できないことに気付けないまま運用が続きます。
+// The form shows pickers for the script mode, style mode, text model and image model.
+// If the options disappeared, operation would carry on without anyone noticing that only the defaults can be generated.
 func TestComposeFormRendersChoiceSelects(t *testing.T) {
 	t.Parallel()
 
@@ -136,14 +136,14 @@ func TestComposeFormRendersChoiceSelects(t *testing.T) {
 			t.Errorf("compose form is missing %q", want)
 		}
 	}
-	// 画像モデルはここでは選ばせない。台本の時点ではコマ数も絵柄も分からないので、
-	// 選ぶのは作品詳細（画像生成を始める画面）。
+	// The image model is not chosen here. At the script stage neither the panel count nor the look is known,
+	// so it is chosen on the work's detail page (the page that starts image generation).
 	if strings.Contains(body, `name="image_model"`) {
-		t.Error("台本生成のフォームに画像モデルの選択が残っている")
+		t.Error("an image model picker remains on the script-generation form")
 	}
 }
 
-// 送信した選択はフォーム入力からタスクへ運ばれること。
+// The submitted choices are carried from the form input to the task.
 func TestEnqueueComicFormCarriesChoices(t *testing.T) {
 	t.Parallel()
 
@@ -169,8 +169,8 @@ func TestEnqueueComicFormCarriesChoices(t *testing.T) {
 	}
 }
 
-// モデル欄に「既定を使う」空選択は置きません。ブラウザからは常に具体名が送られ、
-// どのモデルで作られた作品かが state の記録から辿れるようにするためです。
+// The model pickers have no empty "use the default" option. A browser always sends a concrete name,
+// so that the state's record shows which model made the work.
 func TestComposeFormAlwaysSubmitsAModel(t *testing.T) {
 	t.Parallel()
 
@@ -182,14 +182,14 @@ func TestComposeFormAlwaysSubmitsAModel(t *testing.T) {
 
 	body := rec.Body.String()
 	if strings.Contains(body, `<option value=""`) {
-		t.Errorf("空の選択肢が残っています: %s", body)
+		t.Errorf("an empty option remains: %s", body)
 	}
-	// 未選択のときは先頭（＝既定モデル）が選ばれた状態で表示される。
+	// When nothing is chosen, the head (= the default model) is shown selected.
 	for _, want := range []string{
 		`<option value="gemini-model" selected>既定: gemini-model</option>`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("既定モデルが選択済みで表示されていません: want %q", want)
+			t.Errorf("the default model is not shown selected: want %q", want)
 		}
 	}
 }

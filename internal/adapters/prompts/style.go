@@ -8,37 +8,37 @@ import (
 	"github.com/shouni/ap-story/assets"
 )
 
-// Style は画風プリセット1件です。assets/prompts/styles.json が持ちます。
+// Style is one art-style preset, held in assets/prompts/styles.json.
 //
-// 台本プロンプトのようなテンプレートではなく JSON なのは、1件が
-// 「画風指定（Suffix）」と「その画風で避けたいもの（Negative）」の対で決まるためです。
-// 対等な2つの本文をテンプレートの本文とヘッダーに分けて置くと、片方だけ直す事故が起きます。
+// It is JSON rather than a template like the script prompts because each entry is a pair of
+// "the art-style instruction (Suffix)" and "what to avoid in that style (Negative)".
+// Putting two equal bodies into a template's body and header invites fixing only one of them.
 type Style struct {
-	// Name はスタイルモード名（フォームの選択値、state に記録される値）です。
+	// Name is the style mode name (the form's selected value, the value recorded in the state).
 	Name string `json:"name"`
-	// Direction / UseWhen / Avoids / Category は選ぶ側への説明です。
-	// キー名は姉妹プロジェクトの同種のモード定義に合わせています。
+	// Direction / UseWhen / Avoids / Category describe it to the person choosing.
+	// The key names match the sister projects' mode definitions of the same kind.
 	Direction string `json:"direction"`
 	UseWhen   string `json:"use_when"`
 	Avoids    string `json:"avoids"`
 	Category  string `json:"category"`
-	// Suffix は画像生成プロンプトへ足す画風指定です。
+	// Suffix is the art-style instruction added to image-generation prompts.
 	Suffix string `json:"style"`
-	// DesignSuffix はデザインシート用の画風指定です。Suffix とは別に持ちます。
+	// DesignSuffix is the art-style instruction for design sheets, kept separate from Suffix.
 	//
-	// シートは他の生成物の同一性アンカーなので、演出（cinematic lighting、rim light、
-	// フィルム粒状感など）を含む Suffix をそのまま焼くと、その照明が参照経由で
-	// 下流の全生成に伝染します。同じ絵柄で、演出だけを落とした文言を書いてください。
+	// A sheet is the identity anchor for other outputs, so baking in a Suffix with staging (cinematic lighting,
+	// rim light, film grain and so on) spreads that lighting through the reference to every downstream
+	// generation. Write the same look with only the staging removed.
 	DesignSuffix string `json:"design_style"`
-	// Negative はその画風で避けたいものです。共通のネガティブプロンプト
-	// （プロンプト実装が持つ構図・文字・破綻の抑制）に足して使います。
+	// Negative is what to avoid in that art style. It is added to the shared negative prompt
+	// (the suppression of composition, text and breakage held by the prompt implementations).
 	//
-	// 画風ごとに持つのは、共通側に "monochrome" のような画風の語を書くと、
-	// モノクロを選べるスタイルを足した瞬間に指定同士が真っ向から衝突するためです。
+	// It is per style because writing an art-style word such as "monochrome" on the shared side would make
+	// the instructions clash head-on the moment a style allowing monochrome is added.
 	Negative string `json:"negative"`
 }
 
-// Info は選択 UI 向けの説明（台本モードと共通の形）へ変換します。
+// Info converts to the description for the selection UI (the same shape as the script modes).
 func (s Style) Info() ModeInfo {
 	return ModeInfo{
 		Name:      s.Name,
@@ -49,49 +49,49 @@ func (s Style) Info() ModeInfo {
 	}
 }
 
-// Styles は画風プリセットの一覧です。順序は JSON の記載順を保ちます
-// （選択肢の並びを作者が決められるようにするため）。
+// Styles is the list of art-style presets. It keeps the order written in the JSON
+// (so the author can decide the order of the options).
 type Styles struct {
 	list  []Style
 	byKey map[string]Style
 }
 
-// NewStyles は埋め込みの styles.json を読み込んで Styles を構築します。
-// 既定モードの欠落・名前の重複・必須項目の空はここで弾きます（起動時に落とすため）。
+// NewStyles loads the embedded styles.json and builds Styles.
+// A missing default mode, duplicate names and empty required fields are rejected here (to fail at startup).
 func NewStyles() (*Styles, error) {
 	data, err := assets.Prompts.ReadFile(assets.StylesJSONPath)
 	if err != nil {
-		return nil, fmt.Errorf("画風プリセットの読み込みに失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to load the art-style presets: %w", err)
 	}
 
 	var list []Style
 	if err := json.Unmarshal(data, &list); err != nil {
-		return nil, fmt.Errorf("画風プリセットの解析に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to parse the art-style presets: %w", err)
 	}
 
 	byKey := make(map[string]Style, len(list))
 	for _, style := range list {
 		switch {
 		case strings.TrimSpace(style.Name) == "":
-			return nil, fmt.Errorf("画風プリセットに name のない項目があります")
+			return nil, fmt.Errorf("an art-style preset has an entry with no name")
 		case strings.TrimSpace(style.Suffix) == "":
-			return nil, fmt.Errorf("画風プリセット %q に style がありません", style.Name)
+			return nil, fmt.Errorf("art-style preset %q has no style", style.Name)
 		case strings.TrimSpace(style.DesignSuffix) == "":
-			return nil, fmt.Errorf("画風プリセット %q に design_style がありません", style.Name)
+			return nil, fmt.Errorf("art-style preset %q has no design_style", style.Name)
 		}
 		if _, dup := byKey[style.Name]; dup {
-			return nil, fmt.Errorf("画風プリセット %q が重複しています", style.Name)
+			return nil, fmt.Errorf("art-style preset %q is duplicated", style.Name)
 		}
 		byKey[style.Name] = style
 	}
 	if _, ok := byKey[ModeDefault]; !ok {
-		return nil, fmt.Errorf("画風プリセットに既定モード %q がありません", ModeDefault)
+		return nil, fmt.Errorf("the art-style presets have no default mode %q", ModeDefault)
 	}
 
 	return &Styles{list: list, byKey: byKey}, nil
 }
 
-// Modes は選択できるスタイルモード名を記載順で返します。フォームの検証に使います。
+// Modes returns the selectable style mode names in the order written. It is used for form validation.
 func (s *Styles) Modes() []string {
 	names := make([]string, 0, len(s.list))
 	for _, style := range s.list {
@@ -100,7 +100,7 @@ func (s *Styles) Modes() []string {
 	return names
 }
 
-// ModeInfos は選択できるスタイルモードの説明を記載順で返します。フォームの選択肢に使います。
+// ModeInfos returns the descriptions of the selectable style modes in the order written. They are used for the form's options.
 func (s *Styles) ModeInfos() []ModeInfo {
 	infos := make([]ModeInfo, 0, len(s.list))
 	for _, style := range s.list {
@@ -109,15 +109,15 @@ func (s *Styles) ModeInfos() []ModeInfo {
 	return infos
 }
 
-// resolveStyle は、キットから渡された画風モードを画風指定とネガティブプロンプトへ解決します。
-// パネル・ページ・デザインシートで同じ判断をするため、1か所に置いています。
-// suffixOf でプリセットのどちらの画風指定を使うかを切り替えます。
+// resolveStyle resolves the art-style mode passed from the kit into the art-style instruction and the negative prompt.
+// Panels, pages and design sheets make the same decision, so it lives in one place.
+// suffixOf switches which of the preset's art-style instructions is used.
 //
-// styles は必須です。画風の文言はプリセットにしか無いので、未設定なら画風指定なしで
-// 生成してしまいます。黙って画風を落とすより、プロンプト構築を失敗させます。
+// styles is required. The art-style wording exists only in the presets, so without it generation would
+// run with no art style. Rather than silently dropping the art style, prompt construction fails.
 func resolveStyle(styles *Styles, mode, baseNegative string, suffixOf func(Style) string) (suffix, negative string, err error) {
 	if styles == nil {
-		return "", "", fmt.Errorf("画風プリセットが設定されていません")
+		return "", "", fmt.Errorf("no art-style presets are configured")
 	}
 	style, err := styles.Get(mode)
 	if err != nil {
@@ -129,20 +129,20 @@ func resolveStyle(styles *Styles, mode, baseNegative string, suffixOf func(Style
 	return suffixOf(style), baseNegative + ", " + style.Negative, nil
 }
 
-// imageSuffix / designSuffix は resolveStyle に渡す画風指定の選び方です。
+// imageSuffix / designSuffix choose which art-style instruction is passed to resolveStyle.
 func imageSuffix(s Style) string  { return s.Suffix }
 func designSuffix(s Style) string { return s.DesignSuffix }
 
-// Get はスタイルモード名に対応するプリセットを返します。
-// 空文字は既定モードを指します。未知のモードは台本モードと同じくエラーです
-// （黙って既定へ落とすと、指定したつもりの画風で生成されていないことに気付けません）。
+// Get returns the preset for a style mode name.
+// The empty string means the default mode. An unknown mode is an error, as for script modes
+// (silently falling back to the default would hide that generation did not use the intended style).
 func (s *Styles) Get(mode string) (Style, error) {
 	if mode == "" {
 		mode = ModeDefault
 	}
 	style, ok := s.byKey[mode]
 	if !ok {
-		return Style{}, fmt.Errorf("未知のスタイルモードです: %s", mode)
+		return Style{}, fmt.Errorf("unknown style mode: %s", mode)
 	}
 	return style, nil
 }

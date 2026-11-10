@@ -38,7 +38,7 @@ func scriptTestState() *kitcomic.MangaState {
 	}
 }
 
-// scriptRequest は chi の URL パラメータを載せたリクエストを組み立てます。
+// scriptRequest builds a request carrying chi's URL parameters.
 func scriptRequest(t *testing.T, method, body string) *http.Request {
 	t.Helper()
 	req := httptest.NewRequest(method, "/jobs/"+scriptJobID+"/script", strings.NewReader(body))
@@ -47,7 +47,7 @@ func scriptRequest(t *testing.T, method, body string) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
 }
 
-// runningJobStatus は「生成ジョブが処理中」の状態です。
+// runningJobStatus is the state "a generation job is running".
 func runningJobStatus() domain.JobStatus {
 	status := domain.NewQueuedJobStatus(domain.Task{
 		JobID:   scriptJobID,
@@ -75,14 +75,14 @@ func TestGetComicScriptReturnsOnlyTheEditablePart(t *testing.T) {
 	}
 	var draft domain.ScriptDraft
 	if err := json.Unmarshal(rec.Body.Bytes(), &draft); err != nil {
-		t.Fatalf("レスポンスが台本として読めません: %v", err)
+		t.Fatalf("the response cannot be read as a script: %v", err)
 	}
 	if len(draft.Panels) != 2 || draft.Panels[0].Dialogues[0].Text != "元のセリフなのだ" {
-		t.Errorf("台本が取れていません: %+v", draft)
+		t.Errorf("the script was not retrieved: %+v", draft)
 	}
-	// 生成記録は編集の入力ではないので、台本には出さない
+	// Generation records are not editing input, so they do not appear in the script
 	if strings.Contains(rec.Body.String(), "used_seed") {
-		t.Errorf("生成記録が台本に混ざっています: %s", rec.Body.String())
+		t.Errorf("generation records are mixed into the script: %s", rec.Body.String())
 	}
 }
 
@@ -102,22 +102,22 @@ func TestUpdateComicScriptSavesTheEditedLines(t *testing.T) {
 		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
 	}
 	if len(repo.saved) != 1 {
-		t.Fatalf("保存回数 = %d, want 1", len(repo.saved))
+		t.Fatalf("save count = %d, want 1", len(repo.saved))
 	}
 	if got := repo.saved[0].Panels[0].Dialogues[0].Text; got != "直したのだ" {
-		t.Errorf("保存されたセリフ = %q", got)
+		t.Errorf("saved dialogue = %q", got)
 	}
-	// コマ画像との対応そのものなので、台本の保存で消えてはならない
+	// It is the very mapping to the panel images, so saving the script must not erase it
 	if repo.saved[0].Panels[0].Generation == nil {
-		t.Error("生成記録が保存で失われています")
+		t.Error("the generation record was lost on save")
 	}
 }
 
 func TestUpdateComicScriptReportsThePagesThatMustBeRecomposed(t *testing.T) {
 	t.Parallel()
 
-	// セリフはページ合成のときに画像モデルが描き込むので、保存しただけでは絵は古いまま。
-	// どのページを合成し直せばよいかを返さないと、保存で終わったと勘違いされる。
+	// The image model draws the dialogue in at page composition, so saving alone leaves the art as it was.
+	// Unless it returns which pages to recompose, saving would be mistaken for the end of the job.
 	h, _ := newScriptHandler(t)
 	body := `{"panels":[
 		{"panel_id":"ch01-p01","dialogues":[{"speaker_id":"zundamon","text":"元のセリフなのだ","kind":"speech"}]},
@@ -132,12 +132,12 @@ func TestUpdateComicScriptReportsThePagesThatMustBeRecomposed(t *testing.T) {
 		AffectedPages []int `json:"affected_pages"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("レスポンスが読めません: %v", err)
+		t.Fatalf("cannot read the response: %v", err)
 	}
 	if got.ChangedLines != 1 {
 		t.Errorf("changed_lines = %d, want 1", got.ChangedLines)
 	}
-	// 直したのは2ページ目のコマだけ
+	// Only the panel on page 2 was changed
 	if len(got.AffectedPages) != 1 || got.AffectedPages[0] != 2 {
 		t.Errorf("affected_pages = %v, want [2]", got.AffectedPages)
 	}
@@ -146,8 +146,8 @@ func TestUpdateComicScriptReportsThePagesThatMustBeRecomposed(t *testing.T) {
 func TestUpdateComicScriptDoesNotWriteWhenNothingChanged(t *testing.T) {
 	t.Parallel()
 
-	// 何も変えない要求のために state を上書きすると、実行中ジョブとの競合の窓を
-	// わざわざ開くことになる。
+	// Overwriting the state for a request that changes nothing would open the window for
+	// a race with a running job for no reason.
 	h, repo := newScriptHandler(t)
 	body := `{"panels":[
 		{"panel_id":"ch01-p01","dialogues":[{"speaker_id":"zundamon","text":"元のセリフなのだ","kind":"speech"}]},
@@ -161,7 +161,7 @@ func TestUpdateComicScriptDoesNotWriteWhenNothingChanged(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	if len(repo.saved) != 0 {
-		t.Errorf("変更が無いのに保存しています（%d 回）", len(repo.saved))
+		t.Errorf("saved although nothing changed (%d times)", len(repo.saved))
 	}
 }
 
@@ -169,7 +169,7 @@ func TestUpdateComicScriptRejectsChangesToThePanelLineup(t *testing.T) {
 	t.Parallel()
 
 	h, repo := newScriptHandler(t)
-	// コマを1つ落とした要求
+	// A request that drops one panel
 	body := `{"panels":[
 		{"panel_id":"ch01-p01","dialogues":[{"speaker_id":"zundamon","text":"直したのだ","kind":"speech"}]}
 	]}`
@@ -181,19 +181,19 @@ func TestUpdateComicScriptRejectsChangesToThePanelLineup(t *testing.T) {
 		t.Fatalf("status = %d, want 400 (body: %s)", rec.Code, rec.Body.String())
 	}
 	if len(repo.saved) != 0 {
-		t.Error("拒否したのに保存しています")
+		t.Error("saved although it was rejected")
 	}
 }
 
 func TestUpdateComicScriptRefusesWhileAJobIsRunning(t *testing.T) {
 	t.Parallel()
 
-	// state は「常に上書き・常に最新」なので、生成ジョブと重なると編集が痕跡なく消える。
+	// The state is "always overwrite, always latest", so overlapping with a generation job erases the edit without a trace.
 	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{scriptJobID: scriptTestState()}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
 	status := &fakeJobStatusStore{}
 	if err := status.Save(t.Context(), scriptJobID, runningJobStatus()); err != nil {
-		t.Fatalf("状態の記録に失敗: %v", err)
+		t.Fatalf("failed to record the status: %v", err)
 	}
 	h.jobStatus = status
 
@@ -208,18 +208,18 @@ func TestUpdateComicScriptRefusesWhileAJobIsRunning(t *testing.T) {
 		t.Fatalf("status = %d, want 409 (body: %s)", rec.Code, rec.Body.String())
 	}
 	if len(repo.saved) != 0 {
-		t.Error("実行中なのに保存しています")
+		t.Error("saved although a job is running")
 	}
 }
 
 func TestUpdateComicScriptAllowsEditingWhenNoStatusWasEverRecorded(t *testing.T) {
 	t.Parallel()
 
-	// 状態を追えないことを理由に編集まで止めると、状態記録より前に作られた作品が
-	// 永久に直せなくなる。
+	// Stopping edits because the status cannot be followed would leave works made before status recording
+	// unfixable forever.
 	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{scriptJobID: scriptTestState()}}
 	h := newTestHandlerWithRepo(t, &fakeTaskQueue{}, repo)
-	h.jobStatus = &fakeJobStatusStore{} // 何も記録されていない = Get はエラー
+	h.jobStatus = &fakeJobStatusStore{} // nothing recorded = Get returns an error
 
 	body := `{"panels":[
 		{"panel_id":"ch01-p01","dialogues":[{"speaker_id":"zundamon","text":"直したのだ","kind":"speech"}]},

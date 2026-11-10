@@ -17,7 +17,7 @@ func TestDeleteCharacterDesignRemovesImageAndDesignJobState(t *testing.T) {
 
 	store := newMemStore()
 	imagePath := putCharacterDesignImage(store, "zundamon", "c20260718-000000-eeee5555")
-	// 現行形式: 単体生成ジョブの state は design-jobs/ 配下。ジョブごと削除される。
+	// Current format: a standalone job's state is under design-jobs/ and is deleted with the job.
 	statePath := "gs://test-bucket/design-jobs/c20260718-000000-eeee5555/comic_state.json"
 	store.put(statePath,
 		`{"version":1,"id":"c20260718-000000-eeee5555","design_sheets":[{"character_id":"zundamon","image_url":"`+imagePath+`"}]}`)
@@ -40,7 +40,7 @@ func TestDeleteCharacterDesignRemovesImageAndLegacyDesignOnlyState(t *testing.T)
 
 	store := newMemStore()
 	imagePath := putCharacterDesignImage(store, "zundamon", "c20260718-000000-aaaa1111")
-	// 旧形式: 単体生成ジョブの state が comics/ に残っている（章立てなしで判別して削除）。
+	// Legacy format: a standalone job's state remains in comics/ (identified by having no chapters and deleted).
 	putState(store, "c20260718-000000-aaaa1111",
 		`{"version":1,"id":"c20260718-000000-aaaa1111","design_sheets":[{"character_id":"zundamon","image_url":"`+imagePath+`"}]}`)
 
@@ -62,7 +62,7 @@ func TestDeleteCharacterDesignKeepsComicStateButPrunesReference(t *testing.T) {
 
 	store := newMemStore()
 	imagePath := putCharacterDesignImage(store, "zundamon", "c20260718-000000-bbbb2222")
-	// 章立てあり = 作品ジョブ。state は残し、削除した画像への参照だけを取り除く。
+	// With chapters = a comic job. The state stays; only the reference to the deleted image is removed.
 	putState(store, "c20260718-000000-bbbb2222",
 		`{"version":1,"id":"c20260718-000000-bbbb2222","chapters":[{"id":"ch01"}],`+
 			`"design_sheets":[{"character_id":"zundamon","image_url":"`+imagePath+`"},`+

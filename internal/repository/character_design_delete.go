@@ -14,12 +14,12 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// DeleteCharacterDesign は、指定キャラクターの生成履歴1件を GCS から削除します。
-// 削除対象は character/{characterID}/{jobID}.ext の画像1枚で、拡張子は列挙から特定します。
-// ジョブがデザインシート単体生成だった場合は、対応する state（design-jobs/{jobID}/、
-// または旧形式で comics/{jobID}/ に残った章立てなしの state）も孤児として残さないよう
-// 併せて削除します。作品ジョブ（章立てあり）の state はそのまま残し、state 内の
-// 該当デザインシート記録だけを取り除きます。
+// DeleteCharacterDesign deletes one generation record of the given character from GCS.
+// The target is the one image character/{characterID}/{jobID}.ext; its extension is found by listing.
+// When the job was a standalone design-sheet generation, the matching state (design-jobs/{jobID}/,
+// or a chapterless state left in comics/{jobID}/ in the legacy format) is deleted too so that it is
+// not left orphaned. The state of a comic job (with chapters) stays, and only the matching
+// design-sheet record inside the state is removed.
 func (r *ComicRepository) DeleteCharacterDesign(ctx context.Context, characterID string, jobID string) error {
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return err
@@ -30,14 +30,14 @@ func (r *ComicRepository) DeleteCharacterDesign(ctx context.Context, characterID
 		return err
 	}
 	if err := r.store.Delete(ctx, imagePath); err != nil {
-		return fmt.Errorf("デザインシート画像 %q の削除に失敗しました: %w", imagePath, err)
+		return fmt.Errorf("failed to delete design-sheet image %q: %w", imagePath, err)
 	}
 
 	return r.cleanupDesignJobState(ctx, jobID, imagePath)
 }
 
-// findCharacterDesignImage は character/{characterID}/ 配下から jobID に対応する
-// 画像のフルパスを探します。見つからない場合はエラーを返します。
+// findCharacterDesignImage finds the full path of the image for jobID under
+// character/{characterID}/. It returns an error when there is none.
 func (r *ComicRepository) findCharacterDesignImage(ctx context.Context, characterID string, jobID string) (string, error) {
 	items, err := r.ListCharacterDesignHistory(ctx, characterID)
 	if err != nil {
@@ -48,14 +48,14 @@ func (r *ComicRepository) findCharacterDesignImage(ctx context.Context, characte
 			return item.ImageURL, nil
 		}
 	}
-	return "", fmt.Errorf("キャラクター %q にジョブ %q のデザインシートが見つかりません", characterID, jobID)
+	return "", fmt.Errorf("no design sheet for job %q found for character %q", jobID, characterID)
 }
 
-// cleanupDesignJobState は画像削除後の state の後始末を行います。
-// state が存在しない場合は何もしません。デザインシート単体生成ジョブの state は
-// ジョブごと削除し、作品ジョブの state からは削除済み画像への参照だけを取り除きます。
+// cleanupDesignJobState cleans up the state after the image is deleted.
+// It does nothing when there is no state. The state of a standalone design-sheet job is
+// deleted with the job, and from a comic job's state only the references to the deleted image are removed.
 func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID string, deletedImagePath string) error {
-	// 単体生成ジョブの state（design-jobs/{jobID}/）があればディレクトリごと削除する。
+	// If a standalone job's state (design-jobs/{jobID}/) exists, delete the whole directory.
 	designJobDir, err := domain.DesignJobOutputDir(r.bucket, jobID)
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID strin
 	}
 	if exists, err := r.store.Exists(ctx, designStatePath); err == nil && exists {
 		if _, err := remoteio.DeletePrefix(ctx, r.store, designJobDir); err != nil {
-			return fmt.Errorf("デザインシート単体生成ジョブ %q の state 削除に失敗しました: %w", jobID, err)
+			return fmt.Errorf("failed to delete the state of standalone design-sheet job %q: %w", jobID, err)
 		}
 		return nil
 	}
@@ -74,15 +74,15 @@ func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID strin
 	state, err := r.GetState(ctx, jobID)
 	if err != nil {
 		if errors.Is(err, domain.ErrStateNotFound) {
-			// state を持たない（または既に削除済みの）画像は画像削除だけで完了。
+			// An image with no state (or one already deleted) is done once the image is deleted.
 			return nil
 		}
-		// 読めなかっただけの場合は成功にしません。state には削除済み画像への参照が
-		// 残っており、黙って完了にすると壊れた参照が残ったことに誰も気付けません。
-		return fmt.Errorf("ジョブ %q の state を読めないため参照の後始末ができません: %w", jobID, err)
+		// A mere failure to read is not a success. The state still holds a reference to the deleted
+		// image, and silently reporting completion would leave a broken reference that nobody notices.
+		return fmt.Errorf("cannot clean up references because the state of job %q is unreadable: %w", jobID, err)
 	}
 
-	// 旧形式: 単体生成ジョブの state が comics/ に保存されていた（章立てなしで判別）。
+	// Legacy format: a standalone job's state was saved in comics/ (identified by having no chapters).
 	if len(state.Chapters) == 0 {
 		return r.DeleteHistory(ctx, jobID)
 	}
@@ -103,7 +103,7 @@ func (r *ComicRepository) cleanupDesignJobState(ctx context.Context, jobID strin
 		return err
 	}
 	if _, err := store.Save(ctx, r.store, state, outputDir); err != nil {
-		return fmt.Errorf("state からのデザインシート参照の削除に失敗しました: %w", err)
+		return fmt.Errorf("failed to remove the design-sheet reference from the state: %w", err)
 	}
 	return nil
 }

@@ -9,16 +9,16 @@ import (
 	"github.com/shouni/go-comic-kit/ports"
 )
 
-// unreachableReader は、読み取りが一時的に失敗している状態を表します。
+// unreachableReader represents reads that are failing temporarily.
 type unreachableReader struct{}
 
 func (unreachableReader) Open(context.Context, string) (io.ReadCloser, error) {
 	return nil, errors.New("connection reset")
 }
 
-// TestLoadStateStepsStopOnReadFailure は、既存 state の読み取りに失敗したときに、
-// 「まだ無い」として先へ進まないことを確認します。進んでしまうと OutlineStep が
-// 新品の state を作り、SaveStateStep が保存済みの台本と生成済み画像を上書きします。
+// TestLoadStateStepsStopOnReadFailure checks that a failure to read an existing state does not
+// move on as "not there yet". Moving on would have OutlineStep create a fresh state and
+// SaveStateStep overwrite the saved script and generated images.
 func TestLoadStateStepsStopOnReadFailure(t *testing.T) {
 	t.Parallel()
 
@@ -38,13 +38,13 @@ func TestLoadStateStepsStopOnReadFailure(t *testing.T) {
 				t.Fatalf("Execute() error = %v, want errors.Is(..., ports.ErrGeneration)", err)
 			}
 			if pc.Manga != nil {
-				t.Error("読めなかったのに Manga が設定されています")
+				t.Error("Manga was set even though it could not be read")
 			}
 		})
 	}
 }
 
-// TestLoadStateStepsTreatMissingAsNew は、state が無いことは正常系のままであることを確認します。
+// TestLoadStateStepsTreatMissingAsNew checks that a missing state is still the normal path.
 func TestLoadStateStepsTreatMissingAsNew(t *testing.T) {
 	t.Parallel()
 
@@ -63,7 +63,7 @@ func TestLoadStateStepsTreatMissingAsNew(t *testing.T) {
 				t.Fatalf("Execute() error = %v, want nil for a missing state", err)
 			}
 			if pc.Manga != nil {
-				t.Error("無いはずの state が設定されています")
+				t.Error("a state that should not exist was set")
 			}
 		})
 	}

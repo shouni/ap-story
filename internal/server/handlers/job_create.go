@@ -14,35 +14,35 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// composeComicRequest は POST /jobs（command=compose_comic）の JSON 本文です。
-// フォームも同じ入力項目を共有します。
+// composeComicRequest is the JSON body of POST /jobs (command=compose_comic).
+// The form shares the same input fields.
 type composeComicRequest struct {
 	SourceURL  string `json:"source_url"`
 	SourceText string `json:"source_text"`
 	ScriptMode string `json:"script_mode"`
 	StyleMode  string `json:"style_mode"`
-	// TextModel / ImageModel は台本生成・画像生成に使うモデルです。
-	// 省略すると既定モデル（GEMINI_MODELS / IMAGE_MODELS の先頭）で埋めます。
+	// TextModel / ImageModel are the models used for script generation and image generation.
+	// When omitted, they are filled with the default models (the heads of GEMINI_MODELS / IMAGE_MODELS).
 	TextModel  string `json:"text_model"`
 	ImageModel string `json:"image_model"`
-	// StopAfterScript を指定すると台本までで止まります。内容を確認してから
-	// 画像生成へ進むための指定で、続きは render_comic で行います。
+	// With StopAfterScript it stops after the script. It is for checking the content before
+	// moving on to image generation; the rest is done with render_comic.
 	StopAfterScript bool `json:"stop_after_script"`
 }
 
-// enqueueResponse はジョブ投入系エンドポイントの共通レスポンスです。
+// enqueueResponse is the shared response of the enqueue endpoints.
 type enqueueResponse struct {
 	Status string `json:"status"`
 	JobID  string `json:"job_id"`
 }
 
-// newComposeTask は compose_comic の入力からジョブ ID を採番して Task を構築します。
-// JSON API と Web フォームで共有するコアロジックで、レスポンス形式だけが呼び出し側で異なります。
+// newComposeTask mints a job ID from the compose_comic input and builds the Task.
+// It is the core logic shared by the JSON API and the web form; only the response format differs per caller.
 //
-// モデル未指定は既定モデル（一覧の先頭）で埋めます。worker 側の設定へ落とさないのは、
-// アスペクト比と同じ理由です（DefaultDesignSheetAspectRatio 参照）。埋めておけば
-// どのモデルで作られた作品かが state に必ず残り、章の作り直しや後からの画像生成も
-// 同じモデルを引き継げます。空のまま通すと、その作品だけ出自が辿れなくなります。
+// An unspecified model is filled with the default model (the head of the list). It is not left to the
+// worker's configuration for the same reason as the aspect ratio (see DefaultDesignSheetAspectRatio). Filled in,
+// the state always records which model made the work, and a chapter remake or later image generation can
+// inherit the same model. Passed through empty, that work alone would lose its provenance.
 func (h *Handler) newComposeTask(req composeComicRequest) (domain.Task, error) {
 	jobID, err := domain.NewJobID()
 	if err != nil {
@@ -64,16 +64,16 @@ func (h *Handler) newComposeTask(req composeComicRequest) (domain.Task, error) {
 	return task, nil
 }
 
-// validateChoices は、Task に載ったモデル・プロンプトモードの選択が許可リストに
-// 収まるかを確かめます。ブラウザは <select> の選択肢に縛られますが、JSON API は
-// 任意の文字列を送れるため、投入前にここで弾きます。
+// validateChoices checks that the model and prompt-mode choices on the Task fall within the
+// allowlist. A browser is restricted to the <select> options, but the JSON API can send
+// any string, so they are rejected here before enqueue.
 //
-// コマンドごとに使う項目が違うので、空の項目は「指定なし」として素通しします。
-// 投入系すべて（compose / design-sheet / regenerate）がこの1つを通ります。分けると、
-// 今度コマンドを足したときにどれか1経路だけ検証漏れになります（実際そうなっていました）。
+// Each command uses different fields, so an empty field passes through as "not specified".
+// Every enqueue path (compose / design-sheet / regenerate) goes through this one. Splitting it would
+// leave one path unvalidated the next time a command is added (which is exactly what had happened).
 //
-// モードの実体（テンプレートの有無）やモデル名の空は worker 側でも検証されますが、
-// そちらは Cloud Tasks を1往復してから落ちるので、送る前にここで返します。
+// Whether a mode really exists (its template) and empty model names are also validated on the worker, but
+// that fails only after a Cloud Tasks round trip, so the answer is returned here before sending.
 func (h *Handler) validateChoices(task domain.Task) error {
 	for _, choice := range []struct {
 		kind    string
@@ -92,11 +92,11 @@ func (h *Handler) validateChoices(task domain.Task) error {
 	return nil
 }
 
-// JobCreate は、新しいジョブを投入します（POST /jobs）。
+// JobCreate enqueues a new job (POST /jobs).
 //
-// 入口は 1 本で、本文の形と command で分かれます。JSON は機械（MCP サーバー）、フォームは
-// 画面で、どちらも command が compose_comic（既定）なら作品、generate_design_sheet なら
-// デザインシートのジョブになります。読み取りと応答の形だけが違い、採番・検証・投入は同じ経路です。
+// There is one entry point, split by the shape of the body and the command. JSON is for machines (the MCP
+// server) and the form is for the screen; for both, command compose_comic (the default) makes a comic job
+// and generate_design_sheet a design-sheet job. Only reading and the response shape differ; minting, validation and enqueueing share one path.
 func (h *Handler) JobCreate(w http.ResponseWriter, r *http.Request) {
 	if isJSONBody(r) {
 		h.createJobJSON(w, r)
@@ -105,9 +105,9 @@ func (h *Handler) JobCreate(w http.ResponseWriter, r *http.Request) {
 	h.createJobForm(w, r)
 }
 
-// createJobJSON は JSON 本文の command を見て、作品かデザインシートかへ振り分けます。
+// createJobJSON looks at the JSON body's command and dispatches to a comic or a design sheet.
 //
-// 本文は 1 度しか読めないので、command を覗いてから同じバイト列を読み直させます。
+// The body can be read only once, so it peeks at command and then has the same bytes read again.
 func (h *Handler) createJobJSON(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxCreateJobBody))
 	if err != nil {
@@ -133,7 +133,7 @@ func (h *Handler) createJobJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// createJobForm はフォームの command を見て、作品かデザインシートかへ振り分けます。
+// createJobForm looks at the form's command and dispatches to a comic or a design sheet.
 func (h *Handler) createJobForm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -150,16 +150,16 @@ func (h *Handler) createJobForm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// maxCreateJobBody は POST /jobs の JSON 本文の上限です。入力は短い文字列と選択肢だけです。
+// maxCreateJobBody is the limit on the JSON body of POST /jobs. The input is only short strings and choices.
 const maxCreateJobBody = 64 << 10
 
-// isJSONBody は、本文が JSON かどうかを Content-Type で判定します。
+// isJSONBody decides from Content-Type whether the body is JSON.
 func isJSONBody(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json")
 }
 
-// createComicJSON は JSON 本文から compose_comic ジョブを投入します（POST /jobs）。
-// jobID はサーバー側で新規採番し、レスポンスとして返します。
+// createComicJSON enqueues a compose_comic job from a JSON body (POST /jobs).
+// The server mints a new jobID and returns it in the response.
 func (h *Handler) createComicJSON(w http.ResponseWriter, r *http.Request) {
 	var req composeComicRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -186,17 +186,17 @@ func (h *Handler) createComicJSON(w http.ResponseWriter, r *http.Request) {
 	h.enqueueAndRespond(w, r, task)
 }
 
-// enqueueAndRespond は Task をキューに投入し、成功したら 202 Accepted と jobID を返します。
+// enqueueAndRespond enqueues the Task and, on success, returns 202 Accepted with the jobID.
 func (h *Handler) enqueueAndRespond(w http.ResponseWriter, r *http.Request, task domain.Task) {
-	// 状態を先に書く。worker は配信されたタスクより先に状態を読むので、順序を逆にすると
-	// 1つ前の succeeded を読んで投入が黙って捨てられます（recordQueuedStatus 参照）。
+	// Write the status first. The worker reads the status before the delivered task, so in the reverse order
+	// it would read the previous succeeded and the enqueue would be silently dropped (see recordQueuedStatus).
 	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
 		respond.ServerErrorJSON(w, r, http.StatusInternalServerError, err, "failed to enqueue task", "job_id", task.JobID, "command", task.Command)
 		return
 	}
 
-	// Location は進捗のポーリング先です。本文を読まなくても次に叩く URL が分かります。
+	// Location is where to poll for progress. The next URL to call is known without reading the body.
 	w.Header().Set("Location", "/jobs/"+task.JobID)
 	respond.JSON(w, r, http.StatusAccepted, enqueueResponse{Status: "queued", JobID: task.JobID})
 }

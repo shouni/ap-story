@@ -7,7 +7,7 @@ import (
 	"github.com/shouni/ap-story/internal/config"
 )
 
-// buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
+// buildTaskEnqueuer initialises the Cloud Tasks enqueuer.
 func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*adapters.TaskEnqueuer, error) {
 	return adapters.NewTaskEnqueuer(ctx, cfg)
 }

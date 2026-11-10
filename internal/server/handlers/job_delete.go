@@ -12,10 +12,10 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// defaultHistoryPageSize は履歴一覧のデフォルトページサイズです。
+// defaultHistoryPageSize is the default page size of the history list.
 const defaultHistoryPageSize = 20
 
-// JobDelete は DELETE /jobs/{jobID} を処理し、指定ジョブの成果物一式を削除します。
+// JobDelete handles DELETE /jobs/{jobID} and deletes the job's full set of artifacts.
 func (h *Handler) JobDelete(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {

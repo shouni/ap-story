@@ -1,4 +1,4 @@
-// Package domain は、ap-story のフレームワーク非依存なドメインロジックを提供します。
+// Package domain provides ap-story's framework-independent domain logic.
 package domain
 
 import (
@@ -9,51 +9,51 @@ import (
 	"github.com/shouni/go-utils/jobid"
 )
 
-// jobIDPrefix は ap-story が採番するジョブ ID のプレフィックスです。
+// jobIDPrefix is the prefix of job IDs minted by ap-story.
 const jobIDPrefix = "c"
 
-// comicsPrefix は作品ジョブの成果物を格納する GCS 上のルートプレフィックスです。
+// comicsPrefix is the root GCS prefix that holds the artifacts of comic jobs.
 const comicsPrefix = "comics"
 
-// designJobsPrefix はデザインシート単体生成ジョブの state を格納する GCS 上の
-// ルートプレフィックスです。comics/ と分けることで、履歴一覧（comics/ の列挙）が
-// state を読まずに「作品ジョブだけ」を列挙でき、ページング前の全件読み込みを防ぎます。
+// designJobsPrefix is the root GCS prefix that holds the state of standalone design-sheet
+// jobs. Keeping it apart from comics/ lets the history list (a listing of comics/) list
+// "comic jobs only" without reading state, which avoids loading everything before paging.
 const designJobsPrefix = "design-jobs"
 
-// NewJobID は新しいジョブ ID を採番します。
-// 形式は "c-<UTC日付>-<UTC時刻>-<乱数12桁hex>"（例: "c-20260717-113045-1a2b3c4d5e6f"）です。
+// NewJobID mints a new job ID.
+// The format is "c-<UTC date>-<UTC time>-<12 random hex digits>" (e.g. "c-20260717-113045-1a2b3c4d5e6f").
 //
-// 採番規則は検証規則と同じく go-utils/jobid に集約しています。生成と、ID に埋め込まれた
-// 時刻の復元（jobid.CreatedAt / jobid.SortKey）が同じパッケージにあることで、片方だけ
-// 形式が変わって読めなくなる事故を防げます。
+// The minting rule lives in go-utils/jobid, as does the validation rule. Having generation and the
+// recovery of the embedded time (jobid.CreatedAt / jobid.SortKey) in the same package prevents
+// the accident of one side's format changing and becoming unreadable.
 //
-// v1.5.0 以前は "c<UTC日付>-<UTC時刻>-<乱数8桁hex>" 形式で採番していました。
-// 過去に採番された ID は GCS の成果物パスに残り続けますが、jobid.CreatedAt が
-// 両方の形式を読めるため、履歴の日時表示と並び順は混在しても保たれます。
-// ただし辞書順の比較では新旧が分離してしまうため、並べ替えには必ず
-// jobid.SortKey を使ってください（"c-" と "c2" では前者が小さくなります）。
+// Up to v1.5.0 IDs were minted as "c<UTC date>-<UTC time>-<8 random hex digits>".
+// IDs minted then stay in GCS artifact paths, but jobid.CreatedAt reads both
+// formats, so the history's dates and ordering hold even when they are mixed.
+// Lexical comparison separates old from new, though, so always sort with
+// jobid.SortKey ("c-" is smaller than "c2").
 func NewJobID() (string, error) {
 	return jobid.New(jobIDPrefix)
 }
 
-// ValidateJobID は、ジョブ ID がルーティングとストレージパスで安全に使えることを検証します。
-// HTTP 入力と GCS パス生成は必ずこの検証（または SanitizeJobID）を経由してください。
+// ValidateJobID checks that a job ID is safe to use in routing and storage paths.
+// HTTP input and GCS path construction must always go through this check (or SanitizeJobID).
 //
-// 検証規則は go-utils/jobid に集約しています。MCP サーバーを介して姉妹プロジェクトとも
-// ジョブ ID をやり取りするため、「何を正当な ID とみなすか」がサービス間でずれると
-// 片方が発行した ID をもう片方が拒否する事故につながるためです。
+// The validation rule lives in go-utils/jobid. Job IDs are exchanged with the sister projects
+// through the MCP server, so if services disagreed on "what counts as a valid ID",
+// one could reject an ID the other had issued.
 func ValidateJobID(jobID string) error {
 	return jobid.Validate(jobID)
 }
 
-// SanitizeJobID は、パス風の値を安全なジョブ ID に正規化します。
-// パストラバーサル（"../" 等）は末尾要素の抽出で除去され、残った値を検証します。
+// SanitizeJobID normalises a path-like value into a safe job ID.
+// Path traversal ("../" and the like) is removed by taking the last element, and the rest is validated.
 func SanitizeJobID(jobID string) (string, error) {
 	return jobid.Sanitize(jobID)
 }
 
-// JobObjectPrefix は、検証済みジョブ ID の成果物を格納する GCS プレフィックス
-// （バケット名を除く相対パス）を返します。例: "comics/c20260717-113045-1a2b3c4d"
+// JobObjectPrefix returns the GCS prefix (a relative path without the bucket name) that holds
+// the artifacts of a validated job ID. E.g. "comics/c20260717-113045-1a2b3c4d"
 func JobObjectPrefix(jobID string) (string, error) {
 	safeJobID, err := SanitizeJobID(jobID)
 	if err != nil {
@@ -62,9 +62,9 @@ func JobObjectPrefix(jobID string) (string, error) {
 	return path.Join(comicsPrefix, safeJobID), nil
 }
 
-// JobOutputDir は、検証済みジョブ ID の成果物を格納する完全な GCS URI
-// （例: "gs://bucket/comics/c20260717-113045-1a2b3c4d"）を返します。
-// go-comic-kit の各操作（GenerateOptions.OutputDir 等）にそのまま渡せます。
+// JobOutputDir returns the full GCS URI that holds the artifacts of a validated job ID
+// (e.g. "gs://bucket/comics/c20260717-113045-1a2b3c4d").
+// It can be passed as is to go-comic-kit's operations (GenerateOptions.OutputDir and so on).
 func JobOutputDir(bucket, jobID string) (string, error) {
 	prefix, err := JobObjectPrefix(jobID)
 	if err != nil {
@@ -73,10 +73,10 @@ func JobOutputDir(bucket, jobID string) (string, error) {
 	return remoteio.BuildURI(remoteio.SchemeGCS, bucket, prefix), nil
 }
 
-// DesignJobOutputDir は、デザインシート単体生成ジョブの state を格納する完全な GCS URI
-// （例: "gs://bucket/design-jobs/c20260717-113045-1a2b3c4d"）を返します。
-// 生成画像そのものは CharacterAssetDir 配下（character/{タグ}/）に保存されるため、
-// ここに置かれるのは comic_state.json だけです。
+// DesignJobOutputDir returns the full GCS URI that holds the state of a standalone design-sheet
+// job (e.g. "gs://bucket/design-jobs/c20260717-113045-1a2b3c4d").
+// The generated images themselves are saved under CharacterAssetDir (character/{tag}/), so
+// only comic_state.json is placed here.
 func DesignJobOutputDir(bucket, jobID string) (string, error) {
 	safeJobID, err := SanitizeJobID(jobID)
 	if err != nil {
@@ -85,11 +85,11 @@ func DesignJobOutputDir(bucket, jobID string) (string, error) {
 	return fmt.Sprintf("gs://%s/%s", bucket, path.Join(designJobsPrefix, safeJobID)), nil
 }
 
-// CharacterAssetDir は、特定のジョブ（作品）に依存しない共有キャラクター資産
-// （デザインシート等）の保存先となる GCS バケットルート URI（例: "gs://bucket"）を返します。
-// キャラクターは複数の作品から参照されうる共有アセットのため、comics/{jobID}/ の外に置きます。
-// go-comic-kit の DesignSheetRequest.OutputDir に渡すと、
-// "character/{タグ}/{JobID}.ext" として解決されます。
+// CharacterAssetDir returns the GCS bucket root URI (e.g. "gs://bucket") where shared character
+// assets (design sheets and so on) that belong to no particular job (work) are saved.
+// Characters are shared assets that several works can refer to, so they live outside comics/{jobID}/.
+// Passed to go-comic-kit's DesignSheetRequest.OutputDir, it resolves to
+// "character/{tag}/{JobID}.ext".
 func CharacterAssetDir(bucket string) string {
 	return remoteio.BuildURI(remoteio.SchemeGCS, bucket, "")
 }

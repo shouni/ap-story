@@ -15,48 +15,48 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// Dependencies は Runner の実行に必要な依存の束です。New が必須依存の欠落を
-// 生成時に検証するため、実行時まで依存不足が分からない状態を防ぎます。
+// Dependencies is the bundle of dependencies Runner needs. New checks for missing required
+// dependencies at construction, so a missing dependency is not discovered only at run time.
 type Dependencies struct {
 	Ops    *ports.Operations
 	Reader ports.ContentReader
 	Writer remoteio.Writer
-	// Layout は画像の比率と解像度です。キットは設定として持たず呼び出しごとに受け取るため、
-	// 既定の出どころはアプリ側になります。ゼロ値ならキット既定（3:4 / 1K / 2K）です。
+	// Layout is the image aspect ratio and resolution. The kit does not hold them as configuration and
+	// receives them per call, so their default comes from the app. The zero value means the kit's defaults (3:4 / 1K / 2K).
 	Layout ImageLayout
-	// Bucket はジョブ成果物を格納する GCS バケット名です（gs:// は付けない）。
+	// Bucket is the name of the GCS bucket holding job artifacts (without gs://).
 	Bucket string
-	// Planner はコマンドごとの実行計画を決定します。
-	// 未設定の場合はゼロ値の DefaultPlanner を使います（任意）。
+	// Planner decides the execution plan per command.
+	// Unset, the zero-value DefaultPlanner is used (optional).
 	Planner Planner
-	// Notifier はジョブ完了・失敗を通知します（任意）。未設定の場合は何もしません。
+	// Notifier notifies job completion and failure (optional). Unset, it does nothing.
 	Notifier domain.Notifier
-	// Timeout はタスク1件の実行時間の上限です。0 以下は無制限を意味します（任意）。
+	// Timeout caps the run time of one task. 0 or less means unlimited (optional).
 	Timeout time.Duration
-	// JobStatus はジョブ進行状況の記録先です。未設定の場合は状態記録と
-	// 再実行ガードが無効になります（任意）。
+	// JobStatus is where job progress is recorded. Unset, status recording and
+	// the re-run guard are disabled (optional).
 	JobStatus domain.JobStatusStore
 }
 
-// noopNotifier は Notifier 未設定時に使う何もしない実装です。
+// noopNotifier is the do-nothing implementation used when no Notifier is set.
 type noopNotifier struct{}
 
 func (noopNotifier) NotifyComplete(context.Context, domain.Task) error     { return nil }
 func (noopNotifier) NotifyError(context.Context, domain.Task, error) error { return nil }
 
-// Runner は domain.Task をコマンドに応じたステップ列へ順番に流す Worker パイプラインです。
+// Runner is the worker pipeline that feeds a domain.Task through the step sequence for its command, in order.
 type Runner struct {
 	deps Dependencies
 }
 
 var _ domain.Pipeline = (*Runner)(nil)
 
-// New は依存を検証して Runner を生成します。必須依存が欠けている場合はエラーを返し、
-// 実行時ではなく起動時に構成ミスを検出します。
+// New validates the dependencies and creates a Runner. It returns an error when a required dependency is
+// missing, so a misconfiguration is detected at startup rather than at run time.
 func New(deps Dependencies) (*Runner, error) {
-	// 一括生成（Ops.Panel.GenerateAllPanels / Ops.Page.ComposeAllPages）はステップから直接呼ぶため、欠けていれば
-	// ジョブ実行中ではなく起動時に落とす。workflow.New は常に設定するので、ここに
-	// 引っかかるのは Operations を手組みしたときだけ。
+	// The batch generators (Ops.Panel.GenerateAllPanels / Ops.Page.ComposeAllPages) are called directly from steps, so if missing,
+	// fail at startup rather than in the middle of a job. workflow.New always sets them, so this
+	// only catches a hand-assembled Operations.
 	var ops = deps.Ops
 	var missing []string
 	for _, dep := range []struct {
@@ -86,23 +86,23 @@ func New(deps Dependencies) (*Runner, error) {
 	return &Runner{deps: deps}, nil
 }
 
-// Execute は worker.TaskExecutor を満たします。
+// Execute satisfies worker.TaskExecutor.
 //
-// ジョブの一生（再配信ガード → 検証 → 実行 → 結末の記録）は gcp-kit/worker.Lifecycle が
-// 持ち、ここはそれぞれの中身だけを渡します（public-docs のワーカー規約）。panic の回復、
-// 実行時間の上限、結末の記録の ctx の切り離しはライブラリ側の仕事で、ここには書きません。
+// A job's life (redelivery guard → validation → run → recording the outcome) belongs to gcp-kit/worker.Lifecycle,
+// and this only hands over what goes into each stage (the worker convention in public-docs). Panic recovery,
+// the run-time cap and detaching the ctx for recording the outcome are the library's job and are not written here.
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	return r.lifecycle().Execute(ctx, task)
 }
 
-// lifecycle は、ジョブの一生の各段にこのアプリの中身を当てはめます。
+// lifecycle fits this app's content into each stage of a job's life.
 func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, string] {
-	// 記録先は Dependencies から毎回引きます。テストが Runner をリテラルで組み立てても
-	// 記録が効くようにするためで、Recorder の生成は軽い。
+	// The destination is taken from Dependencies every time, so that recording works even when a test
+	// assembles a Runner as a literal; creating a Recorder is cheap.
 	status := newStatusRecorder(r.deps.JobStatus)
 	return worker.Lifecycle[domain.Task, string]{
-		// 以降このジョブから出るログすべてに job_id / command を載せ、
-		// 各ステップのログを 1 ジョブ単位で追えるようにする。
+		// Put job_id / command on every log line this job emits from here on,
+		// so each step's logs can be followed per job.
 		Prepare: func(ctx context.Context, task domain.Task) context.Context {
 			return slogctx.With(ctx,
 				slog.String("job_id", task.JobID),
@@ -115,7 +115,7 @@ func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, string] {
 		Begin: func(ctx context.Context, task domain.Task) (bool, error) {
 			return r.begin(ctx, status, task)
 		},
-		// 依頼そのものが不正なら、配り直しても同じ行で落ちます（Lifecycle が Permanent に包みます）。
+		// If the request itself is invalid, redelivering it fails on the same line (Lifecycle wraps it as Permanent).
 		Validate: func(task domain.Task) error { return task.ValidateSubmission() },
 		Run: func(ctx context.Context, task domain.Task) (string, error) {
 			return r.run(ctx, &task)
@@ -127,23 +127,23 @@ func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, string] {
 	}
 }
 
-// begin は、Cloud Tasks の再配信で完了済みジョブを作り直さないためのガードです。
+// begin is the guard that keeps a Cloud Tasks redelivery from rebuilding a completed job.
 //
-// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
-// 画像生成コストがそのまま二重に発生します。未完了ならここで running を記録します。
-// 入力検証より前に置くことで、全試行が Attempts に載り、どのジョブも必ず running を
-// 経由して終端に至ります。OutputDir は検証に依存しないので先に解決します
-// （解決できなければ記録は判定だけ）。状態を読めなければ判断できないので、実行せずに
-// エラーを返します。
+// Returning an error even once, for example when a notice fails, causes a redelivery, so without stopping
+// here the image generation cost is simply paid twice. If not completed, running is recorded here.
+// Placing it before input validation puts every attempt into Attempts, and every job reaches a terminal
+// state via running. OutputDir does not depend on validation, so it is resolved first
+// (if it cannot be resolved, the record only checks). If the state cannot be read no decision is possible,
+// so it returns an error without running.
 func (r *Runner) begin(ctx context.Context, status statusRecorder, task domain.Task) (bool, error) {
 	outputDir, _ := domain.JobOutputDir(r.deps.Bucket, task.JobID)
 	return status.begin(ctx, &task, outputDir)
 }
 
-// Run はタスクのコマンドに応じたステップ列を順に実行し、成果物だけを残します。
+// Run runs the step sequence for the task's command in order and leaves only the artifacts.
 //
-// 状態の記録・通知・再配信ガードは行いません。それらは Cloud Tasks worker の入口である
-// Execute の担当で、Run は生成そのものを同期実行して結果を確かめたい場合の本体メソッドです。
+// It records no status, sends no notice and has no redelivery guard. Those belong to Execute, the
+// Cloud Tasks worker's entry point; Run is the core method for running generation synchronously and checking the result.
 func (r *Runner) Run(ctx context.Context, task *domain.Task) error {
 	if err := task.ValidateSubmission(); err != nil {
 		return fmt.Errorf("invalid task: %w", err)
@@ -152,11 +152,11 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) error {
 	return err
 }
 
-// run はステップ列の実行本体です。成功時は記録用のタイトルを返します。
+// run is the body that executes the step sequence. On success it returns the title for the record.
 //
-// 実行時間の上限（画像生成が応答しなくなった場合に Cloud Run のインスタンスを占有し
-// 続けないためのもの）は Lifecycle が Run にだけ被せるので、ここには書きません。
-// 入力の検証も Lifecycle の Validate が済ませています。
+// The run-time cap (which keeps an unresponsive image generation from occupying the Cloud Run
+// instance) is applied by Lifecycle to Run only, so it is not written here.
+// Input validation has also been done by Lifecycle's Validate.
 func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 	runCtx := ctx
 
@@ -191,20 +191,20 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 		}
 	}
 
-	// 台本生成済みならタイトルが埋まっている。UI が一覧で表示するために記録する。
+	// If the script has been generated the title is filled in. It is recorded for the UI to show in listings.
 	if pc.Manga != nil {
 		return pc.Manga.Title, nil
 	}
 	return "", nil
 }
 
-// recordOutcome は終端状態の記録と通知を、成功・失敗の別なく同じ経路で行います
-// （Lifecycle の Finish）。
+// recordOutcome records the terminal state and sends the notice along the same path for success and failure
+// (Lifecycle's Finish).
 //
-// 打ち切りこそが終端の理由である場面（PIPELINE_TIMEOUT の発火、Cloud Tasks の
-// dispatch deadline 超過によるリクエストのキャンセル）では呼び出し元の ctx は既に
-// 期限切れです。切り離しは Lifecycle が行い、成功と失敗のどちらもここを通るので、
-// 片方だけ切り離し忘れる書き方が表現できません。
+// Where the cutoff itself is the reason for terminating (PIPELINE_TIMEOUT firing, or the request being
+// cancelled because the Cloud Tasks dispatch deadline was exceeded), the caller's ctx has already
+// expired. Lifecycle does the detaching, and success and failure both go through here, so code that
+// forgets to detach on only one side cannot be written.
 func (r *Runner) recordOutcome(ctx context.Context, task *domain.Task, status statusRecorder, title string, cause error) error {
 	outcomeCtx := ctx
 
@@ -217,7 +217,7 @@ func (r *Runner) recordOutcome(ctx context.Context, task *domain.Task, status st
 		return cause
 	}
 
-	// 記録 → 通知の順。記録できていないジョブの成功を人に知らせない。
+	// Record, then notify. Do not tell anyone a job succeeded before it has been recorded.
 	status.markSucceeded(outcomeCtx, task, title)
 	if notifyErr := r.deps.Notifier.NotifyComplete(outcomeCtx, *task); notifyErr != nil {
 		slog.WarnContext(ctx, "success notification failed", "job_id", task.JobID, "error", notifyErr)
@@ -225,20 +225,20 @@ func (r *Runner) recordOutcome(ctx context.Context, task *domain.Task, status st
 	return nil
 }
 
-// partialSaveTimeout は、失敗時の保存に許す時間です。
-// 呼び出し元の context から切り離して使うため、短く区切ります。
+// partialSaveTimeout is the time allowed for saving on failure.
+// It runs detached from the caller's context, so it is kept short.
 const partialSaveTimeout = 30 * time.Second
 
-// savePartialResults は、ステップが失敗した時点までの成果を保存します。
+// savePartialResults saves what was achieved up to the point a step failed.
 //
-// go-comic-kit の一括生成は部分的な成功も state に記録して返すため、ここで保存して
-// おかないと、生成済みの画像が state から参照されないまま GCS に取り残されます。
-// Cloud Tasks の再試行でも最初から作り直しになり、画像生成のコストがそのまま二重に
-// かかります。保存しておけば、再実行は未生成のコマ・ページだけで済みます。
+// go-comic-kit's batch generation records partial success in the state it returns, so without saving
+// here, generated images would be left in GCS with no reference from the state.
+// A Cloud Tasks retry would also start over, paying the image generation cost twice.
+// Once saved, a re-run only needs the panels and pages not yet generated.
 //
-// 保存は呼び出し元から切り離した context で行います。PIPELINE_TIMEOUT による打ち切りは
-// まさに成果を残したい場面で、その ctx は既に期限切れだからです。保存自体の失敗は
-// 警告に留め、本来の失敗理由を上書きしません。
+// Saving uses a context detached from the caller. A PIPELINE_TIMEOUT cutoff is exactly when the
+// results should be kept, and that ctx has already expired. A failure of the save itself is only
+// a warning and does not overwrite the original failure reason.
 func (r *Runner) savePartialResults(ctx context.Context, pc *Context) {
 	if pc.Manga == nil {
 		return

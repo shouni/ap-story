@@ -46,20 +46,20 @@ func TestNewScriptDraftCarriesTheContextNeededToReadTheScript(t *testing.T) {
 	draft := NewScriptDraft(testState())
 
 	if draft.JobID != "job-1" || draft.Title != "作品" {
-		t.Errorf("作品の識別情報が落ちています: %+v", draft)
+		t.Errorf("the work's identifying fields were dropped: %+v", draft)
 	}
 	if len(draft.Chapters) != 1 || draft.Chapters[0].Title != "第1話" {
-		t.Errorf("章の見出しが落ちています: %+v", draft.Chapters)
+		t.Errorf("the chapter headings were dropped: %+v", draft.Chapters)
 	}
 	if len(draft.Panels) != 2 {
-		t.Fatalf("パネル数 = %d, want 2", len(draft.Panels))
+		t.Fatalf("panel count = %d, want 2", len(draft.Panels))
 	}
-	// ページ番号は「直したら何を合成し直すか」を読み手に示すので必ず載せる
+	// The page number always goes in, because it tells the reader what has to be recomposed after a fix
 	if draft.Panels[0].Page != 1 || draft.Panels[0].ChapterID != "ch01" {
-		t.Errorf("章・ページの文脈が落ちています: %+v", draft.Panels[0])
+		t.Errorf("the chapter and page context were dropped: %+v", draft.Panels[0])
 	}
 	if draft.Panels[0].Dialogues[0].Text != "元のセリフなのだ" {
-		t.Errorf("セリフが取り出せていません: %+v", draft.Panels[0].Dialogues)
+		t.Errorf("the dialogue was not extracted: %+v", draft.Panels[0].Dialogues)
 	}
 }
 
@@ -75,14 +75,14 @@ func TestApplyToReplacesOnlyTheDialogues(t *testing.T) {
 	}
 
 	if got := state.Panels[0].Dialogues[0].Text; got != "直したセリフなのだ" {
-		t.Errorf("セリフが反映されていません: %q", got)
+		t.Errorf("the dialogue was not applied: %q", got)
 	}
-	// 生成記録はコマ画像との対応そのものなので、台本の編集で触ってはならない
+	// Generation records are the very mapping to the panel images, so editing the script must not touch them
 	if state.Panels[0].Generation == nil || state.Panels[0].Generation.UsedSeed != 42 {
-		t.Errorf("生成記録が失われています: %+v", state.Panels[0].Generation)
+		t.Errorf("the generation record was lost: %+v", state.Panels[0].Generation)
 	}
 	if state.Panels[0].Shot != "medium" || state.Panels[0].Page != 1 {
-		t.Errorf("コマの構成が書き換わっています: %+v", state.Panels[0])
+		t.Errorf("the panel structure was rewritten: %+v", state.Panels[0])
 	}
 }
 
@@ -94,10 +94,10 @@ func TestApplyToRejectsChangesToThePanelLineup(t *testing.T) {
 		name   string
 		mutate func(*ScriptDraft)
 	}{
-		{"コマの削除", func(d *ScriptDraft) { d.Panels = d.Panels[:1] }},
-		{"コマの追加", func(d *ScriptDraft) { d.Panels = append(d.Panels, ScriptPanel{PanelID: "ch01-p03"}) }},
-		{"コマの並べ替え", func(d *ScriptDraft) { d.Panels[0], d.Panels[1] = d.Panels[1], d.Panels[0] }},
-		{"パネルIDの改名", func(d *ScriptDraft) { d.Panels[0].PanelID = "ch09-p09" }},
+		{"removing a panel", func(d *ScriptDraft) { d.Panels = d.Panels[:1] }},
+		{"adding a panel", func(d *ScriptDraft) { d.Panels = append(d.Panels, ScriptPanel{PanelID: "ch01-p03"}) }},
+		{"reordering panels", func(d *ScriptDraft) { d.Panels[0], d.Panels[1] = d.Panels[1], d.Panels[0] }},
+		{"renaming a panel ID", func(d *ScriptDraft) { d.Panels[0].PanelID = "ch09-p09" }},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestApplyToRejectsChangesToThePanelLineup(t *testing.T) {
 			tt.mutate(&draft)
 
 			if err := draft.ApplyTo(state, speakers); err == nil {
-				t.Fatal("コマの構成変更が通っています")
+				t.Fatal("a change to the panel structure was accepted")
 			}
 		})
 	}
@@ -118,32 +118,32 @@ func TestApplyToLeavesTheStateUntouchedWhenAnyPanelIsInvalid(t *testing.T) {
 	state := testState()
 	draft := NewScriptDraft(state)
 	draft.Panels[0].Dialogues[0].Text = "1コマ目は正しい"
-	draft.Panels[1].Dialogues[0].Kind = "whisper" // 未知の kind
+	draft.Panels[1].Dialogues[0].Kind = "whisper" // unknown kind
 
 	if err := draft.ApplyTo(state, knownSpeakers("zundamon", "metan")); err == nil {
-		t.Fatal("不正な kind が通っています")
+		t.Fatal("an invalid kind was accepted")
 	}
-	// 部分適用されると「失敗したのに変わっている」状態になる
+	// A partial apply would leave it "changed even though it failed"
 	if got := state.Panels[0].Dialogues[0].Text; got != "元のセリフなのだ" {
-		t.Errorf("失敗したのに1コマ目が書き換わっています: %q", got)
+		t.Errorf("the first panel was rewritten even though it failed: %q", got)
 	}
 }
 
 func TestApplyToRejectsAnUnknownSpeaker(t *testing.T) {
 	t.Parallel()
 
-	// go-comic-kit は台本生成時に未知の話者をナレーションへ落とすが、手で書いた行を
-	// 黙って別物にすると直したつもりの行が何も言わず化ける。編集経路では突き返す。
+	// go-comic-kit turns an unknown speaker into narration when generating a script, but silently
+	// turning a hand-written line into something else garbles the line someone meant to fix. The edit path sends it back.
 	state := testState()
 	draft := NewScriptDraft(state)
 	draft.Panels[0].Dialogues[0].SpeakerID = "dareka"
 
 	err := draft.ApplyTo(state, knownSpeakers("zundamon", "metan"))
 	if err == nil {
-		t.Fatal("未知の話者が通っています")
+		t.Fatal("an unknown speaker was accepted")
 	}
 	if !strings.Contains(err.Error(), "dareka") {
-		t.Errorf("どの話者が問題か分からないエラーです: %v", err)
+		t.Errorf("the error does not say which speaker is the problem: %v", err)
 	}
 }
 
@@ -171,10 +171,10 @@ func TestApplyToRequiresASpeakerExceptForNarrationAndSFX(t *testing.T) {
 
 			err := draft.ApplyTo(state, speakers)
 			if tt.wantErr && err == nil {
-				t.Errorf("話者なしの %q が通っています", tt.kind)
+				t.Errorf("%q without a speaker was accepted", tt.kind)
 			}
 			if !tt.wantErr && err != nil {
-				t.Errorf("話者なしの %q が拒否されています: %v", tt.kind, err)
+				t.Errorf("%q without a speaker was rejected: %v", tt.kind, err)
 			}
 		})
 	}
@@ -193,7 +193,7 @@ func TestApplyToDropsEmptyLinesSoABubbleCanBeRemoved(t *testing.T) {
 		t.Fatalf("ApplyTo() = %v, want nil", err)
 	}
 	if len(state.Panels[0].Dialogues) != 1 {
-		t.Errorf("空行が残っています: %+v", state.Panels[0].Dialogues)
+		t.Errorf("empty lines remain: %+v", state.Panels[0].Dialogues)
 	}
 }
 
@@ -205,21 +205,21 @@ func TestApplyToRejectsATextLongEnoughToBreakThePage(t *testing.T) {
 	draft.Panels[0].Dialogues[0].Text = strings.Repeat("あ", MaxDialogueRunes+1)
 
 	if err := draft.ApplyTo(state, knownSpeakers("zundamon", "metan")); err == nil {
-		t.Fatal("上限を超えるセリフが通っています")
+		t.Fatal("dialogue over the limit was accepted")
 	}
 }
 
 func TestApplyToAcceptsTheOverBudgetLinesTheGeneratorAlreadyProduces(t *testing.T) {
 	t.Parallel()
 
-	// 台本プロンプトは25文字以内を求めるが、生成済みの台本はそれを普通に超えている。
-	// その基準で弾くと、既存の台本を読んで保存し直すだけで失敗する。
+	// The script prompt asks for 25 characters or fewer, but generated scripts routinely exceed that.
+	// Rejecting on that basis would make merely reading and re-saving an existing script fail.
 	state := testState()
 	draft := NewScriptDraft(state)
 	draft.Panels[0].Dialogues[0].Text = strings.Repeat("あ", 30)
 
 	if err := draft.ApplyTo(state, knownSpeakers("zundamon", "metan")); err != nil {
-		t.Fatalf("30文字のセリフが拒否されました: %v", err)
+		t.Fatalf("30-character dialogue was rejected: %v", err)
 	}
 }
 
@@ -235,6 +235,6 @@ func TestApplyToRejectsMoreBubblesThanAPanelCanHold(t *testing.T) {
 	}
 
 	if err := draft.ApplyTo(state, knownSpeakers("zundamon", "metan")); err == nil {
-		t.Fatal("吹き出しの上限を超える要求が通っています")
+		t.Fatal("a request over the speech-bubble limit was accepted")
 	}
 }

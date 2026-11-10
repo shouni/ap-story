@@ -10,8 +10,8 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// 保存形式そのもの（未記録・破損 JSON・パストラバーサル・上書き）の検証は
-// go-job-kit の jobstatus 側にあります。ここは ap-story 固有の点だけを見ます。
+// Checking the storage format itself (unrecorded, broken JSON, path traversal, overwrites) lives
+// in go-job-kit's jobstatus. This looks only at what is specific to ap-story.
 
 const statusTestJobID = "c20260726-120000-abcd1234"
 
@@ -19,8 +19,8 @@ func newStatusRepo(store *memStore) *jobstatus.Store[domain.JobStatus] {
 	return NewJobStatusRepository(config.StorageConfig{GCSBucket: "bucket"}, store)
 }
 
-// 状態は成果物と同じ comics/{jobID}/ 配下に置き、履歴削除（プレフィックス一括削除）で
-// 自動的に片付くようにする。履歴一覧は comic_state.json だけを拾うため混ざらない。
+// The status sits under comics/{jobID}/ with the artifacts, so deleting the history (a prefix delete)
+// cleans it up automatically. The history list picks up only comic_state.json, so it does not mix in.
 func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	t.Parallel()
 
@@ -38,12 +38,12 @@ func TestSaveWritesInsideJobDirectory(t *testing.T) {
 
 	want := "gs://bucket/comics/" + statusTestJobID + "/status.json"
 	if !store.has(want) {
-		t.Fatalf("status.json が %q に書かれていない。書き込み済み: %v", want, keysOf(store))
+		t.Fatalf("status.json was not written to %q; written: %v", want, keysOf(store))
 	}
 }
 
-// ap-story 固有フィールド（OutputDir）が往復すること。
-// jobstatus.Status の埋め込みで JSON がフラットに保たれることの確認を兼ねます。
+// The ap-story-specific field (OutputDir) makes the round trip.
+// It also checks that embedding jobstatus.Status keeps the JSON flat.
 func TestSaveAndGetRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -76,11 +76,11 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 	if got.OutputDir != original.OutputDir {
 		t.Errorf("OutputDir = %q", got.OutputDir)
 	}
-	// Save 側で必ず打刻されること（呼び出し側が設定し忘れても記録が残るように）。
+	// It is always stamped on the Save side (so the record exists even if the caller forgets to set it).
 	if got.UpdatedAt.IsZero() {
-		t.Error("UpdatedAt が設定されていない")
+		t.Error("UpdatedAt is not set")
 	}
 }
 
-// keysOf は memStore に書き込まれたパス一覧を返します。
+// keysOf returns the paths written to memStore.
 func keysOf(store *memStore) []string { return store.h.URIs() }

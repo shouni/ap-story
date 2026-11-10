@@ -9,12 +9,12 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// writeStateError は GetState の失敗を JSON のエラー応答へ変換します。
+// writeStateError converts a GetState failure into a JSON error response.
 //
-// **「まだ無い」と「読めない」を同じ 404 にしません。** 権限不足や GCS 障害まで
-// 404 にすると、障害の間ずっと全作品が「ありません」と見え、呼び出し側は待てば
-// 直るのか消えたのかを区別できません。読めなかった側は原因をログへ残します
-// （応答には出しません。ストレージの内部事情を呼び出し側へ渡さないためです）。
+// **"Not there yet" and "unreadable" are not the same 404.** Making missing permissions or a GCS outage
+// a 404 too would make every work look "not there" for the whole outage, and the caller could not tell
+// whether waiting would fix it or it was gone. The unreadable side logs its cause
+// (it is not put in the response, so storage internals are not handed to the caller).
 func writeStateError(w http.ResponseWriter, r *http.Request, jobID string, err error) {
 	if errors.Is(err, domain.ErrStateNotFound) {
 		respond.ErrorJSON(w, r, http.StatusNotFound, "comic not found")

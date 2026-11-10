@@ -27,7 +27,7 @@ func testAuthHandler(t *testing.T) *session.Handler {
 		ServiceURL:   "https://example.com",
 		SessionName:  testSessionName,
 		Store:        session.NewMemoryStore(),
-		// 許可リストが空だと fail-closed で全員拒否されます。
+		// An empty allowlist fails closed and rejects everyone.
 		AllowedDomains: []string{"example.com"},
 	})
 	if err != nil {
@@ -81,8 +81,8 @@ func TestProtectedAccessMiddlewareFallsBackToSessionWithoutM2MToken(t *testing.T
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 
-	// M2M トークンが無いので、未ログインのセッション認証にフォールバックし
-	// ログイン画面へリダイレクトされる（next には到達しない）。
+	// There is no M2M token, so it falls back to session auth as not logged in
+	// and is redirected to the login page (next is never reached).
 	if called {
 		t.Error("next handler was called, want fallback to session auth (no valid session)")
 	}
@@ -106,8 +106,8 @@ func TestProtectedAccessRejectsInvalidM2MToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 
-	// 提示した資格情報が通らなかった呼び出しは、そこで確定します。ログイン画面へ
-	// 送ると、JSON を求めているエージェントが HTML を受け取ることになります。
+	// A call whose presented credentials fail is settled right there. Sending it to the login
+	// page would hand HTML to an agent that asked for JSON.
 	if called {
 		t.Error("next handler was called, want the invalid token to be rejected")
 	}
@@ -115,19 +115,19 @@ func TestProtectedAccessRejectsInvalidM2MToken(t *testing.T) {
 		t.Errorf("status = %d, want %d (invalid_token)", rec.Code, http.StatusUnauthorized)
 	}
 	if got := rec.Header().Get("WWW-Authenticate"); got == "" {
-		t.Error("WWW-Authenticate が無い（RFC 9110, Section 15.5.2）")
+		t.Error("no WWW-Authenticate (RFC 9110, Section 15.5.2)")
 	}
 	if got := rec.Header().Get("Location"); got != "" {
-		t.Errorf("Location = %q, want empty（ログイン画面へ送らない）", got)
+		t.Errorf("Location = %q, want empty (not sent to the login page)", got)
 	}
 }
 
-// TestCSRFTokenReachesTemplates は、認証を通った GET で CSRF トークンが
-// テンプレート側から読めることを確認します。
+// TestCSRFTokenReachesTemplates checks that on an authenticated GET the CSRF token can be
+// read from the template side.
 //
-// トークンの発行は gcp-kit の session.Authenticate が行います。ここで見たいのは
-// handlers.CSRFTokenFromContext が同じキーを読めていることで、ずれるとフォームの
-// hidden が空になり、以降の POST が全て弾かれます。
+// The token is issued by gcp-kit's session.Authenticate. What this looks at is that
+// handlers.CSRFTokenFromContext reads the same key; if they drift, the form's hidden
+// field goes empty and every later POST is rejected.
 func TestCSRFTokenReachesTemplates(t *testing.T) {
 	t.Parallel()
 
@@ -150,10 +150,10 @@ func TestCSRFTokenReachesTemplates(t *testing.T) {
 	}
 }
 
-// loggedInCookie は、h でログイン済みのセッションを作り、そのクッキーを返します。
+// loggedInCookie creates a logged-in session with h and returns its cookie.
 //
-// OAuth のコールバックを経ずにログイン状態を作ります。クッキーは h 自身に
-// 焼かせます。セッションの実体はストア側にあるので、自前で組み立てても読めません。
+// It creates the logged-in state without going through the OAuth callback. The cookie is baked by h
+// itself: the session's substance lives in the store, so one assembled by hand could not be read.
 func loggedInCookie(t *testing.T, h *session.Handler) *http.Cookie {
 	t.Helper()
 
@@ -164,21 +164,21 @@ func loggedInCookie(t *testing.T, h *session.Handler) *http.Cookie {
 
 	cookies := rec.Result().Cookies()
 	if len(cookies) == 0 {
-		t.Fatal("セッションクッキーが生成されていない")
+		t.Fatal("no session cookie was created")
 	}
 	return cookies[0]
 }
 
-// TestNewRouterOmitsWorkerRoutesWithoutTaskAuth は、SERVER_ROLE=web のプロセスで
-// /tasks/generate が登録されないことを確認します。
+// TestNewRouterOmitsWorkerRoutesWithoutTaskAuth checks that /tasks/generate is not registered
+// in a SERVER_ROLE=web process.
 //
-// 見るのは「401 で拒否される」ではなく「404 でルートが無い」ことです。分離の目的は
-// 公開サービス上からタスク受付口を消すことなので、アプリのコードが応答する余地を
-// 残していない状態を確かめる必要があります。
+// What it looks for is "404, no route" rather than "rejected with 401". The point of the split is
+// to remove the task intake from the public service, so it must confirm that no room is left
+// for the app's code to answer.
 func TestNewRouterOmitsWorkerRoutesWithoutTaskAuth(t *testing.T) {
 	t.Parallel()
 
-	// Web 面だけを担う構成: TaskAuth も Worker も nil。
+	// A web-face-only configuration: TaskAuth and Worker are both nil.
 	router := NewRouter(&builder.AppHandlers{Auth: testAuthHandler(t)}, "")
 	req := httptest.NewRequest(http.MethodPost, "/tasks/generate", nil)
 	rec := httptest.NewRecorder()
@@ -190,12 +190,12 @@ func TestNewRouterOmitsWorkerRoutesWithoutTaskAuth(t *testing.T) {
 	}
 }
 
-// TestNewRouterOmitsWebRoutesWithoutWebHandler は、SERVER_ROLE=worker のプロセスで
-// Web 面のルートが登録されないことを確認します。
+// TestNewRouterOmitsWebRoutesWithoutWebHandler checks that the web-face routes are not registered
+// in a SERVER_ROLE=worker process.
 func TestNewRouterOmitsWebRoutesWithoutWebHandler(t *testing.T) {
 	t.Parallel()
 
-	// Worker 面だけを担う構成: Auth も Web も nil。
+	// A worker-face-only configuration: Auth and Web are both nil.
 	router := NewRouter(&builder.AppHandlers{
 		TaskAuth: mustOIDC(t, "https://worker.example.com", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
@@ -212,8 +212,8 @@ func TestNewRouterOmitsWebRoutesWithoutWebHandler(t *testing.T) {
 	}
 }
 
-// TestNewRouterKeepsHealthzForWorkerRole は、Worker 面だけの構成でも
-// ヘルスチェックが残ることを確認します。Cloud Run の起動判定に使われます。
+// TestNewRouterKeepsHealthzForWorkerRole checks that the health check remains even in a
+// worker-face-only configuration. Cloud Run uses it to decide that startup succeeded.
 func TestNewRouterKeepsHealthzForWorkerRole(t *testing.T) {
 	t.Parallel()
 
@@ -230,9 +230,9 @@ func TestNewRouterKeepsHealthzForWorkerRole(t *testing.T) {
 	}
 }
 
-// TestNewRouterRegistersTheScriptRoutes は、台本の取得と保存の口が両方とも
-// 生えていることを確認します。片方だけ生えていても画面は静かに壊れるだけで、
-// ビルドもテストも通ってしまうため、経路そのものを固定します。
+// TestNewRouterRegistersTheScriptRoutes checks that both the script read and save routes
+// exist. With only one of them the screen just breaks quietly while the build and the tests
+// pass, so the routes themselves are pinned.
 func TestNewRouterRegistersTheScriptRoutes(t *testing.T) {
 	t.Parallel()
 
@@ -254,7 +254,7 @@ func TestNewRouterRegistersTheScriptRoutes(t *testing.T) {
 	}
 	routes, ok := router.(chi.Routes)
 	if !ok {
-		t.Fatalf("router が chi.Routes ではありません: %T", router)
+		t.Fatalf("router is not a chi.Routes: %T", router)
 	}
 	if err := chi.Walk(routes, walk); err != nil {
 		t.Fatalf("chi.Walk failed: %v", err)
@@ -262,12 +262,12 @@ func TestNewRouterRegistersTheScriptRoutes(t *testing.T) {
 
 	for method := range want {
 		if !found[method] {
-			t.Errorf("%s %s が登録されていません", method, want[method])
+			t.Errorf("%s %s is not registered", method, want[method])
 		}
 	}
 }
 
-// CSP が全レスポンスに付き、script-src が緩められていないこと。
+// The CSP is on every response, and script-src has not been loosened.
 func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -277,30 +277,30 @@ func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
 
 	policy := rec.Header().Get("Content-Security-Policy")
 	if policy == "" {
-		t.Fatal("Content-Security-Policy が付いていない")
+		t.Fatal("no Content-Security-Policy")
 	}
 	for _, want := range []string{"default-src 'self'", "script-src 'self'", "object-src 'none'", "frame-ancestors 'none'"} {
 		if !strings.Contains(policy, want) {
-			t.Errorf("CSP に %q が無い: %s", want, policy)
+			t.Errorf("CSP lacks %q: %s", want, policy)
 		}
 	}
-	// script-src の 'unsafe-inline' はインラインスクリプト禁止（assets の
-	// TestTemplatesHaveNoInlineScripts）を無意味にします。style-src 側は許容しているので
-	// 区間を限って見ます。
+	// 'unsafe-inline' in script-src would make the ban on inline scripts (assets'
+	// TestTemplatesHaveNoInlineScripts) meaningless. style-src does allow it, so only that
+	// directive is examined.
 	scriptSrc := cspDirective(policy, "script-src")
 	if scriptSrc == "" {
-		t.Fatalf("script-src が無い: %s", policy)
+		t.Fatalf("no script-src: %s", policy)
 	}
 	if strings.Contains(scriptSrc, "unsafe-inline") || strings.Contains(scriptSrc, "unsafe-eval") {
-		t.Errorf("script-src が緩められています: %s", scriptSrc)
+		t.Errorf("script-src has been loosened: %s", scriptSrc)
 	}
-	// 漫画とキャラクターの画像は署名付き URL へ 302 するため、img-src が送り先を許す必要があります。
+	// Comic and character images 302 to a signed URL, so img-src must allow the destination.
 	if !strings.Contains(cspDirective(policy, "img-src"), "https://storage.googleapis.com") {
-		t.Errorf("img-src が署名付き URL のホストを許していない: %s", policy)
+		t.Errorf("img-src does not allow the signed URL's host: %s", policy)
 	}
 }
 
-// cspDirective は CSP から 1 ディレクティブ分を取り出します。無ければ空文字を返します。
+// cspDirective extracts one directive from the CSP. It returns the empty string if absent.
 func cspDirective(policy, name string) string {
 	for directive := range strings.SplitSeq(policy, ";") {
 		directive = strings.TrimSpace(directive)
@@ -311,8 +311,8 @@ func cspDirective(policy, name string) string {
 	return ""
 }
 
-// 圧縮が効いていること。画面は日本語 UTF-8（1 文字 3 バイト）でよく縮むのに、
-// これまで無圧縮で配信していました。
+// Compression is in effect. The screens are Japanese UTF-8 (3 bytes per character) and shrink well,
+// yet they used to be served uncompressed.
 func TestCompressibleResponsesAreCompressed(t *testing.T) {
 	t.Parallel()
 
@@ -335,18 +335,18 @@ func TestCompressibleResponsesAreCompressed(t *testing.T) {
 
 	body, err := io.ReadAll(reader)
 	if err != nil {
-		t.Fatalf("解凍できない: %v", err)
+		t.Fatalf("cannot decompress: %v", err)
 	}
 	if !strings.Contains(string(body), "Bootstrap") {
-		t.Error("解凍した中身が Bootstrap の CSS でない")
+		t.Error("the decompressed content is not Bootstrap's CSS")
 	}
 	if len(body) <= rec.Body.Len() {
-		t.Errorf("圧縮後 %d バイトが元の %d バイトを下回っていない", rec.Body.Len(), len(body))
+		t.Errorf("compressed %d bytes is not below the original %d bytes", rec.Body.Len(), len(body))
 	}
 }
 
-// CSP 以外の防御ヘッダーも全レスポンスに付くこと。どれも 1 行で入る割に、
-// 抜けても画面は正常に見えるため気付けません。
+// The defensive headers other than CSP are on every response too. Each is one line, yet
+// the screens look fine without them, so a missing one goes unnoticed.
 func TestResponsesCarrySecurityHeaders(t *testing.T) {
 	t.Parallel()
 
@@ -364,17 +364,17 @@ func TestResponsesCarrySecurityHeaders(t *testing.T) {
 			t.Errorf("%s = %q, want %q", name, got, value)
 		}
 	}
-	// autoplay は塞ぎません（メディア再生が壊れます）。
+	// autoplay is not blocked (it would break media playback).
 	policy := rec.Header().Get("Permissions-Policy")
 	if policy == "" {
-		t.Error("Permissions-Policy が付いていない")
+		t.Error("no Permissions-Policy")
 	}
 	if strings.Contains(policy, "autoplay") {
-		t.Errorf("Permissions-Policy が autoplay を塞いでいます: %s", policy)
+		t.Errorf("Permissions-Policy blocks autoplay: %s", policy)
 	}
 }
 
-// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+// mustOIDC builds a configured verifier for tests (New returns an error when settings are missing).
 func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
 	t.Helper()
 	v, err := oidc.New(audience, allowed)

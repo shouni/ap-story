@@ -143,12 +143,12 @@ func TestEnqueueDesignSheetFormAcceptsModelOverride(t *testing.T) {
 	}
 }
 
-// モデル名は IMAGE_MODELS の許可リストで縛ります。ブラウザは <select> に縛られますが、
-// JSON API は任意の文字列を送れるため、投入前に弾かないと未知のモデルが worker まで届きます。
+// Model names are restricted by the IMAGE_MODELS allowlist. A browser is restricted by the <select>, but
+// the JSON API can send any string, so without rejecting before enqueue an unknown model would reach the worker.
 func TestEnqueueDesignSheetRejectsUnknownModelOverride(t *testing.T) {
 	t.Parallel()
 
-	t.Run("フォーム", func(t *testing.T) {
+	t.Run("form", func(t *testing.T) {
 		q := &fakeTaskQueue{}
 		h := newTestHandler(t, q)
 
@@ -161,7 +161,7 @@ func TestEnqueueDesignSheetRejectsUnknownModelOverride(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 		}
 		if q.lastTask.JobID != "" {
-			t.Error("未知のモデルなのにジョブが投入されました")
+			t.Error("a job was enqueued for an unknown model")
 		}
 	})
 
@@ -178,13 +178,13 @@ func TestEnqueueDesignSheetRejectsUnknownModelOverride(t *testing.T) {
 			t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 		}
 		if q.lastTask.JobID != "" {
-			t.Error("未知のモデルなのにジョブが投入されました")
+			t.Error("a job was enqueued for an unknown model")
 		}
 	})
 }
 
-// モデル未指定は既定モデル（IMAGE_MODELS の先頭）で埋めます。空のまま worker の
-// 設定へ落とすと、どのモデルで生成したのかが記録から辿れなくなります。
+// An unspecified model is filled with the default model (the head of IMAGE_MODELS). Falling through
+// empty to the worker's configuration would leave no record of which model generated it.
 func TestEnqueueDesignSheetFormFillsInDefaultModel(t *testing.T) {
 	t.Parallel()
 
@@ -219,12 +219,12 @@ func TestEnqueueDesignSheetFormRejectsNoCharacters(t *testing.T) {
 	}
 }
 
-// 比率を指定しない依頼は、フォームでも JSON API でもアプリ側の既定で埋めます。
-// キットのフォールバックへ落とすと、経路ごとに答えが変わりかねません。
+// A request that names no aspect ratio is filled with the app's default, from the form and the JSON API alike.
+// Falling to the kit's fallback could make the answer differ per path.
 func TestDesignSheetDefaultsAspectRatio(t *testing.T) {
 	t.Parallel()
 
-	t.Run("フォーム", func(t *testing.T) {
+	t.Run("form", func(t *testing.T) {
 		q := &fakeTaskQueue{}
 		h := newTestHandler(t, q)
 

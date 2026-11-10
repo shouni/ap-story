@@ -8,51 +8,51 @@ import (
 	"github.com/shouni/netarmor/securenet"
 )
 
-// IsSecureServiceURL は、設定された ServiceURL が安全なスキーム（HTTPS など）を使用しているかどうかを確認します。
+// IsSecureServiceURL reports whether the configured ServiceURL uses a secure scheme (such as HTTPS).
 func (c *Config) IsSecureServiceURL() bool {
 	return securenet.IsSecureServiceURL(c.Server.ServiceURL)
 }
 
-// WarnOnContradictoryGenerationSettings は、生成制御の設定同士が噛み合っていない場合に
-// 警告を出します。起動を止めるほどではないが、黙って期待外れの挙動になる組み合わせを
-// 運用者に気づかせるためのものです。
+// WarnOnContradictoryGenerationSettings warns when generation-control settings do not fit
+// together. Not bad enough to stop startup, but these combinations silently behave worse than
+// expected, and this makes the operator notice.
 func (c *Config) WarnOnContradictoryGenerationSettings() {
-	// 一括生成のスループット上限は 1/RATE_INTERVAL で決まるため、間隔を空けたまま
-	// 並列数だけ上げても速くならない。設定した本人が一番気づきにくい組み合わせ。
+	// Batch throughput is capped by 1/RATE_INTERVAL, so raising only the concurrency while
+	// keeping the interval does not speed anything up. The person who set it is the least likely to notice.
 	if c.AI.MaxConcurrency > 1 && c.AI.RateInterval > 0 {
-		slog.Warn("MAX_CONCURRENCY を上げても RATE_INTERVAL が発射間隔を律速するため並列化の効果が出ません",
+		slog.Warn("raising MAX_CONCURRENCY has no parallel effect because RATE_INTERVAL limits the call rate",
 			"max_concurrency", c.AI.MaxConcurrency,
 			"rate_interval", c.AI.RateInterval,
 			"effective_calls_per_minute", time.Minute/c.AI.RateInterval)
 	}
-	// 画像生成1枚に数十秒かかるため、極端に短い上限は生成そのものを打ち切る。
+	// One image takes tens of seconds, so an extremely short cap cuts generation itself off.
 	if c.AI.RequestTimeout > 0 && c.AI.RequestTimeout < minSafeRequestTimeout {
-		slog.Warn("REQUEST_TIMEOUT が短く、画像生成が完了前に打ち切られる可能性があります",
+		slog.Warn("REQUEST_TIMEOUT is short; image generation may be cut off before it completes",
 			"request_timeout", c.AI.RequestTimeout,
 			"recommended_minimum", minSafeRequestTimeout)
 	}
 }
 
-// minSafeRequestTimeout は、画像生成1回が収まる目安の下限です。
+// minSafeRequestTimeout is the rough minimum that one image generation fits in.
 const minSafeRequestTimeout = 2 * time.Minute
 
-// ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
+// ValidateEssentialConfig validates the settings essential to running the application.
 func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureServiceURL() {
-		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.Server.ServiceURL)
+		return fmt.Errorf("SERVICE_URL ('%s') must be HTTPS in production", c.Server.ServiceURL)
 	}
 
 	if c.GCP.ProjectID == "" {
-		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
+		return fmt.Errorf("GCP_PROJECT_ID is not set (required for Vertex AI)")
 	}
 	if c.GCP.LocationID == "" {
-		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
+		return fmt.Errorf("GCP_LOCATION_ID is not set (default: asia-northeast1)")
 	}
 	if c.Storage.GCSBucket == "" {
-		return fmt.Errorf("STORY_BUCKET が設定されていません")
+		return fmt.Errorf("STORY_BUCKET is not set")
 	}
-	// CHARACTERS_JSON_PATH は任意。未設定時は go-character-kit の埋め込みデフォルト
-	// キャラクター定義にフォールバックする（internal/adapters.LoadCharacters）。
+	// CHARACTERS_JSON_PATH is optional. Unset, it falls back to go-character-kit's embedded
+	// default character definitions (internal/adapters.LoadCharacters).
 
 	if c.Server.Role.ServesWeb() {
 		if err := c.validateWebConfig(); err != nil {
@@ -62,11 +62,11 @@ func (c *Config) ValidateEssentialConfig() error {
 
 	if c.Server.Role.ServesWorker() {
 		if c.Tasks.TaskAudienceURL == "" {
-			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+			return fmt.Errorf("TASK_AUDIENCE_URL is not set; it is required for Cloud Tasks OIDC verification")
 		}
-		// 空だと検証器が fail-closed になり、全タスクが 500 で失敗し続けます。
+		// Empty makes the verifier fail closed and every task keeps failing with 500.
 		if len(c.Tasks.AllowedServiceAccounts) == 0 {
-			return fmt.Errorf("許可する caller SA が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS を設定してください")
+			return fmt.Errorf("no allowed caller SA is set; set ALLOWED_TASK_SERVICE_ACCOUNTS")
 		}
 		if err := c.validatePipelineTimeout(); err != nil {
 			return err
@@ -76,37 +76,37 @@ func (c *Config) ValidateEssentialConfig() error {
 	return nil
 }
 
-// validatePipelineTimeout は、パイプラインを走らせる役割で PIPELINE_TIMEOUT が
-// TASK_DISPATCH_DEADLINE より確実に短いことを検査します。
+// validatePipelineTimeout checks, for a role that runs the pipeline, that PIPELINE_TIMEOUT
+// is strictly shorter than TASK_DISPATCH_DEADLINE.
 //
-// アプリが自分で先に諦めることが要点です。逆順（等号を含む）だと Cloud Tasks が先に
-// リクエストを打ち切り、失敗の記録も Slack 通知も走らないまま、キューは max_attempts = 1 で
-// 再試行しないため、ジョブが running のまま残ります。無制限（0 以下）も同じ理由で拒みます。
-// 打ち切りの実効上限は 3 つのうち最小値なので、この 1 本だけは起動時に強制します。
+// The point is that the app gives up first. In the reverse order (equality included) Cloud Tasks
+// cuts the request first, neither the failure record nor the Slack notice runs, and with the queue at
+// max_attempts = 1 there is no retry, so the job stays at running. Unlimited (0 or less) is refused for the same reason.
+// The effective cap is the smallest of the three, so this one relation is enforced at startup.
 func (c *Config) validatePipelineTimeout() error {
 	if c.Tasks.DispatchDeadline <= 0 {
-		return fmt.Errorf("TASK_DISPATCH_DEADLINE が設定されていません（三段のタイムアウトはデプロイ設定が決めます。例: 30m）")
+		return fmt.Errorf("TASK_DISPATCH_DEADLINE is not set (the three-tier timeouts are decided by the deployment, e.g. 30m)")
 	}
 	if c.AI.PipelineTimeout <= 0 {
-		return fmt.Errorf("PIPELINE_TIMEOUT は worker では無制限にできません。Cloud Tasks の打ち切り（%s）より短い値を設定してください", c.Tasks.DispatchDeadline)
+		return fmt.Errorf("PIPELINE_TIMEOUT cannot be unlimited on the worker; set a value shorter than the Cloud Tasks cutoff (%s)", c.Tasks.DispatchDeadline)
 	}
 	if c.AI.PipelineTimeout >= c.Tasks.DispatchDeadline {
-		return fmt.Errorf("PIPELINE_TIMEOUT (%s) は Cloud Tasks の打ち切り (%s) より短くしてください。等号でもアプリが失敗を記録する前に打ち切られます", c.AI.PipelineTimeout, c.Tasks.DispatchDeadline)
+		return fmt.Errorf("PIPELINE_TIMEOUT (%s) must be shorter than the Cloud Tasks cutoff (%s); even when equal, the request is cut before the app can record the failure", c.AI.PipelineTimeout, c.Tasks.DispatchDeadline)
 	}
 	return nil
 }
 
-// validateWebConfig は Web 面（OAuth ログインとセッション、タスク投入）に必要な設定を検証します。
-// Worker 面だけを提供するプロセスに OAuth 関連の設定を要求すると、
-// 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
+// validateWebConfig validates the settings the web face needs (OAuth login and sessions, enqueueing tasks).
+// Requiring OAuth settings of a process that serves only the worker face would hand out
+// access to credentials it never uses, so the checks are split by role.
 func (c *Config) validateWebConfig() error {
-	// モデル一覧は Web 面だけの要件です。フォームの選択肢と、投入時の許可リストに使います。
-	// worker は読みません——ジョブが必ず自分のモデル名を運ぶようになったためです
-	// （go-comic-kit も設定としてのモデル既定を持ちません）。
+	// The model lists are a web-face requirement only: the form's options and the allowlist at enqueue.
+	// The worker does not read them, since every job now carries its own model names
+	// (go-comic-kit holds no configured model default either).
 	//
-	// 空を起動時に落とすのは、通すとフォームの選択欄が消え、JSON API のモデル指定が
-	// 全部 400 になるためです。起動自体は成功してしまうので、そのままでは
-	// 「選べないこと」に気付くのが使ってみた後になります。
+	// Empty fails startup because letting it through would remove the form's model picker and
+	// make every model choice in the JSON API a 400. Startup itself would succeed, so as is
+	// nobody would notice that nothing can be chosen until they tried.
 	for _, models := range []struct {
 		name string
 		list []string
@@ -115,33 +115,33 @@ func (c *Config) validateWebConfig() error {
 		{"GEMINI_MODELS", c.AI.GeminiModels},
 	} {
 		if len(models.list) == 0 {
-			return fmt.Errorf("%s が設定されていません（カンマ区切りで複数指定すると、先頭が既定でフォームの選択肢になります）", models.name)
+			return fmt.Errorf("%s is not set (comma-separate several; the head is the default and they become the form's options)", models.name)
 		}
 	}
 
-	// タスクを投入するのは Web 面だけなので、キュー名も Web 面の要件です。
+	// Only the web face enqueues tasks, so the queue name is a web-face requirement too.
 	if c.Tasks.QueueID == "" {
-		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID is not set")
 	}
 
-	// 配送先も投入側＝ Web 面の要件です。未設定を SERVICE_URL から導出しない理由は
-	// normalizeWorkerURL を参照（導出させると必ず 404 になります）。
+	// The delivery target is also a requirement of the enqueuing side, i.e. the web face. For why
+	// it is not derived from SERVICE_URL, see normalizeWorkerURL (deriving it always 404s).
 	if c.Tasks.WorkerURL == "" {
-		return fmt.Errorf("WORKER_URL が設定されていません（worker サービスの URL を渡します）")
+		return fmt.Errorf("WORKER_URL is not set (pass the worker service's URL)")
 	}
 
-	// caller SA はタスクを投入する側＝ web 面の要件です。worker が受け付ける許可リストは
-	// ALLOWED_TASK_SERVICE_ACCOUNTS で別に指定するため、worker 専用プロセスは持たずに済みます。
+	// The caller SA is a requirement of the enqueuing side, i.e. the web face. The allowlist the worker
+	// accepts is set separately with ALLOWED_TASK_SERVICE_ACCOUNTS, so a worker-only process needs none.
 	if c.TaskCallerServiceAccount() == "" {
-		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL が設定されていません")
+		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL is not set")
 	}
 
 	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" {
-		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret）が不足しています")
+		return fmt.Errorf("missing Google OAuth settings (ClientID, ClientSecret)")
 	}
 
 	if len(c.Auth.AllowedEmails) == 0 && len(c.Auth.AllowedDomains) == 0 {
-		return fmt.Errorf("許可されたメールアドレスまたはドメインが一つも設定されていません（認可リストが空です）")
+		return fmt.Errorf("no allowed email address or domain is set (the allowlist is empty)")
 	}
 
 	return nil

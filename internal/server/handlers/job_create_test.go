@@ -34,7 +34,7 @@ func TestEnqueueComicSuccess(t *testing.T) {
 		t.Errorf("Command = %q, want %q", q.lastTask.Command, domain.TaskCommandComposeComic)
 	}
 	if q.lastTask.SourceText != "元文章" {
-		t.Errorf("SourceText = %q, want 元文章", q.lastTask.SourceText)
+		t.Errorf("SourceText = %q, want %q", q.lastTask.SourceText, "元文章")
 	}
 	if err := domain.ValidateJobID(q.lastTask.JobID); err != nil {
 		t.Errorf("generated JobID %q is invalid: %v", q.lastTask.JobID, err)
@@ -134,8 +134,8 @@ func TestNewHandlerRequiresBucket(t *testing.T) {
 	}
 }
 
-// モデルと画風の選択は Task へ運ばれること。画像モデルは既存の ModelOverride を使います
-// （デザインシートと同じ欄なので、Task 側に2つ目の画像モデルは作りません）。
+// The chosen model and art style are carried to the Task. The image model uses the existing ModelOverride
+// (it is the same field as for design sheets, so the Task does not get a second image model).
 func TestEnqueueComicCarriesModelAndModeChoices(t *testing.T) {
 	t.Parallel()
 
@@ -161,16 +161,16 @@ func TestEnqueueComicCarriesModelAndModeChoices(t *testing.T) {
 	}
 }
 
-// 許可リスト外の選択は投入前に弾くこと。ブラウザは <select> に縛られますが、
-// JSON API は任意の文字列を送れます。
+// A choice outside the allowlist is rejected before enqueue. A browser is restricted by the <select>, but
+// the JSON API can send any string.
 func TestEnqueueComicRejectsUnknownChoices(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"台本モード":   `{"source_text": "x", "script_mode": "no-such-mode"}`,
-		"スタイルモード": `{"source_text": "x", "style_mode": "no-such-style"}`,
-		"テキストモデル": `{"source_text": "x", "text_model": "no-such-model"}`,
-		"画像モデル":   `{"source_text": "x", "image_model": "no-such-model"}`,
+		"script mode": `{"source_text": "x", "script_mode": "no-such-mode"}`,
+		"style mode":  `{"source_text": "x", "style_mode": "no-such-style"}`,
+		"text model":  `{"source_text": "x", "text_model": "no-such-model"}`,
+		"image model": `{"source_text": "x", "image_model": "no-such-model"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -193,8 +193,8 @@ func TestEnqueueComicRejectsUnknownChoices(t *testing.T) {
 	}
 }
 
-// モデル未指定の JSON 呼び出し（MCP 等）も、既定モデルで埋めた Task になること。
-// worker 側の設定へ落とすと、その作品だけ出自が state に残りません。
+// A JSON call with no model (MCP and the like) also yields a Task filled with the default model.
+// Falling to the worker's configuration would leave that work alone without its provenance in the state.
 func TestEnqueueComicFillsInDefaultModels(t *testing.T) {
 	t.Parallel()
 
@@ -217,8 +217,8 @@ func TestEnqueueComicFillsInDefaultModels(t *testing.T) {
 	}
 }
 
-// 選択肢を引ける口があること。ブラウザは <select> を見て選べますが、JSON API の
-// 呼び出し側には何が指定できるか知る手段がなく、知らずに送れば 400 になります。
+// There is an endpoint for looking up the options. A browser can choose by looking at the <select>, but a
+// JSON API caller has no way to know what can be specified, and sending blind gives a 400.
 func TestComicOptionsListsChoices(t *testing.T) {
 	t.Parallel()
 
@@ -238,23 +238,23 @@ func TestComicOptionsListsChoices(t *testing.T) {
 	if len(resp.ScriptModes) == 0 || len(resp.StyleModes) == 0 {
 		t.Fatalf("modes = %+v/%+v, want both listed", resp.ScriptModes, resp.StyleModes)
 	}
-	// 先頭が既定モデル。フォームと同じ並びで返す。
+	// The head is the default model, in the same order as the form.
 	if len(resp.TextModels) == 0 || resp.TextModels[0] != "gemini-model" {
 		t.Errorf("text models = %v, want gemini-model first", resp.TextModels)
 	}
 	if len(resp.ImageModels) == 0 || resp.ImageModels[0] != "image-model" {
 		t.Errorf("image models = %v, want image-model first", resp.ImageModels)
 	}
-	// 名前だけでは選べないので、投入時の許可リストと同じ値が名前として返ること。
+	// A name alone is not enough to choose; the same values as the allowlist at enqueue are returned as names.
 	if resp.StyleModes[0].Name != prompts.ModeDefault {
 		t.Errorf("style modes[0] = %q, want %q", resp.StyleModes[0].Name, prompts.ModeDefault)
 	}
 }
 
-// ジョブ状態は enqueue より先に書くこと。
-// worker は配信されたタスクより先に状態を読み、succeeded なら再配信と見なして飛ばします。
-// Cloud Tasks は数十ミリ秒で届くので、順序が逆だと同じ作品への次の操作が
-// 1つ前の succeeded を読んで黙って捨てられます（実際に踏みました）。
+// The job status is written before the enqueue.
+// The worker reads the status before the delivered task and skips it as a redelivery if it is succeeded.
+// Cloud Tasks delivers within tens of milliseconds, so in the reverse order the next operation on the same
+// work would read the previous succeeded and be silently dropped (this actually happened).
 func TestEnqueueRecordsQueuedStatusBeforeEnqueueing(t *testing.T) {
 	t.Parallel()
 
@@ -271,6 +271,6 @@ func TestEnqueueRecordsQueuedStatusBeforeEnqueueing(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if len(order) != 2 || order[0] != "status" || order[1] != "enqueue" {
-		t.Errorf("順序 = %v, want [status enqueue]", order)
+		t.Errorf("order = %v, want [status enqueue]", order)
 	}
 }

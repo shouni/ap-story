@@ -10,13 +10,13 @@ import (
 
 var _ domain.JobStatusStore = (*jobstatus.Store[domain.JobStatus])(nil)
 
-// NewJobStatusRepository は、GCS を裏付けとしたジョブ進行状況の読み書きを構築します。
+// NewJobStatusRepository builds GCS-backed reads and writes of job progress.
 //
-// 保存形式・ジョブ ID の正規化・キャッシュ抑止（no-store）は go-job-kit の jobstatus が
-// 担います。ここが与えるのは「成果物と同じ comics/{jobID}/ 配下に置く」という配置だけです。
+// The storage format, job ID normalisation and cache suppression (no-store) are go-job-kit's jobstatus's job.
+// All this provides is the placement: "under comics/{jobID}/, with the artifacts".
 //
-// domain.JobStatusStore は jobstatus.Store と同じシグネチャなので、包む型は要りません。
-// 状態ファイルは常に最新の1世代だけを保持し、上書きで更新します。
+// domain.JobStatusStore has the same signature as jobstatus.Store, so no wrapping type is needed.
+// The status file always holds only the latest generation and is updated by overwriting.
 func NewJobStatusRepository(
 	storage config.StorageConfig,
 	store remoteio.Store,

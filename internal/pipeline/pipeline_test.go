@@ -30,7 +30,7 @@ type fakeOutline struct {
 func (f *fakeOutline) GenerateOutline(_ context.Context, req ports.OutlineRequest) (*comic.MangaState, error) {
 	f.called++
 	f.lastModel = req.Model
-	// 本物と同じく、指定されたモードを state に写して返す（以降の工程はここを見る）。
+	// Like the real one, copy the given mode into the state and return it (later stages read it from here).
 	return &comic.MangaState{
 		Version:    comic.StateSchemaVersion,
 		Title:      "title from " + req.SourceText,
@@ -81,8 +81,8 @@ func (f *fakePanel) GeneratePanel(_ context.Context, state *comic.MangaState, pa
 	return state, nil
 }
 
-// GenerateAllPanels は一括生成を単体生成の繰り返しで模します。
-// 並列数の検証は go-comic-kit 側のテストが担うため、ここでは呼び出し内容だけを見ます。
+// GenerateAllPanels imitates batch generation by repeating single generations.
+// Checking concurrency is go-comic-kit's tests' job, so this only looks at what is called.
 func (f *fakePanel) GenerateAllPanels(ctx context.Context, state *comic.MangaState, opts ports.BatchOptions) (*comic.MangaState, error) {
 	f.lastBatchOpts = opts
 	for i := range state.Panels {
@@ -114,7 +114,7 @@ func (f *fakePage) ComposePage(_ context.Context, state *comic.MangaState, page 
 	return state, nil
 }
 
-// ComposeAllPages は一括合成を単体合成の繰り返しで模します。
+// ComposeAllPages imitates batch composition by repeating single compositions.
 func (f *fakePage) ComposeAllPages(ctx context.Context, state *comic.MangaState, opts ports.BatchOptions) (*comic.MangaState, error) {
 	f.lastBatchOpts = opts
 	seen := map[int]struct{}{}
@@ -147,7 +147,7 @@ func (f *fakePage) ComposeAllPages(ctx context.Context, state *comic.MangaState,
 // memStore is an in-memory fake satisfying both ports.ContentReader and remoteio.Writer.
 type memStore struct {
 	files map[string][]byte
-	// writes はパスごとの書き込み回数です。工程ごとのチェックポイント保存の検証に使います。
+	// writes is the number of writes per path, used to check the per-stage checkpoint saves.
 	writes map[string]int
 }
 
@@ -155,22 +155,22 @@ func newMemStore() *memStore {
 	return &memStore{files: map[string][]byte{}, writes: map[string]int{}}
 }
 
-// writeCount は指定パスへの書き込み回数を返します。
+// writeCount returns the number of writes to the given path.
 func (m *memStore) writeCount(path string) int { return m.writes[path] }
 
 func (m *memStore) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	data, ok := m.files[path]
 	if !ok {
-		// remoteio と同じく、不存在は fs.ErrNotExist で包む。以前は io.ErrUnexpectedEOF を
-		// 返しており、「無い」と「読めない」を区別しない実装でもテストが通っていた。
+		// As in remoteio, a missing object is wrapped in fs.ErrNotExist. It used to return io.ErrUnexpectedEOF,
+		// and the tests passed even for an implementation that did not tell "missing" from "unreadable".
 		return nil, fmt.Errorf("open %s: %w", path, fs.ErrNotExist)
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
 func (m *memStore) Write(ctx context.Context, path string, r io.Reader, _ ...remoteio.WriteOption) error {
-	// 実際の GCS 書き込みと同じく context を尊重する。これが無いと、失敗時の保存を
-	// 期限切れ context で行っていても素通りしてしまい、テストが退行を検出できない。
+	// Honour the context, as a real GCS write does. Without this, saving on failure with an expired
+	// context would slip through and the tests could not detect the regression.
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -190,9 +190,9 @@ type fakeNotifier struct {
 	failedErr []error
 }
 
-// Slack への送信は HTTP なので context を尊重します（fakeJobStatusStore.Save と同じ理由）。
-// ここを無視すると、期限際に終わったジョブの通知が期限切れ context で送られていても
-// テストが通ってしまいます。
+// Sending to Slack is HTTP, so it honours the context (the same reason as fakeJobStatusStore.Save).
+// Ignoring it here would let the tests pass even when the notice of a job finishing at the deadline
+// is sent with an expired context.
 func (f *fakeNotifier) NotifyComplete(ctx context.Context, task domain.Task) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -232,8 +232,8 @@ func newTestRunnerWithNotifier(t *testing.T, store *memStore, ops *ports.Operati
 	return r
 }
 
-// completeOps は、全操作が揃った Operations を返します。
-// New の依存検証テストで「検証したい1つだけが欠けている」状態を作るために使います。
+// completeOps returns an Operations with every operation present.
+// It is used by New's dependency tests to build a state where "only the one under test is missing".
 func completeOps() *ports.Operations {
 	return fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, &fakePanel{}, &fakePage{})
 }
@@ -262,7 +262,7 @@ func TestNewValidatesRequiredDependencies(t *testing.T) {
 		"Reader": {Ops: completeOps(), Writer: store, Bucket: "b"},
 		"Writer": {Ops: completeOps(), Reader: store, Bucket: "b"},
 		"Bucket": {Ops: completeOps(), Reader: store, Writer: store},
-		// 一括生成はステップから直接呼ぶため、欠けていれば起動時に落ちること
+		// The batch generators are called directly from steps, so if missing, startup must fail
 		"Ops.Panel/Page": {Ops: batchless, Reader: store, Writer: store, Bucket: "b"},
 	}
 	for name, deps := range cases {
@@ -305,7 +305,7 @@ func TestRunnerComposeComicEndToEnd(t *testing.T) {
 		t.Error("page was never composed")
 	}
 
-	// state が保存されていること
+	// The state has been saved
 	savedPath := "gs://test-bucket/comics/job-abc/comic_state.json"
 	if _, ok := store.files[savedPath]; !ok {
 		t.Errorf("state not saved at %q; files: %v", savedPath, keysOf(store.files))
@@ -384,7 +384,7 @@ func TestRunnerGenerateDesignSheetWithoutExistingJob(t *testing.T) {
 	if design.called != 1 {
 		t.Errorf("design.called = %d, want 1", design.called)
 	}
-	// 既存の作品 state がない単体生成の state は comics/ ではなく design-jobs/ に保存される
+	// The state of a standalone generation with no existing comic state is saved in design-jobs/, not comics/
 	savedPath := "gs://test-bucket/design-jobs/job-design/comic_state.json"
 	if !strings.Contains(string(store.files[savedPath]), "zundamon") {
 		t.Errorf("saved state does not contain character: %s", store.files[savedPath])
@@ -410,7 +410,7 @@ func TestRunnerGenerateDesignSheetForExistingComicSavesToComics(t *testing.T) {
 	if err := r.Run(context.Background(), task); err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
-	// 既存の作品 state がある場合は comics/ 側を更新し、design-jobs/ には保存しない
+	// When a comic state exists, comics/ is updated and nothing is saved to design-jobs/
 	if !strings.Contains(string(store.files["gs://test-bucket/comics/job-comic/comic_state.json"]), "zundamon") {
 		t.Error("comic state was not updated with the design sheet")
 	}
@@ -424,7 +424,7 @@ func TestRunnerRejectsInvalidTask(t *testing.T) {
 	store := newMemStore()
 	r := newTestRunner(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, &fakePanel{}, &fakePage{}))
 
-	task := &domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-1"} // SourceURL/SourceText 両方欠落
+	task := &domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-1"} // missing both SourceURL and SourceText
 	if err := r.Run(context.Background(), task); err == nil {
 		t.Error("Run with invalid task succeeded, want error")
 	}
@@ -447,7 +447,7 @@ func TestRunnerNotifiesCompleteOnSuccess(t *testing.T) {
 	notifier := &fakeNotifier{}
 	r := newTestRunnerWithNotifier(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, &fakePanel{}, &fakePage{}), notifier)
 
-	// 通知は本番の入口である Execute からしか起きない（Run はステップ実行だけを行う）。
+	// Notices only come from Execute, the production entry point (Run only runs the steps).
 	task := domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-notify", SourceText: "元文章"}
 	if err := r.Execute(context.Background(), task); err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -507,8 +507,8 @@ func keysOf(m map[string][]byte) []string {
 	return keys
 }
 
-// fakePartialPanel は指定パネルだけ失敗し、それ以外は生成記録を残します。
-// 「一部失敗しても成功分は state に残る」ことの検証用です。
+// fakePartialPanel fails only the given panel and leaves generation records for the rest.
+// It is for checking that "even when part fails, the successes remain in the state".
 type fakePartialPanel struct {
 	failOn string
 }
@@ -523,8 +523,8 @@ func (f *fakePartialPanel) GeneratePanel(_ context.Context, state *comic.MangaSt
 	return state, nil
 }
 
-// GenerateAllPanels は go-comic-kit の一括生成と同じく、失敗しても成功分を記録した
-// state をエラーと一緒に返します。
+// GenerateAllPanels, like go-comic-kit's batch generation, returns the state recording the successes
+// along with the error even when it fails.
 func (f *fakePartialPanel) GenerateAllPanels(_ context.Context, state *comic.MangaState, opts ports.BatchOptions) (*comic.MangaState, error) {
 	var failure error
 	for i := range state.Panels {
@@ -551,9 +551,9 @@ func TestRunnerSavesStateBetweenPhases(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	// 台本・パネル・ページの3工程ぶん保存される（最後の1回だけではない）
+	// It is saved once per stage, for the script, panels and pages (not just the last time)
 	if got := store.writeCount(statePathFor("job-checkpoint")); got != 3 {
-		t.Errorf("state の保存回数 = %d, want 3（工程ごとのチェックポイント）", got)
+		t.Errorf("state save count = %d, want 3 (a checkpoint per stage)", got)
 	}
 }
 
@@ -576,18 +576,18 @@ func TestRunnerSavesPartialResultsOnFailure(t *testing.T) {
 		t.Fatal("Run succeeded, want error")
 	}
 
-	// 失敗しても state は残り、成功したコマの生成記録が入っていること。
-	// これが無いと、生成済みの画像が state から参照されないまま GCS に取り残される。
+	// Even on failure the state remains, and it holds the generation records of the panels that succeeded.
+	// Without this, generated images are left in GCS with no reference from the state.
 	saved := loadSavedState(t, store, "job-partial")
 	if saved == nil {
-		t.Fatal("失敗時に state が保存されていない")
+		t.Fatal("the state was not saved on failure")
 	}
 	first := saved.PanelByID("ch01-p01")
 	if first == nil || first.Generation == nil {
-		t.Error("成功したコマの生成記録が保存された state に無い")
+		t.Error("the saved state has no generation record for the panel that succeeded")
 	}
 	if failed := saved.PanelByID("ch02-p01"); failed != nil && failed.Generation != nil {
-		t.Error("失敗したコマに生成記録が付いている")
+		t.Error("the failed panel has a generation record")
 	}
 }
 
@@ -605,8 +605,8 @@ func TestRunnerSavesPartialResultsWhenContextExpired(t *testing.T) {
 	}
 	r := newTestRunner(t, store, ops)
 
-	// PIPELINE_TIMEOUT で打ち切られた状況を模す。保存はこの ctx から切り離して
-	// 行うため、期限切れでも成果は残らなければならない。
+	// Imitates being cut off by PIPELINE_TIMEOUT. Saving is detached from this ctx,
+	// so the results must remain even after it has expired.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -616,16 +616,16 @@ func TestRunnerSavesPartialResultsWhenContextExpired(t *testing.T) {
 	}
 
 	if saved := loadSavedState(t, store, "job-expired"); saved == nil {
-		t.Error("context 期限切れ時に state が保存されていない")
+		t.Error("the state was not saved when the context had expired")
 	}
 }
 
-// statePathFor は指定ジョブの state 保存先パスを返します。
+// statePathFor returns the state path of the given job.
 func statePathFor(jobID string) string {
 	return "gs://test-bucket/comics/" + jobID + "/comic_state.json"
 }
 
-// loadSavedState は memStore に保存された state を読み出します。未保存なら nil を返します。
+// loadSavedState reads the state saved in memStore. It returns nil if nothing was saved.
 func loadSavedState(t *testing.T, store *memStore, jobID string) *comic.MangaState {
 	t.Helper()
 	data, ok := store.files[statePathFor(jobID)]
@@ -634,12 +634,12 @@ func loadSavedState(t *testing.T, store *memStore, jobID string) *comic.MangaSta
 	}
 	var state comic.MangaState
 	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatalf("保存された state のパースに失敗しました: %v", err)
+		t.Fatalf("failed to parse the saved state: %v", err)
 	}
 	return &state
 }
 
-// stepNames は計画されたステップ名を並び順で返します。
+// stepNames returns the names of the planned steps in order.
 func stepNames(t *testing.T, task *domain.Task) []string {
 	t.Helper()
 	steps, err := (DefaultPlanner{}).Plan(task)
@@ -658,13 +658,13 @@ func TestPlannerComposeComicStopsAfterScript(t *testing.T) {
 
 	full := stepNames(t, &domain.Task{Command: domain.TaskCommandComposeComic})
 	if !slices.Contains(full, "panels") || !slices.Contains(full, "pages") {
-		t.Errorf("compose_comic の計画に画像生成が含まれていない: %v", full)
+		t.Errorf("the compose_comic plan does not include image generation: %v", full)
 	}
 
 	gated := stepNames(t, &domain.Task{Command: domain.TaskCommandComposeComic, StopAfterScript: true})
 	want := []string{"load_state_if_exists", "outline", "chapter_scripts", "save_state"}
 	if !slices.Equal(gated, want) {
-		t.Errorf("stop_after_script の計画 = %v, want %v", gated, want)
+		t.Errorf("stop_after_script plan = %v, want %v", gated, want)
 	}
 }
 
@@ -674,21 +674,21 @@ func TestPlannerRenderComicResumes(t *testing.T) {
 	names := stepNames(t, &domain.Task{Command: domain.TaskCommandRenderComic})
 	want := []string{"load_state", "panels", "save_state", "pages", "save_state"}
 	if !slices.Equal(names, want) {
-		t.Fatalf("render_comic の計画 = %v, want %v", names, want)
+		t.Fatalf("render_comic plan = %v, want %v", names, want)
 	}
 
-	// 生成済みを飛ばす設定になっていること（再開が未生成分だけで済む根拠）
+	// It is set to skip what has been generated (the reason a resume only covers what is missing)
 	steps, err := (DefaultPlanner{}).Plan(&domain.Task{Command: domain.TaskCommandRenderComic})
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
 	panels, ok := steps[1].(AllPanelsStep)
 	if !ok || !panels.SkipGenerated {
-		t.Errorf("render_comic の panels ステップ = %+v, want SkipGenerated=true", steps[1])
+		t.Errorf("render_comic panels step = %+v, want SkipGenerated=true", steps[1])
 	}
 	pages, ok := steps[3].(AllPagesStep)
 	if !ok || !pages.SkipGenerated {
-		t.Errorf("render_comic の pages ステップ = %+v, want SkipGenerated=true", steps[3])
+		t.Errorf("render_comic pages step = %+v, want SkipGenerated=true", steps[3])
 	}
 }
 
@@ -696,7 +696,7 @@ func TestRunnerRenderComicGeneratesOnlyMissing(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
 
-	// 台本まで済んで、1コマだけ生成済みの state を用意する
+	// Prepare a state that is done up to the script, with only one panel generated
 	scriptOps := fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, &fakePanel{}, &fakePage{})
 	scriptRunner := newTestRunner(t, store, scriptOps)
 	scriptTask := &domain.Task{
@@ -704,20 +704,20 @@ func TestRunnerRenderComicGeneratesOnlyMissing(t *testing.T) {
 		SourceText: "元文章", StopAfterScript: true,
 	}
 	if err := scriptRunner.Run(context.Background(), scriptTask); err != nil {
-		t.Fatalf("台本生成に失敗: %v", err)
+		t.Fatalf("script generation failed: %v", err)
 	}
 
 	saved := loadSavedState(t, store, "job-resume")
 	if saved == nil || len(saved.Panels) == 0 {
-		t.Fatal("台本の state が保存されていない")
+		t.Fatal("the script state was not saved")
 	}
 	for i := range saved.Panels {
 		if saved.Panels[i].Generation != nil {
-			t.Fatal("stop_after_script なのに画像が生成されている")
+			t.Fatal("images were generated despite stop_after_script")
 		}
 	}
 
-	// 1コマだけ生成済みにしてから再開する
+	// Mark one panel as generated, then resume
 	saved.Panels[0].Generation = &comic.GenerationRecord{ImageURL: "gs://out/already.png"}
 	writeState(t, store, "job-resume", saved)
 
@@ -726,35 +726,35 @@ func TestRunnerRenderComicGeneratesOnlyMissing(t *testing.T) {
 		fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, &fakePage{}))
 	renderTask := &domain.Task{Command: domain.TaskCommandRenderComic, JobID: "job-resume"}
 	if err := renderRunner.Run(context.Background(), renderTask); err != nil {
-		t.Fatalf("render_comic に失敗: %v", err)
+		t.Fatalf("render_comic failed: %v", err)
 	}
 
 	if slices.Contains(panel.calledPanels, saved.Panels[0].ID) {
-		t.Errorf("生成済みのコマ %q を作り直している", saved.Panels[0].ID)
+		t.Errorf("the generated panel %q is being remade", saved.Panels[0].ID)
 	}
 	if len(panel.calledPanels) != len(saved.Panels)-1 {
-		t.Errorf("生成したコマ = %v, want 未生成の %d コマだけ", panel.calledPanels, len(saved.Panels)-1)
+		t.Errorf("generated panels = %v, want only the %d panels not yet generated", panel.calledPanels, len(saved.Panels)-1)
 	}
 }
 
-// writeState は memStore に state を直接書き込みます。
+// writeState writes a state directly into memStore.
 func writeState(t *testing.T, store *memStore, jobID string, state *comic.MangaState) {
 	t.Helper()
 	data, err := json.Marshal(state)
 	if err != nil {
-		t.Fatalf("state の JSON 変換に失敗: %v", err)
+		t.Fatalf("failed to convert the state to JSON: %v", err)
 	}
 	store.files[statePathFor(jobID)] = data
 }
 
-// TestRunnerComposeComicRetryResumesInsteadOfRestarting は、失敗した compose_comic が
-// Cloud Tasks に再配信されたとき、保存済みの成果を捨てずに未了分だけを進めることを検証します。
-// これが崩れると、失敗するたびに生成済み画像ぶんの費用がそのまま二重にかかります。
+// TestRunnerComposeComicRetryResumesInsteadOfRestarting checks that when a failed compose_comic is
+// redelivered by Cloud Tasks, it moves on with only what is unfinished, without discarding saved output.
+// If this breaks, every failure pays the cost of the generated images twice.
 func TestRunnerComposeComicRetryResumesInsteadOfRestarting(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
 
-	// 1回目: ch02-p01 で失敗する。ch01-p01 までは生成済みとして保存される。
+	// First run: fails at ch02-p01. Everything up to ch01-p01 is saved as generated.
 	partial := &fakePartialPanel{failOn: "ch02-p01"}
 	firstOps := &ports.Operations{
 		Outline: &fakeOutline{}, ChapterScript: &fakeChapterScript{}, DesignSheet: &fakeDesignSheet{},
@@ -762,40 +762,40 @@ func TestRunnerComposeComicRetryResumesInsteadOfRestarting(t *testing.T) {
 	}
 	task := &domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-retry", SourceText: "元文章"}
 	if err := newTestRunner(t, store, firstOps).Run(context.Background(), task); err == nil {
-		t.Fatal("1回目の Run が成功した。失敗させる前提が崩れている")
+		t.Fatal("the first Run succeeded; the premise of making it fail is broken")
 	}
 
 	saved := loadSavedState(t, store, "job-retry")
 	if saved == nil || saved.PanelByID("ch01-p01").Generation == nil {
-		t.Fatal("失敗時に生成済みコマが保存されていない")
+		t.Fatal("the generated panels were not saved on failure")
 	}
 
-	// 2回目: 同じタスクの再配信。台本は作り直さず、未生成のコマだけを生成する。
+	// Second run: a redelivery of the same task. The script is not remade; only missing panels are generated.
 	outline := &fakeOutline{}
 	chapter := &fakeChapterScript{}
 	panel := &fakePanel{}
 	retryOps := fullOps(outline, chapter, &fakeDesignSheet{}, panel, &fakePage{})
 	if err := newTestRunner(t, store, retryOps).Run(context.Background(), task); err != nil {
-		t.Fatalf("再実行に失敗: %v", err)
+		t.Fatalf("re-run failed: %v", err)
 	}
 
 	if outline.called != 0 {
-		t.Errorf("GenerateOutline が %d 回呼ばれた。既存の章立てを作り直している", outline.called)
+		t.Errorf("GenerateOutline was called %d times; the existing outline is being remade", outline.called)
 	}
 	if len(chapter.calledChapters) != 0 {
-		t.Errorf("台本を作り直している: %v。コマの生成記録まで消える", chapter.calledChapters)
+		t.Errorf("the script is being remade: %v; the panels' generation records would be erased too", chapter.calledChapters)
 	}
 	if slices.Contains(panel.calledPanels, "ch01-p01") {
-		t.Error("生成済みの ch01-p01 を作り直している")
+		t.Error("the generated ch01-p01 is being remade")
 	}
 	if !slices.Contains(panel.calledPanels, "ch02-p01") {
-		t.Errorf("未生成の ch02-p01 が生成されていない: %v", panel.calledPanels)
+		t.Errorf("the missing ch02-p01 was not generated: %v", panel.calledPanels)
 	}
 
 	final := loadSavedState(t, store, "job-retry")
 	for i := range final.Panels {
 		if final.Panels[i].Generation == nil {
-			t.Errorf("再実行後もコマ %q が未生成", final.Panels[i].ID)
+			t.Errorf("panel %q is still not generated after the re-run", final.Panels[i].ID)
 		}
 	}
 }
@@ -814,20 +814,20 @@ func TestRunnerComposeComicFreshJobRunsFullPipeline(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	// state が無いジョブでは従来どおり全工程が走ること（再開対応が新規実行を壊していない）
+	// A job with no state runs every stage, as before (resume support has not broken a fresh run)
 	if outline.called != 1 {
-		t.Errorf("GenerateOutline = %d 回, want 1", outline.called)
+		t.Errorf("GenerateOutline = %d calls, want 1", outline.called)
 	}
 	if len(chapter.calledChapters) != 2 {
-		t.Errorf("台本生成 = %v, want 2章ぶん", chapter.calledChapters)
+		t.Errorf("script generation = %v, want 2 chapters", chapter.calledChapters)
 	}
 	if len(panel.calledPanels) == 0 {
-		t.Error("コマが1つも生成されていない")
+		t.Error("no panel was generated")
 	}
 }
 
-// フォームで選んだモデルと画風が、台本・コマ・ページのすべてに届くこと。
-// 章ごと・工程ごとに違うモデルが混ざると、1つの作品の中で文体も絵柄も揃いません。
+// The model and art style chosen in the form reach the script, the panels and the pages alike.
+// Mixing models per chapter or per stage leaves one work with an uneven writing and drawing style.
 func TestRunnerComposeComicPassesModelAndStyleChoices(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -868,7 +868,7 @@ func TestRunnerComposeComicPassesModelAndStyleChoices(t *testing.T) {
 		t.Errorf("page style mode = %q, want watercolor", page.lastBatchOpts.StyleMode)
 	}
 
-	// 選択は state にも残す。後続の render_comic / 章の作り直しがここから引き継ぐ。
+	// The choice is kept in the state too. A later render_comic or chapter remake inherits it from there.
 	saved := string(store.files["gs://test-bucket/comics/job-models/comic_state.json"])
 	for _, want := range []string{`"text_model": "gemini-selected"`, `"image_model": "image-selected"`, `"style_mode": "watercolor"`} {
 		if !strings.Contains(saved, want) {
@@ -877,8 +877,8 @@ func TestRunnerComposeComicPassesModelAndStyleChoices(t *testing.T) {
 	}
 }
 
-// 台本まで作った作品を後から画像生成するときは、Task にモデルの指定が無くても
-// state に記録された選択を引き継ぐこと。引き継がないと、続きだけ別のモデルで描かれます。
+// When a work made up to the script gets its images later, the choice recorded in the state is inherited
+// even when the Task names no model. Otherwise the rest would be drawn by a different model.
 func TestRunnerRenderComicInheritsRecordedChoices(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -911,7 +911,7 @@ func TestRunnerRenderComicInheritsRecordedChoices(t *testing.T) {
 	}
 }
 
-// 章の台本を作り直すときも、その作品を書いたモデルを引き継ぐこと。
+// Remaking a chapter's script also inherits the model that wrote the work.
 func TestRunnerRegenerateChapterScriptInheritsRecordedTextModel(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -935,8 +935,8 @@ func TestRunnerRegenerateChapterScriptInheritsRecordedTextModel(t *testing.T) {
 	}
 }
 
-// 比率と解像度もキットの設定ではなく呼び出しごとの値になったので、
-// アプリ側から届いていることを確かめます（届かないとキット既定で生成されます）。
+// Aspect ratio and resolution are now per-call values rather than kit configuration, so this
+// checks that they arrive from the app (otherwise generation uses the kit's defaults).
 func TestRunnerPassesImageLayout(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -974,8 +974,8 @@ func TestRunnerPassesImageLayout(t *testing.T) {
 	}
 }
 
-// ページはコマを並べた合成物なので、コマの出来を見てから合成へ進めるようにします。
-// 止めたあとのページ合成は、同じコマンドをもう一度投げれば走ります（生成済みは飛ばされる）。
+// A page is a composite of the panels, so composition waits until the panels have been checked.
+// After stopping, page composition runs when the same command is sent again (the generated panels are skipped).
 func TestRunnerRenderComicStopsAfterPanels(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -1003,7 +1003,7 @@ func TestRunnerRenderComicStopsAfterPanels(t *testing.T) {
 		t.Errorf("pages = %v, want none composed", page.calledPages)
 	}
 
-	// 続きを投げるとページだけが走る（コマは生成済みなので飛ばされる）。
+	// Sending the continuation runs only the pages (the panels are generated, so they are skipped).
 	panel.calledPanels = nil
 	if err := r.Run(context.Background(), &domain.Task{
 		Command: domain.TaskCommandRenderComic, JobID: "job-stage",
@@ -1018,8 +1018,8 @@ func TestRunnerRenderComicStopsAfterPanels(t *testing.T) {
 	}
 }
 
-// seed は同じコマンドの中でコマとページの両方に効くこと。
-// 片方だけ効くと、指定したつもりの条件で再現できません。
+// The seed applies to both panels and pages within the same command.
+// If it applied to only one, the intended conditions could not be reproduced.
 func TestRunnerRenderComicPassesSeedToBothStages(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -1054,8 +1054,8 @@ func TestRunnerRenderComicPassesSeedToBothStages(t *testing.T) {
 	}
 }
 
-// 画像モデルは最初の画像生成で作品に記録され、次の章はそれを引き継ぎます。
-// 台本の時点では未定なので、記録しないと2回目のボタンがモデル名なしで飛びます。
+// The image model is recorded on the work at the first image generation, and the next chapter inherits it.
+// It is undecided at the script stage, so without the record the second button would go out with no model name.
 func TestRunnerRecordsImageModelOnFirstRender(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
@@ -1069,7 +1069,7 @@ func TestRunnerRecordsImageModelOnFirstRender(t *testing.T) {
 	panel := &fakePanel{}
 	r := newTestRunner(t, store, fullOps(&fakeOutline{}, &fakeChapterScript{}, &fakeDesignSheet{}, panel, &fakePage{}))
 
-	// 1回目: 画面で選んだモデルが Task に乗ってくる。
+	// First run: the model chosen on screen arrives on the Task.
 	if err := r.Run(context.Background(), &domain.Task{
 		Command: domain.TaskCommandRenderComic, JobID: "job-rec",
 		ModelOverride: "image-alt", StopAfterPanels: true,
@@ -1077,10 +1077,10 @@ func TestRunnerRecordsImageModelOnFirstRender(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 	if !strings.Contains(string(store.files[statePath]), `"image_model": "image-alt"`) {
-		t.Fatalf("画像モデルが作品に記録されていない: %s", store.files[statePath])
+		t.Fatalf("the image model was not recorded on the work: %s", store.files[statePath])
 	}
 
-	// 2回目: モデル指定なしでも、記録した値を引き継ぐ。
+	// Second run: even with no model given, the recorded value is inherited.
 	panel.lastBatchOpts = ports.BatchOptions{}
 	if err := r.Run(context.Background(), &domain.Task{
 		Command: domain.TaskCommandRenderComic, JobID: "job-rec", StopAfterPanels: true,
@@ -1088,6 +1088,6 @@ func TestRunnerRecordsImageModelOnFirstRender(t *testing.T) {
 		t.Fatalf("Run (2nd) failed: %v", err)
 	}
 	if panel.lastBatchOpts.Model != "image-alt" {
-		t.Errorf("model = %q, want image-alt (記録の引き継ぎ)", panel.lastBatchOpts.Model)
+		t.Errorf("model = %q, want image-alt (inheriting the record)", panel.lastBatchOpts.Model)
 	}
 }

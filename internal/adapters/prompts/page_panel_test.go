@@ -25,9 +25,9 @@ func testCharacters(t *testing.T) *comic.Characters {
 	return cm
 }
 
-// TestPanelPromptNumbersSubjectsInAttachmentOrder は、[Subject N] の番号が参照画像の
-// 添付順（SubjectIDs）と一致することを確認します。ずれるとモデルは別人の参照画像を
-// 見ながら描くことになります。
+// TestPanelPromptNumbersSubjectsInAttachmentOrder checks that the [Subject N] numbers match the
+// attachment order of the reference images (SubjectIDs). If they drift, the model draws while looking at
+// someone else's reference image.
 func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 	t.Parallel()
 	cm := testCharacters(t)
@@ -54,7 +54,7 @@ func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 		"[Subject 1: ずんだもん (green hair)] emotion: 驚き.",
 		"[Subject 2: めたん (purple hair)]",
 		"Background extras (no reference, generic): students (ざわめく)",
-		"Style: Japanese anime style", // 既定プリセットの画風指定が後置される
+		"Style: Japanese anime style", // the default preset's art style is appended
 		"No speech bubbles, no text.",
 	} {
 		if !strings.Contains(user, want) {
@@ -69,8 +69,8 @@ func TestPanelPromptNumbersSubjectsInAttachmentOrder(t *testing.T) {
 	}
 }
 
-// TestPagePromptLayoutAndReferences は、コマ配置マップ・参照番号・セリフ種別の描画指示を
-// 確認します（go-comic-kit から移設した作り込み部分の回帰テストです）。
+// TestPagePromptLayoutAndReferences checks the panel placement map, the reference numbers and the
+// drawing instructions per dialogue kind (a regression test of the refinements moved over from go-comic-kit).
 func TestPagePromptLayoutAndReferences(t *testing.T) {
 	t.Parallel()
 	cm := testCharacters(t)
@@ -103,18 +103,18 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 
 	for _, want := range []string{
 		"PANEL COUNT: [ 2 ]",
-		// 叫びを含む見せゴマなので、2コマとも全幅で縦に積む
+		// Feature panels containing a shout, so both panels stack vertically at full width
 		"TIER 1 (65% of the page height): PANEL 1 = FULL WIDTH.",
 		"TIER 2 (35% of the page height): PANEL 2 = FULL WIDTH.",
-		// コマ画像がある側が正解なので、立ち絵の一覧は出さない（下の専用テスト参照）。
+		// The side with a panel image is the reference, so no list of character sheets is shown (see the dedicated test below).
 		"SUBJECT [めたん]: Match input_file_2",
 		"COMPOSITION_GUIDE: Recreate the composition, posing, background, and character appearance from input_file_3",
-		// コマ画像がある側が正解。立ち絵は細部の補助に降りる。
+		// The side with a panel image is the reference. The character sheet steps down to helping with detail.
 		"CHARACTER_IDENTITY: [ ずんだもん ] already appears in input_file_3",
 		"SHOUT: Jagged, explosive speech bubble for [ずんだもん]",
 		"NARRATION: Rectangular caption box",
 		`TEXT_TO_RENDER: "なんなのだ！？"`,
-		"Horizontal (Yokogaki) or Vertical", // 短い叫びは横書き許可
+		"Horizontal (Yokogaki) or Vertical", // a short shout may be written horizontally
 		`TEXT_TO_RENDER: "落ち着きなさい。"`,
 	} {
 		if !strings.Contains(user, want) {
@@ -126,8 +126,8 @@ func TestPagePromptLayoutAndReferences(t *testing.T) {
 	}
 }
 
-// TestPagePromptFullWidthImpactForOddCount は、演出指定のないページでも最後のコマが
-// 全幅の見せゴマになることを確認します（ページ最後は次への引きなので広く取ります）。
+// TestPagePromptFullWidthImpactForOddCount checks that even on a page with no staging instructions,
+// the last panel becomes a full-width feature panel (the last panel pulls into the next page, so it gets room).
 func TestPagePromptFullWidthImpactForOddCount(t *testing.T) {
 	t.Parallel()
 	cm := testCharacters(t)
@@ -150,8 +150,8 @@ func TestPagePromptFullWidthImpactForOddCount(t *testing.T) {
 	}
 }
 
-// TestPageLayoutFollowsPanelContent は、割り付けがコマの中身で決まることを確認します。
-// 一律の2列グリッドだと、章頭に必ず来る引きの画が半幅に潰れます。
+// TestPageLayoutFollowsPanelContent checks that the layout is decided by the panels' content.
+// With a uniform two-column grid, the long shot that always opens a chapter is squashed to half width.
 func TestPageLayoutFollowsPanelContent(t *testing.T) {
 	t.Parallel()
 
@@ -172,24 +172,24 @@ func TestPageLayoutFollowsPanelContent(t *testing.T) {
 		panel  int
 		column string
 	}{
-		{0, columnFull},  // 章頭の引き
-		{1, columnRight}, // 掛け合い。相方の無言の寄りより広く取る
+		{0, columnFull},  // the chapter's opening long shot
+		{1, columnRight}, // the exchange; wider than its partner, a silent close-up
 		{2, columnLeft},
-		{5, columnFull}, // 叫びで締める見せゴマ
+		{5, columnFull}, // the feature panel closing on a shout
 	} {
 		if got := layout[tc.panel].Column; got != tc.column {
-			t.Errorf("PANEL %d の位置 = %s, want %s", tc.panel+1, got, tc.column)
+			t.Errorf("PANEL %d position = %s, want %s", tc.panel+1, got, tc.column)
 		}
 	}
 	if layout[1].Width <= layout[2].Width {
-		t.Errorf("掛け合いのコマが無言の寄りより広くない: %d%% vs %d%%", layout[1].Width, layout[2].Width)
+		t.Errorf("the exchange panel is not wider than the silent close-up: %d%% vs %d%%", layout[1].Width, layout[2].Width)
 	}
 	if layout[5].Height <= layout[2].Height {
-		t.Errorf("締めのコマの段が説明の段より高くない: %d%% vs %d%%", layout[5].Height, layout[2].Height)
+		t.Errorf("the closing panel's tier is not taller than the explanation's tier: %d%% vs %d%%", layout[5].Height, layout[2].Height)
 	}
 }
 
-// 段の高さの合計は必ず 100% です。端数が残ると、そこがページ下端の空白の帯になります。
+// The tier heights always total 100%. A remainder would become a blank strip at the bottom of the page.
 func TestPageLayoutTierHeightsFillThePage(t *testing.T) {
 	t.Parallel()
 
@@ -200,13 +200,13 @@ func TestPageLayoutTierHeightsFillThePage(t *testing.T) {
 		}
 		layout := planPageLayout(panels)
 		if len(layout) != n {
-			t.Fatalf("n=%d: 割り付けが %d 件", n, len(layout))
+			t.Fatalf("n=%d: %d placements", n, len(layout))
 		}
 
 		total := 0
 		for _, tier := range groupTiers(layout) {
 			if tier.Height <= 0 {
-				t.Errorf("n=%d: TIER %d の高さが %d%%", n, tier.Number, tier.Height)
+				t.Errorf("n=%d: TIER %d has height %d%%", n, tier.Number, tier.Height)
 			}
 			total += tier.Height
 			width := 0
@@ -214,17 +214,17 @@ func TestPageLayoutTierHeightsFillThePage(t *testing.T) {
 				width += layout[i].Width
 			}
 			if width != 100 {
-				t.Errorf("n=%d: TIER %d の幅の合計が %d%%", n, tier.Number, width)
+				t.Errorf("n=%d: the widths in TIER %d total %d%%", n, tier.Number, width)
 			}
 		}
 		if total != 100 {
-			t.Errorf("n=%d: 段の高さの合計が %d%%", n, total)
+			t.Errorf("n=%d: the tier heights total %d%%", n, total)
 		}
 	}
 }
 
-// 配置マップとコマごとの指示は同じ割り付けから書くこと。別々に組み立てると、
-// 同じページに食い違う位置指示が並びます。
+// The placement map and the per-panel instructions are written from the same layout. Built separately,
+// the same page would carry conflicting position instructions.
 func TestPagePromptMapAgreesWithPanelBreakdown(t *testing.T) {
 	t.Parallel()
 
@@ -248,22 +248,22 @@ func TestPagePromptMapAgreesWithPanelBreakdown(t *testing.T) {
 		}
 	}
 	if len(mapTier) != len(panels) {
-		t.Fatalf("配置マップに載ったコマが %d 件:\n%s", len(mapTier), user)
+		t.Fatalf("%d panels in the placement map:\n%s", len(mapTier), user)
 	}
 	for _, m := range regexp.MustCompile(`### PANEL (\d+) \[[^\]]+\]\n- POSITION: Tier (\d+) of`).FindAllStringSubmatch(user, -1) {
 		panel, _ := strconv.Atoi(m[1])
 		tier, _ := strconv.Atoi(m[2])
 		if mapTier[panel] != tier {
-			t.Errorf("PANEL %d: 配置マップは TIER %d、コマの指示は TIER %d", panel, mapTier[panel], tier)
+			t.Errorf("PANEL %d: the placement map says TIER %d, the panel instruction says TIER %d", panel, mapTier[panel], tier)
 		}
 		delete(mapTier, panel)
 	}
 	if len(mapTier) != 0 {
-		t.Errorf("配置マップにあってコマの指示に無い: %v", mapTier)
+		t.Errorf("in the placement map but not in the panel instructions: %v", mapTier)
 	}
 }
 
-// 狭いコマに吹き出しが複数入るときは、そのことを伝えます。絵が全部隠れます。
+// When several speech bubbles go into a narrow panel, say so. They would hide all the art.
 func TestPagePromptFlagsBalloonCrowdingInNarrowPanels(t *testing.T) {
 	t.Parallel()
 
@@ -271,7 +271,7 @@ func TestPagePromptFlagsBalloonCrowdingInNarrowPanels(t *testing.T) {
 		{SpeakerID: "zundamon", Kind: comic.DialogueKindSpeech, Text: "どうなってるのだ"},
 		{SpeakerID: "metan", Kind: comic.DialogueKindSpeech, Text: "落ち着きなさい"},
 	}
-	// 引きで始まり引きで締めるページ。真ん中の段だけが半幅になる。
+	// A page that opens and closes on a long shot. Only the middle tier is half width.
 	panels := []comic.Panel{
 		{ID: "p1", Shot: "wide"},
 		{ID: "p2", Shot: "medium", Dialogues: chatter},
@@ -285,13 +285,13 @@ func TestPagePromptFlagsBalloonCrowdingInNarrowPanels(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if layout[1].Column == columnFull {
-		t.Fatalf("前提が崩れている: 半幅のコマが無い（%+v）", layout)
+		t.Fatalf("the premise is broken: no half-width panel (%+v)", layout)
 	}
 	if !strings.Contains(user, "BALLOON SPACE: 2 balloons must fit inside this narrow panel") {
-		t.Errorf("狭いコマの吹き出し過密を伝えていない:\n%s", user)
+		t.Errorf("the crowding of speech bubbles in a narrow panel is not mentioned:\n%s", user)
 	}
 
-	// 全幅のコマには要らない。狭くないので言うだけ雑音になる。
+	// Not needed for a full-width panel. It is not narrow, so saying it is only noise.
 	_, single, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
 		Panels: panels[1:2], Characters: testCharacters(t),
 	})
@@ -299,20 +299,20 @@ func TestPagePromptFlagsBalloonCrowdingInNarrowPanels(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if strings.Contains(single, "BALLOON SPACE") {
-		t.Error("全幅のコマに狭さの注意が出ている")
+		t.Error("a full-width panel got the narrowness warning")
 	}
 }
 
-// コマの無いページは作れません。0コマのまま組むと「PANEL COUNT: [ 0 ]」を渡すことになります。
+// A page with no panels cannot be made. Building it with 0 panels would pass "PANEL COUNT: [ 0 ]".
 func TestPagePromptRejectsEmptyPage(t *testing.T) {
 	t.Parallel()
 
 	if _, _, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{Characters: testCharacters(t)}); err == nil {
-		t.Error("0コマのページがエラーにならない")
+		t.Error("a page with 0 panels did not fail")
 	}
 }
 
-// TestPromptEditModePreservesComposition は、編集モードが構図の維持を指示することを確認します。
+// TestPromptEditModePreservesComposition checks that edit mode instructs keeping the composition.
 func TestPromptEditModePreservesComposition(t *testing.T) {
 	t.Parallel()
 
@@ -333,9 +333,9 @@ func TestPromptEditModePreservesComposition(t *testing.T) {
 	}
 }
 
-// testStyles は埋め込みの画風プリセットを読み込みます。
-// プロンプト実装は画風の解決をプリセットに委ねるため、テストでも本物を使います
-// （文言そのものの検証は style_test.go 側で行います）。
+// testStyles loads the embedded art-style presets.
+// The prompt implementations leave resolving the art style to the presets, so the tests use the real ones too
+// (the wording itself is checked in style_test.go).
 func testStyles(t *testing.T) *Styles {
 	t.Helper()
 	styles, err := NewStyles()
@@ -349,8 +349,8 @@ func testPanelPrompt(t *testing.T) PanelPrompt   { return PanelPrompt{Styles: te
 func testPagePrompt(t *testing.T) PagePrompt     { return PagePrompt{Styles: testStyles(t)} }
 func testDesignPrompt(t *testing.T) DesignPrompt { return DesignPrompt{Styles: testStyles(t)} }
 
-// 1コマに複数の発話があるときは読む順序を指示すること。
-// 順序を言わないと吹き出しの配置が絵の都合で決まり、掛け合いが逆順に読めます。
+// When one panel has several utterances, the reading order is instructed.
+// Without it, bubble placement is decided by the art's convenience and an exchange can read in reverse.
 func TestPagePromptOrdersMultipleBalloons(t *testing.T) {
 	t.Parallel()
 
@@ -374,16 +374,16 @@ func TestPagePromptOrdersMultipleBalloons(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if !strings.Contains(user, "BALLOON ORDER") {
-		t.Errorf("複数の吹き出しがあるのに読み順の指示が無い:\n%s", user)
+		t.Errorf("several speech bubbles but no reading-order instruction:\n%s", user)
 	}
-	// 話者ごとに誰の吹き出しかが伝わること
+	// Each speaker's bubble is identified
 	for _, want := range []string{"ずんだもん", "めたん", `"全自動なのだ！"`, `"勘違いよ。"`} {
 		if !strings.Contains(user, want) {
 			t.Errorf("prompt missing %q", want)
 		}
 	}
 
-	// 1つだけのときは余計な指示を出さない
+	// With only one, no extra instruction is given
 	single := multi
 	single.Dialogues = multi.Dialogues[:1]
 	_, user, _, err = testPagePrompt(t).BuildPage(&ports.PagePromptData{
@@ -393,12 +393,12 @@ func TestPagePromptOrdersMultipleBalloons(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if strings.Contains(user, "BALLOON ORDER") {
-		t.Error("吹き出しが1つなのに読み順の指示が出ている")
+		t.Error("a reading-order instruction appears with only one speech bubble")
 	}
 }
 
-// ページはフキダシを描くのが仕事なので、構図メモに紛れた「文字を描くな」を渡してはいけません。
-// 同じプロンプトで「描くな」と「この文字を描け」を同時に指示することになります。
+// A page's job is to draw speech bubbles, so a "do not draw text" that slipped into the composition notes must not be passed on.
+// The same prompt would instruct "do not draw" and "draw this text" at once.
 func TestPagePromptDropsTextExclusionsFromScene(t *testing.T) {
 	t.Parallel()
 
@@ -417,19 +417,19 @@ func TestPagePromptDropsTextExclusionsFromScene(t *testing.T) {
 	}
 	for _, unwanted := range []string{"no speech bubbles", "no text"} {
 		if strings.Contains(user, unwanted) {
-			t.Errorf("ページのプロンプトに %q が残っている:\n%s", unwanted, user)
+			t.Errorf("%q remains in the page prompt:\n%s", unwanted, user)
 		}
 	}
-	// 構図そのものは残すこと
+	// The composition itself is kept
 	if !strings.Contains(user, "dramatic rim lighting") {
-		t.Error("構図の記述まで落としている")
+		t.Error("the composition description was dropped too")
 	}
 	if !strings.Contains(user, "TEXT_TO_RENDER") {
-		t.Error("描くべき文字の指示が消えている")
+		t.Error("the instruction for the text to draw is gone")
 	}
 }
 
-// コマ側は逆で、フキダシを描かせない指定が要ります（専用のネガティブプロンプトが担当）。
+// The panel side is the opposite: it needs an instruction not to draw speech bubbles (handled by a dedicated negative prompt).
 func TestPanelNegativePromptStillExcludesText(t *testing.T) {
 	t.Parallel()
 
@@ -442,13 +442,13 @@ func TestPanelNegativePromptStillExcludesText(t *testing.T) {
 	}
 	for _, want := range []string{"speech bubble", "text"} {
 		if !strings.Contains(negative, want) {
-			t.Errorf("コマのネガティブプロンプトに %q が無い", want)
+			t.Errorf("the panel negative prompt lacks %q", want)
 		}
 	}
 }
 
-// ページにとっての正解は、既に生成されたコマ画像です。立ち絵は比率も絵柄も違う別の絵で、
-// 優先させると寄せ直しが起きます。コマ画像が無いときだけ立ち絵が唯一の手がかりになります。
+// For a page, the reference is the panel image already generated. A character sheet is a different picture with a
+// different ratio and style, and prioritising it causes re-fitting. Only when there is no panel image is the sheet the sole clue.
 func TestPagePromptPrefersPanelOverCharacterSheet(t *testing.T) {
 	t.Parallel()
 
@@ -468,13 +468,13 @@ func TestPagePromptPrefersPanelOverCharacterSheet(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if !strings.Contains(withGuide, "already appears in input_file_2") {
-		t.Errorf("コマ画像を正解として指示していない:\n%s", withGuide)
+		t.Errorf("the panel image is not instructed as the reference:\n%s", withGuide)
 	}
 	if strings.Contains(withGuide, "MUST match input_file_1 exactly") {
-		t.Error("立ち絵を優先させる指示が残っている")
+		t.Error("an instruction prioritising the character sheet remains")
 	}
 
-	// コマ画像が無いページでは、立ち絵が唯一の手がかりになる。
+	// On a page with no panel image, the character sheet is the sole clue.
 	_, withoutGuide, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
 		Panels: []comic.Panel{panel}, Characters: chars,
 		CharacterFile: map[string]int{"zundamon": 1},
@@ -483,12 +483,12 @@ func TestPagePromptPrefersPanelOverCharacterSheet(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if !strings.Contains(withoutGuide, "MUST match input_file_1 exactly") {
-		t.Errorf("コマ画像が無いのに立ち絵を使う指示が出ていない:\n%s", withoutGuide)
+		t.Errorf("no instruction to use the character sheet although there is no panel image:\n%s", withoutGuide)
 	}
 }
 
-// コマ画像に写っているキャラは、そのコマが手本です。
-// 立ち絵の一覧を重ねて出すと、コマ単位の指示と競合します（説明文も700字近くあります）。
+// For a character shown in a panel image, that panel is the model.
+// Adding the list of character sheets on top conflicts with the per-panel instructions (and the descriptions run close to 700 characters).
 func TestPagePromptOmitsMasterListWhenPanelsCoverEveryone(t *testing.T) {
 	t.Parallel()
 
@@ -506,13 +506,13 @@ func TestPagePromptOmitsMasterListWhenPanelsCoverEveryone(t *testing.T) {
 		t.Fatalf("BuildPage() error = %v", err)
 	}
 	if strings.Contains(covered, "CHARACTER MASTER REFERENCES") {
-		t.Errorf("コマ画像があるのに立ち絵の一覧が出ている:\n%s", covered)
+		t.Errorf("the list of character sheets appears although there is a panel image:\n%s", covered)
 	}
 	if strings.Contains(covered, "green hair") {
-		t.Error("立ち絵の説明文がページのプロンプトに残っている")
+		t.Error("the character sheet descriptions remain in the page prompt")
 	}
 
-	// コマ画像が無いキャラは、立ち絵が唯一の手本なので残す。
+	// A character with no panel image keeps the sheet, its sole model.
 	_, uncovered, _, err := testPagePrompt(t).BuildPage(&ports.PagePromptData{
 		Panels: []comic.Panel{panel}, Characters: testCharacters(t),
 		CharacterFile: map[string]int{"zundamon": 1},
@@ -522,7 +522,7 @@ func TestPagePromptOmitsMasterListWhenPanelsCoverEveryone(t *testing.T) {
 	}
 	for _, want := range []string{"CHARACTER MASTER REFERENCES", "no panel guide", "green hair"} {
 		if !strings.Contains(uncovered, want) {
-			t.Errorf("コマ画像が無いのに %q が出ていない", want)
+			t.Errorf("%q does not appear although there is no panel image", want)
 		}
 	}
 }

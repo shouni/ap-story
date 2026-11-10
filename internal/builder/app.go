@@ -1,5 +1,5 @@
-// Package builder は、設定値から各サービスクライアント・DI コンテナの
-// 依存関係を組み立てるファクトリ関数を提供します。
+// Package builder provides the factory functions that assemble the service clients and the
+// dependencies of the DI container from the configuration.
 package builder
 
 import (
@@ -19,7 +19,7 @@ import (
 	"github.com/shouni/ap-story/internal/repository"
 )
 
-// BuildContainer は外部サービスとの接続を確立し、依存関係を組み立てた app.Container を返します。
+// BuildContainer connects to the external services and returns an app.Container with its dependencies assembled.
 func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Container, err error) {
 	var resources []io.Closer
 	defer func() {
@@ -43,10 +43,10 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if ioErr != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", ioErr)
 	}
-	// resources は組み立て中の巻き戻し用で、成功して返ったあとは誰も見ません。
-	// 実行中の解放は closers（app.Container.Close）が受け持つため、成功後も
-	// 生き続ける資源は両方へ入れます。ストレージの寿命はファクトリが持ちます
-	// （Bundle.Close が factory を閉じます）。
+	// resources is for unwinding a failed assembly; nobody looks at it after a successful return.
+	// Releasing at run time belongs to closers (app.Container.Close), so a resource that
+	// outlives a successful build goes into both. The storage's lifetime belongs to the factory
+	// (Bundle.Close closes the factory).
 	closers := []io.Closer{storage}
 
 	httpClient := httpkit.New()
@@ -58,22 +58,22 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 
 	// 3. Job Status
-	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込むため、
-	// 役割によらず必要です。
+	// Needed regardless of role: the web process writes `queued` at enqueue time and the
+	// worker process writes the outcome.
 	jobStatus := repository.NewJobStatusRepository(cfg.Storage, store)
 
 	// 4. go-comic-kit Operations、Notifier、Worker Pipeline
-	// 生成を実行するのは Worker 面だけです。Web 面で組み立てないことで、
-	// Vertex AI クライアントと Slack Webhook への依存を持たずに済みます
-	// （ap-story-web-runner には aiplatform.user も SLACK_WEBHOOK_URL への
-	// アクセス権も無く、持たせる理由がありません）。
+	// Only the worker face runs generation. Not assembling it on the web face keeps the
+	// web face free of the Vertex AI client and the Slack webhook
+	// (ap-story-web-runner has neither aiplatform.user nor access to SLACK_WEBHOOK_URL,
+	// and there is no reason to give it either).
 	//
-	// どちらも Web 面では nil のまま Container に入ります。
-	// Pipeline を参照するのは BuildHandlers の ServesWorker 分岐だけです。
+	// Both stay nil in the Container on the web face.
+	// The only reader of Pipeline is the ServesWorker branch of BuildHandlers.
 	//
-	// pipelineRunner を具象の *pipeline.Runner ではなく domain.Pipeline で宣言するのは、
-	// nil のポインタを interface のフィールドへ代入すると、中身が nil でも
-	// interface 自体は非 nil になり、Web 面での nil 判定が効かなくなるためです。
+	// pipelineRunner is declared as domain.Pipeline rather than the concrete *pipeline.Runner
+	// because assigning a nil pointer to an interface field makes the interface itself non-nil
+	// even though its content is nil, which would defeat the nil check on the web face.
 	var ops *ports.Operations
 	var pipelineRunner domain.Pipeline
 	if cfg.Server.Role.ServesWorker() {
@@ -81,8 +81,8 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		if opsErr != nil {
 			return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
 		}
-		// go-comic-kit v1.6.0 から Operations は解放すべきリソースを持ちません
-		// （参照画像のキャッシュが読み出し時失効になり、掃除用 goroutine が消えたため）。
+		// Since go-comic-kit v1.6.0, Operations holds no resource that needs releasing
+		// (the reference-image cache now expires on read, so its cleanup goroutine is gone).
 		ops = builtOps
 
 		notifier, notifierErr := buildNotifier(httpClient.WithoutRetry(), cfg)
@@ -98,21 +98,21 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 
 	// 5. Task Enqueuer
-	// タスクを投入するのは Web 面だけです。Worker 面は受け取る側なので、
-	// 組み立てないことで未使用の Cloud Tasks クライアントと CLOUD_TASKS_QUEUE_ID への
-	// 依存を持たずに済みます。
+	// Only the web face enqueues tasks. The worker face is the receiving side, so not
+	// assembling it there keeps it free of an unused Cloud Tasks client and of
+	// CLOUD_TASKS_QUEUE_ID.
 	//
-	// nil のポインタを domain.TaskQueue に代入すると「非 nil のインターフェースが nil を保持する」
-	// 状態になり、Closers の nil チェックをすり抜けて nil レシーバーで Close が呼ばれます。
-	// それを避けるため、組み立てたときにだけインターフェースと Closers へ入れます。
+	// Assigning a nil pointer to domain.TaskQueue produces "a non-nil interface holding nil",
+	// which slips past the nil check in Closers and calls Close on a nil receiver.
+	// To avoid that, the interface and Closers are filled only when a client was built.
 	var taskQueue domain.TaskQueue
 	var sessionStore session.Store
 	if cfg.Server.Role.ServesWeb() {
-		// セッションはジョブ状態とは別のデータベースに置きます（SessionDatabase）。
-		// クライアントの寿命はストアが持つので、Closers にはストアを登録します。
+		// Sessions live in a database separate from job status (SessionDatabase).
+		// The store owns the client's lifetime, so the store is what goes into Closers.
 		owned, fsErr := session.OpenFirestoreStore(ctx, cfg.GCP.ProjectID, cfg.Auth.SessionDatabase, cfg.Auth.SessionCollection)
 		if fsErr != nil {
-			return nil, fmt.Errorf("セッションストアの構築に失敗しました: %w", fsErr)
+			return nil, fmt.Errorf("failed to build the session store: %w", fsErr)
 		}
 		resources = append(resources, owned)
 		closers = append(closers, owned)

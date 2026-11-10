@@ -7,17 +7,17 @@ import (
 	"github.com/shouni/go-comic-kit/ports"
 )
 
-// AllPanelsStep は、pc.Manga の全パネルを生成します。compose_comic の一括生成で使います。
-// 並列数は go-comic-kit の Config.MaxConcurrency（MAX_CONCURRENCY）に従います。
+// AllPanelsStep generates every panel of pc.Manga. It is used by compose_comic's batch generation.
+// Concurrency follows go-comic-kit's Config.MaxConcurrency (MAX_CONCURRENCY).
 type AllPanelsStep struct {
-	// SkipGenerated が true の場合、すでに生成済みのコマを飛ばします（再開用）。
+	// When SkipGenerated is true, panels already generated are skipped (for resuming).
 	SkipGenerated bool
 }
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (AllPanelsStep) Name() string { return "panels" }
 
-// Execute は pc.Manga の全パネルを生成します。
+// Execute generates every panel of pc.Manga.
 func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 	if pc.Manga == nil {
 		return fmt.Errorf("panels: manga state is nil")
@@ -30,14 +30,14 @@ func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 		ImageSize:   pc.Layout.PanelImageSize,
 		StyleMode:   pc.styleMode(),
 		OutputDir:   pc.OutputDir,
-		// 章の指定があればその章だけを生成する。画像はいちばん高価な工程なので、
-		// 確認の単位を台本（章単位）と揃えられるようにしている。
+		// With a chapter given, generate only that chapter. Images are the most expensive stage, so
+		// the unit of checking can match the script's (per chapter).
 		ChapterID:     pc.Task.ChapterID,
 		SkipGenerated: s.SkipGenerated,
 	})
-	// 一括生成は一部が失敗しても、成功分を記録した state をエラーと一緒に返す。
-	// エラー時も受け取っておかないと、生成済みの画像が state から参照されないまま
-	// GCS に取り残される（Runner.savePartialResults がこれを保存する）。
+	// Even when part of a batch fails, it returns the state recording the successes along with the error.
+	// Unless it is received on error too, generated images are left in GCS with no reference from
+	// the state (Runner.savePartialResults saves it).
 	if manga != nil {
 		pc.Manga = manga
 	}
@@ -47,14 +47,14 @@ func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 	return nil
 }
 
-// SinglePanelStep は、Task.PanelID の1パネルのみ生成/再生成します。
-// regenerate_panel で使います。Task の Seed/EditPrompt/PromptOverride を反映します。
+// SinglePanelStep generates or regenerates only the panel in Task.PanelID.
+// It is used by regenerate_panel and applies the Task's Seed/EditPrompt/PromptOverride.
 type SinglePanelStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (SinglePanelStep) Name() string { return "panel" }
 
-// Execute は Task.PanelID の1パネルのみ生成/再生成します。
+// Execute generates or regenerates only the panel in Task.PanelID.
 func (SinglePanelStep) Execute(ctx context.Context, pc *Context) error {
 	opts := ports.GenerateOptions{
 		Seed:           pc.Task.Seed,

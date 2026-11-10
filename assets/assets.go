@@ -1,36 +1,36 @@
-// Package assets は、コードとは別のサイクルで編集される埋め込みリソース
-// （HTML テンプレート・CSS/JavaScript・プロンプトテンプレート）を提供します。
-// 姉妹プロジェクトと同じ配置です。
+// Package assets provides the embedded resources edited on a different cycle from the code
+// (HTML templates, CSS/JavaScript, prompt templates).
+// The layout is the same as in the sister projects.
 //
-// このパッケージは置き場に徹します。読み込み・パース・組み立ては利用側
-// （internal/server/handlers、internal/adapters/prompts）の責務です。ここに処理を
-// 足し始めると、埋め込みリソースの所在という単一の役割が失われます。
+// This package is only a place to keep things. Loading, parsing and assembling are the users'
+// job (internal/server/handlers, internal/adapters/prompts). Adding processing here would
+// lose its single role: being where the embedded resources live.
 package assets
 
 import "embed"
 
 const (
-	// OutlinePromptDir は章立て生成プロンプトの埋め込みパスです。
+	// OutlinePromptDir is the embedded path of the outline-generation prompts.
 	OutlinePromptDir = "prompts/outline"
-	// ChapterPromptDir は章台本生成プロンプトの埋め込みパスです。
+	// ChapterPromptDir is the embedded path of the chapter-script generation prompts.
 	ChapterPromptDir = "prompts/chapter"
-	// StylesJSONPath は画風プリセット（スタイルモード）の埋め込みパスです。
-	// 台本プロンプトと違い、1件が画風指定とネガティブプロンプトの対で決まる
-	// 構造データなので、テンプレートではなく JSON で持ちます。
+	// StylesJSONPath is the embedded path of the art-style presets (style modes).
+	// Unlike the script prompts, each entry is structured data determined by a pair of the art-style
+	// instruction and the negative prompt, so it is kept as JSON rather than a template.
 	StylesJSONPath = "prompts/styles.json"
 )
 
 var (
-	// Templates は、画面を構成する HTML テンプレート一式を保持します。
+	// Templates holds the full set of HTML templates that make up the screens.
 	//go:embed templates/*.html
 	Templates embed.FS
 
-	// StaticFiles は、ブラウザへ配信するCSS/JavaScriptなどの静的ファイルを保持します。
+	// StaticFiles holds the static files served to the browser, such as CSS/JavaScript.
 	//go:embed static
 	StaticFiles embed.FS
 
-	// Prompts は、台本生成プロンプトのテンプレートと画風プリセットを保持します。
-	// テンプレートはディレクトリ名が生成工程、ファイル名（拡張子を除く）がモード名です。
+	// Prompts holds the script-generation prompt templates and the art-style presets.
+	// For the templates, the directory name is the generation stage and the file name (without extension) is the mode name.
 	//go:embed prompts/outline/*.md prompts/chapter/*.md prompts/styles.json
 	Prompts embed.FS
 )

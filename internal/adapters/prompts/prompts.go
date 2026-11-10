@@ -1,7 +1,7 @@
-// Package prompts は、ap-story 独自の Outline/ChapterScript/DesignSheet プロンプトを
-// go-comic-kit の ports.OutlinePrompt / ports.ChapterScriptPrompt / ports.DesignSheetPrompt
-// として実装します。ずんだもん・めたん・つむぎの配役・世界観（SFメカアクション風・技術学習漫画）は
-// 姉妹プロジェクトの対話プロンプトの構成を踏襲しています。
+// Package prompts implements ap-story's own Outline/ChapterScript/DesignSheet prompts as
+// go-comic-kit's ports.OutlinePrompt / ports.ChapterScriptPrompt / ports.DesignSheetPrompt.
+// The casting of Zundamon, Metan and Tsumugi and the world (SF-mecha-action-style tech-learning comics)
+// follow the structure of the sister project's dialogue prompts.
 package prompts
 
 import (
@@ -14,15 +14,15 @@ import (
 	"github.com/shouni/ap-story/assets"
 )
 
-// ModeDefault は既定のプロンプトモード名です。
+// ModeDefault is the name of the default prompt mode.
 const ModeDefault = "default"
 
-// ScriptPrompts は、ap-story 独自の Outline/ChapterScript プロンプトです。
+// ScriptPrompts are ap-story's own Outline/ChapterScript prompts.
 type ScriptPrompts struct {
 	outline *promptkit.Builder
 	chapter *promptkit.Builder
-	// infos は章立てテンプレートの front matter です。台本モードの説明は
-	// 章立て側に書きます（1つのモードの説明が2ファイルに割れないようにするため）。
+	// infos is the front matter of the outline templates. A script mode's description is written
+	// on the outline side (so that one mode's description is not split across two files).
 	infos map[string]ModeInfo
 }
 
@@ -31,53 +31,53 @@ var (
 	_ ports.ChapterScriptPrompt = (*ScriptPrompts)(nil)
 )
 
-// NewScriptPrompts は埋め込みテンプレートを読み込んで ScriptPrompts を構築します。
+// NewScriptPrompts loads the embedded templates and builds ScriptPrompts.
 //
-// 台本モードは章立てと章台本の両方でそのモード名のテンプレートを引くため、
-// 片方にしか無いモードは構築時に弾きます。選択肢に出したモードが章の生成に入って
-// から「テンプレートが無い」と落ちるのを、起動時に前倒しするためです。
+// A script mode looks up the template of that mode name for both the outline and the chapter script,
+// so a mode present on only one side is rejected at construction. This moves the failure of
+// "no template" from the middle of generating a chapter, after the mode was offered as an option, forward to startup.
 func NewScriptPrompts() (*ScriptPrompts, error) {
 	outline, infos, err := loadPrompts(assets.OutlinePromptDir)
 	if err != nil {
-		return nil, fmt.Errorf("章立てテンプレートの読み込みに失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to load the outline templates: %w", err)
 	}
 	chapter, _, err := loadPrompts(assets.ChapterPromptDir)
 	if err != nil {
-		return nil, fmt.Errorf("章台本テンプレートの読み込みに失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to load the chapter-script templates: %w", err)
 	}
 	outlineModes, chapterModes := sortedModes(outline), sortedModes(chapter)
 	if !slices.Equal(outlineModes, chapterModes) {
-		return nil, fmt.Errorf("台本モードが章立てと章台本で一致しません: outline=%v chapter=%v", outlineModes, chapterModes)
+		return nil, fmt.Errorf("script modes differ between outline and chapter script: outline=%v chapter=%v", outlineModes, chapterModes)
 	}
 	return &ScriptPrompts{outline: outline, chapter: chapter, infos: infos}, nil
 }
 
-// Modes は選択できる台本モード名を名前順で返します。フォームの検証に使います。
+// Modes returns the selectable script mode names in name order. It is used for form validation.
 func (p *ScriptPrompts) Modes() []string {
 	return sortedModes(p.outline)
 }
 
-// ModeInfos は選択できる台本モードの説明を名前順で返します。フォームの選択肢に使います。
+// ModeInfos returns the descriptions of the selectable script modes in name order. They are used for the form's options.
 func (p *ScriptPrompts) ModeInfos() []ModeInfo {
 	return sortedInfos(p.outline, p.infos)
 }
 
-// BuildOutline は章立て生成プロンプトを構築します。
+// BuildOutline builds the outline-generation prompt.
 func (p *ScriptPrompts) BuildOutline(mode string, data *ports.OutlinePromptData) (string, error) {
 	return execute(p.outline, mode, data)
 }
 
-// BuildChapterScript は章単位の台本生成プロンプトを構築します。
+// BuildChapterScript builds the per-chapter script-generation prompt.
 func (p *ScriptPrompts) BuildChapterScript(mode string, data *ports.ChapterPromptData) (string, error) {
 	return execute(p.chapter, mode, data)
 }
 
-// loadPrompts は、埋め込みディレクトリ配下の .md をモード名（拡張子を除いたファイル名）で
-// 読み込み、front matter を本文から切り離してテンプレートとモード説明を返します。
+// loadPrompts loads the .md files under the embedded directory by mode name (the file name without
+// its extension), splits the front matter off the body and returns the templates and mode descriptions.
 //
-// WithFrontMatter を付けるのは、front matter がプロンプト本文へ紛れ込まないよう
-// テンプレート化の前に切り落とす必要があるためです。切り離した内容は
-// Builder.FrontMatter から取り出せるので、読み込みは 1 回で済みます。
+// WithFrontMatter is used because the front matter must be cut off before templating so that
+// it does not leak into the prompt body. What is cut off can be read from
+// Builder.FrontMatter, so loading happens only once.
 func loadPrompts(dir string) (*promptkit.Builder, map[string]ModeInfo, error) {
 	builder, err := promptkit.LoadFS(assets.Prompts, dir,
 		promptkit.WithExtensions(".md"),
@@ -100,16 +100,16 @@ func loadPrompts(dir string) (*promptkit.Builder, map[string]ModeInfo, error) {
 	return builder, infos, nil
 }
 
-// sortedModes は、読み込み済みテンプレートのモード名を名前順で返します。
-// go-prompt-kit の Modes() は登録順なので、画面の並びが埋め込みの走査順に
-// 左右されないようここで固定します。
+// sortedModes returns the mode names of the loaded templates in name order.
+// go-prompt-kit's Modes() is in registration order, so it is fixed here to keep the on-screen order
+// independent of the embedded files' traversal order.
 func sortedModes(builder *promptkit.Builder) []string {
 	modes := builder.Modes()
 	slices.Sort(modes)
 	return modes
 }
 
-// sortedInfos は、読み込み済みテンプレートのモード説明を名前順で返します。
+// sortedInfos returns the mode descriptions of the loaded templates in name order.
 func sortedInfos(builder *promptkit.Builder, infos map[string]ModeInfo) []ModeInfo {
 	modes := sortedModes(builder)
 	out := make([]ModeInfo, 0, len(modes))
@@ -123,17 +123,17 @@ func sortedInfos(builder *promptkit.Builder, infos map[string]ModeInfo) []ModeIn
 	return out
 }
 
-// execute はモード未指定を既定モードへ寄せたうえでプロンプトを構築します。
-// 未知のモードは既定へフォールバックさせずエラーにします。モード名の指定ミスを
-// 既定プロンプトとして黙って通さないためで、go-prompt-kit の WithDefaultMode は
-// 意図的に使っていません。
+// execute builds the prompt after mapping an unspecified mode to the default.
+// An unknown mode is an error rather than falling back to the default. This keeps a mistyped
+// mode name from silently passing as the default prompt; go-prompt-kit's WithDefaultMode is
+// deliberately not used.
 func execute(builder *promptkit.Builder, mode string, data any) (string, error) {
 	if mode == "" {
 		mode = ModeDefault
 	}
 	out, err := builder.Build(mode, data)
 	if err != nil {
-		return "", fmt.Errorf("プロンプトの構築に失敗しました (mode: %s): %w", mode, err)
+		return "", fmt.Errorf("failed to build the prompt (mode: %s): %w", mode, err)
 	}
 	return out, nil
 }
