@@ -11,14 +11,14 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// このファイルは、人と機械が同じものを見る経路をまとめています。
+// This file gathers the paths where people and machines look at the same thing.
 //
-// 表現だけが違うのに実装を 2 つ持つと、片方だけ直したときに画面と機械可読な結果が
-// 食い違います。取得と検証は 1 度だけ行い、最後に Accept を見て HTML か JSON かを
-// 決めます。片方の読者にしか無いもの（入力フォーム、再生成の指示、画像の転送など）は
-// 別のリソースなので、ここには置きません。
+// Keeping two implementations that differ only in representation makes the screen and the machine-readable
+// result disagree when only one is fixed. Fetching and validation happen once, and Accept decides HTML or JSON
+// at the end. Things only one kind of reader has (input forms, regeneration instructions, image
+// transfers and so on) are separate resources and do not live here.
 
-// JobList は作品（compose_comic のジョブ）の一覧を返します（GET /jobs?page=）。
+// JobList returns the list of works (compose_comic jobs) (GET /jobs?page=).
 func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 	page := parseHistoryPage(r)
 	historyPage, err := h.repository.ListHistoryPage(r.Context(), page, defaultHistoryPageSize)
@@ -34,23 +34,23 @@ func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, http.StatusOK, "history.html", "作品履歴", historyPage)
 }
 
-// jobDocument は GET /jobs/{jobID} の JSON 応答です。
+// jobDocument is the JSON response of GET /jobs/{jobID}.
 //
-// 進行状況（JobStatus）を土台に、state が読めるジョブでは作品の状態を同じ文書に載せます。
-// 投入直後から削除するまで同じ URL を同じ形で読めるので、呼び出し側は URL を切り替えずに
-// 済みます。state を入れ子にするのは、state が job_id や title を自分でも持ち、平らに
-// 並べると encoding/json が両方のキーを落とすためです。
+// On top of the progress (JobStatus), for a job whose state can be read the work's state goes in the same document.
+// The same URL reads in the same shape from just after enqueue until delete, so the caller never
+// switches URLs. The state is nested because it also has job_id and title of its own, and laid flat
+// encoding/json would drop both keys.
 type jobDocument struct {
 	domain.JobStatus
 	Comic any `json:"comic,omitempty"`
 }
 
-// Job はジョブ 1 件を返します（GET /jobs/{jobID}）。
+// Job returns one job (GET /jobs/{jobID}).
 //
-// state（comic_state.json）が読めれば作品の詳細、まだ無ければ進行状況です。画面は
-// 「処理中または未存在」の案内を出し、機械には記録があれば状態を、無ければ 404 を返します。
-// デザインシートのジョブは state を持たないので、常に進行状況になります（成果物は
-// /characters/{characterID} 側に並びます）。
+// If the state (comic_state.json) can be read, it is the work's details; if not yet, the progress. The screen
+// shows the "in progress or missing" notice, and a machine gets the status if recorded, or 404 if not.
+// A design-sheet job has no state, so it is always the progress (its artifacts are listed
+// under /characters/{characterID}).
 func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
@@ -81,7 +81,7 @@ func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 		}
 		code := http.StatusNotFound
 		if status != nil {
-			// 記録があるなら「無い」のではなく「まだ」なので、案内は成功応答で返します。
+			// If there is a record, it is "not yet" rather than "missing", so the notice is a success response.
 			code = http.StatusOK
 		}
 		h.render(w, r, code, "history_pending.html", "処理中または未存在", historyPendingData{JobID: jobID})
@@ -90,8 +90,8 @@ func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, http.StatusOK, "history_detail.html", state.Title, h.buildDetailData(jobID, state))
 }
 
-// loadJobStatus は記録された進行状況を返します。無い（状態機能より前のジョブ）か読めなければ
-// nil です。読めなかった場合をエラーにしないのは、作品の詳細は state から描けるからです。
+// loadJobStatus returns the recorded progress. It is nil when there is none (a job older than the status
+// feature) or it cannot be read. Unreadable is not an error because the work's details can be drawn from the state.
 func (h *Handler) loadJobStatus(r *http.Request, jobID string) *domain.JobStatus {
 	if h.jobStatus == nil {
 		return nil
@@ -106,8 +106,8 @@ func (h *Handler) loadJobStatus(r *http.Request, jobID string) *domain.JobStatus
 	return &status
 }
 
-// completedStatus は、state が読めたジョブの状態を返します。記録が無いジョブでも、
-// state が読めた時点で少なくとも台本までは出来ています。
+// completedStatus returns the status of a job whose state could be read. Even a job with no record
+// has at least its script done once its state can be read.
 func completedStatus(jobID string, status *domain.JobStatus) domain.JobStatus {
 	if status != nil {
 		return *status
@@ -118,11 +118,11 @@ func completedStatus(jobID string, status *domain.JobStatus) domain.JobStatus {
 	return completed
 }
 
-// Characters は、characters.json の全キャラクターを返します。
+// Characters returns every character in characters.json.
 //
-// 画面はサムネイルの URL を Web の経路へ書き換えますが、機械には定義そのままの
-// 参照 URL を渡します。書き換えた URL は画面の画像エンドポイントに紐づくため、
-// 機械が受け取っても素材の在り処にはなりません。
+// The screen rewrites thumbnail URLs to web paths, but machines get the reference URLs exactly
+// as defined. A rewritten URL is tied to the screen's image endpoint, so for a machine
+// it would not say where the material lives.
 func (h *Handler) Characters(w http.ResponseWriter, r *http.Request) {
 	if respond.WantsJSON(w, r) {
 		items := make([]characterSummaryResponse, 0, h.characters.Len())
@@ -148,11 +148,11 @@ func (h *Handler) Characters(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, http.StatusOK, "characters.html", "Characters", items)
 }
 
-// Character は、マスター参照画像とデザインシート履歴を返します。
+// Character returns the master reference images and the design-sheet history.
 //
-// 画面は履歴を characterDetailHistoryLimit 件で切りますが、機械には全件返します。
-// 画面の上限は一覧の見やすさのためで、呼び出し側が探したい 1 枚を落とす理由には
-// なりません。
+// The screen cuts the history at characterDetailHistoryLimit items, but machines get everything.
+// The screen's limit is for a readable list, not a reason to drop the one image the caller
+// is looking for.
 func (h *Handler) Character(w http.ResponseWriter, r *http.Request) {
 	characterID := chi.URLParam(r, "characterID")
 	char := h.characters.GetCharacter(characterID)

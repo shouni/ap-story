@@ -1,4 +1,4 @@
-// Package server は、HTTPルーティングとミドルウェアを構成します。
+// Package server configures HTTP routing and middleware.
 package server
 
 import (
@@ -19,8 +19,8 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// NewRouter は、ミドルウェアとルーティングを統合した http.Handler を構築します。
-// projectID は Cloud Logging のトレース相関にのみ使用し、空なら相関を行いません。
+// NewRouter builds the http.Handler that combines middleware and routing.
+// projectID is used only for Cloud Logging trace correlation; when empty there is no correlation.
 func NewRouter(h *builder.AppHandlers, projectID string) http.Handler {
 	r := chi.NewRouter()
 	setupCommonMiddleware(r, projectID)
@@ -29,36 +29,36 @@ func NewRouter(h *builder.AppHandlers, projectID string) http.Handler {
 	return r
 }
 
-// setupCommonMiddleware は、標準的なミドルウェアを構成します。
+// setupCommonMiddleware configures the standard middleware.
 func setupCommonMiddleware(r *chi.Mux, projectID string) {
-	// トレース相関はログ出力より先に効かせる必要があるため最初に登録する。
+	// Trace correlation must take effect before log output, so it is registered first.
 	r.Use(cloudlog.TraceMiddleware(projectID))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.CleanPath)
-	// 画面は日本語 UTF-8（1 文字 3 バイト）なので圧縮がよく効きます。静的ファイルも
-	// 同じ経路に乗ります（vendor は immutable なので再圧縮は稀です）。
+	// The screens are Japanese UTF-8 (3 bytes per character), so compression works well. Static files
+	// go through the same path too (vendor is immutable, so recompression is rare).
 	r.Use(middleware.Compress(compressionLevel))
 	r.Use(secureheaders.Middleware(secureheaders.Config{
 		ImageSources: []string{gcsOrigin},
-		// Bootstrap の JS が遷移中にインラインスタイルを当てるため。
+		// Because Bootstrap's JS applies inline styles during transitions.
 		AllowInlineStyle: true,
 	}))
 }
 
-// compressionLevel は gzip の圧縮レベルです。
+// compressionLevel is the gzip compression level.
 const compressionLevel = 5
 
-// gcsOrigin は、画像の実体である GCS のオリジンです。画面は同一オリジンの
-// エンドポイントを指しますが、そこから署名付き URL へ 302 するため、送り先を明示します。
+// gcsOrigin is the origin of GCS, where the images actually live. The screens point at same-origin
+// endpoints, which 302 to a signed URL, so the destination is named explicitly.
 const gcsOrigin = "https://storage.googleapis.com"
 
-// setupRoutes は、各コンポーネントのハンドラーをルーティングに登録します。
+// setupRoutes registers each component's handlers with the router.
 func setupRoutes(r chi.Router, h *builder.AppHandlers) {
-	// --- 1. 公開ルート (ヘルスチェック) ---
-	// "/healthz" は Cloud Run のデフォルトドメイン (*.run.app) 側で予約パス的に扱われ、
-	// コンテナまでリクエストが届かず GFE の汎用 404 に置き換えられるため使わない。
-	// パスの選択理由（"/healthz" を使わない）は cloudrun.HealthPath を参照。
+	// --- 1. Public routes (health check) ---
+	// "/healthz" is treated as a reserved path on Cloud Run's default domain (*.run.app):
+	// requests never reach the container and are replaced by GFE's generic 404, so it is not used.
+	// For why the path was chosen (not "/healthz"), see cloudrun.HealthPath.
 	r.Get(cloudrun.HealthPath, cloudrun.Health)
 	setupStaticRoutes(r)
 
@@ -67,12 +67,12 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		return
 	}
 
-	// --- 2. 認証関連エンドポイント (OAuth2 フロー) ---
+	// --- 2. Authentication endpoints (OAuth2 flow) ---
 	if h.Auth != nil {
 		r.Handle("/auth/*", h.Auth.Routes()) // login / callback / logout
 	}
 
-	// --- 3. 認証が必要なルート (API 本体 + Web UI 画面。画面は Home から段階的に追加していく) ---
+	// --- 3. Routes requiring authentication (the API itself + web UI screens, added step by step starting from Home) ---
 	r.Group(func(r chi.Router) {
 		if h.Auth == nil {
 			if h.Web != nil {
@@ -81,23 +81,23 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		// ブラウザセッション認証(Cookie+CSRF)、またはM2M呼び出し元はOIDC Bearerトークンで認証。
-		// 人向けの方式を最後に置くと、どれも成立しなかったときログイン画面へ送られます
-		// （JSON を求めている相手には 401 が返ります）。
+		// Browser session auth (cookie + CSRF), or an OIDC Bearer token for M2M callers.
+		// With the human-facing method last, a request where none succeeds is sent to the login page
+		// (a caller asking for JSON gets 401).
 		r.Use(auth.Protected(h.M2M, h.Auth))
 
 		if h.Web != nil {
-			// 未認証アクセスは session.Handler が /auth/login へリダイレクトする。
+			// Unauthenticated access is redirected to /auth/login by session.Handler.
 			r.Get("/", h.Web.Home)
-			// 入力フォームは JSON の対応物を持たない画面なので、資源とは別に置きます。
+			// Input forms are screens with no JSON counterpart, so they sit apart from the resources.
 			r.Get("/compose", h.Web.ComposeForm)
 			r.Get("/compose/design-sheet", h.Web.ComposeDesignSheetForm)
 			r.Get("/comic-options", h.Web.ComicOptions)
 
-			// ジョブが主リソースです。作品（compose_comic）とデザインシート
-			// （generate_design_sheet）は同じ記録の command が違うだけなので、投入から削除まで
-			// 同じ /jobs/{jobID} で指します（public-docs の URL 命名規約）。人と機械は同じ
-			// ルートを Accept と本文の形で使い分けます。
+			// The job is the primary resource. A comic (compose_comic) and a design sheet
+			// (generate_design_sheet) are the same record with a different command, so from enqueue to
+			// delete both are addressed by the same /jobs/{jobID} (the URL naming convention in public-docs).
+			// People and machines use the same route, told apart by Accept and the shape of the body.
 			r.Route("/jobs", func(r chi.Router) {
 				r.Post("/", h.Web.JobCreate)
 				r.Get("/", h.Web.JobList)
@@ -109,9 +109,9 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 				r.Get("/{jobID}/images/*", h.Web.JobImage)
 			})
 
-			// キャラクターは作品をまたいで再利用される別の資源です。デザインシートの
-			// 成果物はこちらに並びます。images / reference は固定の語なので、chi は
-			// {characterID} より先に照合します。
+			// Characters are a separate resource, reused across works. Design-sheet artifacts are
+			// listed here. images / reference are fixed words, so chi matches them before
+			// {characterID}.
 			r.Route("/characters", func(r chi.Router) {
 				r.Get("/", h.Web.Characters)
 				r.Get("/images/*", h.Web.CharacterImage)
@@ -123,33 +123,33 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		}
 	})
 
-	// --- 4. Cloud Tasks 専用ルート (Worker 用) ---
-	// SERVER_ROLE=web のプロセスでは TaskAuth も Worker も nil になるため、
-	// このグループごと登録されず /tasks/generate は公開されません。
-	// 片方だけが nil になる形は builder.AppHandlers.Validate が起動時に弾くので、
-	// ここでは TaskAuth の有無だけを見れば足ります。
+	// --- 4. Cloud Tasks-only routes (for the worker) ---
+	// In a SERVER_ROLE=web process TaskAuth and Worker are both nil, so this whole group
+	// is not registered and /tasks/generate is not exposed.
+	// A shape where only one of them is nil is rejected at startup by builder.AppHandlers.Validate,
+	// so checking only for TaskAuth is enough here.
 	r.Group(func(r chi.Router) {
 		if h.TaskAuth == nil {
 			return
 		}
 
-		// Cloud Tasks からの OIDC トークンを検証 (セッション不要)。
-		// 失敗はセッションへフォールバックせず、その場で止まります。
+		// Verify the OIDC token from Cloud Tasks (no session needed).
+		// A failure stops right there, without falling back to the session.
 		r.Use(auth.Require(h.TaskAuth))
 		r.Post(domain.WorkerTaskPath, h.Worker.ProcessTask)
 	})
 }
 
-// setupStaticRoutes は、埋め込み済みの静的ファイルを /static/* で配信します。
-// Cache-Control の判断（自前は短命、vendor は不変）とディレクトリ一覧の抑止は
-// go-serve-kit の staticfiles が持ちます。
+// setupStaticRoutes serves the embedded static files at /static/*.
+// The Cache-Control decisions (short-lived for our own, immutable for vendor) and suppressing directory
+// listings belong to go-serve-kit's staticfiles.
 //
-// 認証の外側に置きます。スタイルシートにログインを求める理由が無く、
-// 未認証で表示されるログイン画面からも参照されるためです。
+// It sits outside authentication. There is no reason to require login for a stylesheet, and
+// the login page, shown unauthenticated, refers to them too.
 func setupStaticRoutes(r chi.Router) {
 	files, err := staticfiles.New(staticfiles.Config{FS: assets.StaticFiles, Dir: "static"})
 	if err != nil {
-		// 埋め込んだ定数の取り違えなので、リクエストを受ける前に止めます。
+		// It is a mix-up of embedded constants, so stop before accepting any request.
 		panic(fmt.Sprintf("static assets: %v", err))
 	}
 	r.Handle("/static/*", files)

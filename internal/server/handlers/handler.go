@@ -1,5 +1,5 @@
-// Package handlers は、JSON と HTML を同じルートで返す Web 面の
-// HTTP ハンドラーを提供します。
+// Package handlers provides the web face's HTTP handlers, which answer JSON and HTML
+// on the same routes.
 package handlers
 
 import (
@@ -15,33 +15,33 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// Signer は、画像リダイレクトが必要とする署名機能だけを表します。
-// remoteio.Store がそのまま満たします。
+// Signer represents only the signing that image redirects need.
+// remoteio.Store satisfies it as is.
 type Signer interface {
 	SignURL(ctx context.Context, name, method string, expires time.Duration) (string, error)
 }
 
-// Handler は、API/Web UI ハンドラーが共有する依存関係を保持します。
+// Handler holds the dependencies shared by the API/web UI handlers.
 type Handler struct {
 	taskQueue  domain.TaskQueue
 	repository domain.ComicRepository
-	// jobStatus はジョブ進行状況の記録・参照先です。未設定なら状態機能は無効です。
+	// jobStatus is where job progress is recorded and read. Unset, the status features are disabled.
 	jobStatus  domain.JobStatusStore
 	signer     Signer
 	bucket     string
 	templates  map[string]*template.Template
 	characters *characterkit.Characters
-	// imageModels / geminiModels は、生成フォームのモデル選択肢です（先頭が既定）。
-	// 空なら選択肢を出しません。JSON API の検証にも使う許可リストでもあります。
+	// imageModels / geminiModels are the generation forms' model options (the head is the default).
+	// When empty, no options are shown. They are also the allowlist used to validate the JSON API.
 	imageModels  []string
 	geminiModels []string
-	// scriptModes / styleModes は、漫画生成フォームの台本モード・スタイルモードの
-	// 選択肢です（assets/prompts 配下のテンプレートとその front matter）。
+	// scriptModes / styleModes are the comic generation form's script-mode and style-mode
+	// options (the templates under assets/prompts and their front matter).
 	scriptModes []prompts.ModeInfo
 	styleModes  []prompts.ModeInfo
 }
 
-// HandlerOptions は、NewHandler に渡す Handler の構築用オプションです。
+// HandlerOptions are the construction options for a Handler, passed to NewHandler.
 type HandlerOptions struct {
 	TaskQueue    domain.TaskQueue
 	Repository   domain.ComicRepository
@@ -55,7 +55,7 @@ type HandlerOptions struct {
 	StyleModes   []prompts.ModeInfo
 }
 
-// NewHandler は指定された構成に基づいて新しいハンドラーを初期化します。
+// NewHandler initialises a new handler from the given configuration.
 func NewHandler(opts HandlerOptions) (*Handler, error) {
 	if opts.TaskQueue == nil {
 		return nil, fmt.Errorf("task queue is required")

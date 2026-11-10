@@ -4,9 +4,9 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// acceptedData は accepted.html テンプレートに渡すデータです。
-// 文言・進捗リンクはコマンドごとに異なります（漫画生成は作品詳細、デザインシート
-// 単体生成は完了後にキャラクターページの生成履歴に現れるため、そちらへ誘導します）。
+// acceptedData is the data passed to the accepted.html template.
+// The wording and the progress link differ per command (comic generation goes to the work's detail page;
+// a standalone design sheet appears in the character page's history once done, so it leads there).
 type acceptedData struct {
 	JobID         string
 	Command       string
@@ -17,7 +17,7 @@ type acceptedData struct {
 	ProgressLabel string
 }
 
-// newComposeAcceptedData は compose_comic 受付画面の表示データを構築します。
+// newComposeAcceptedData builds the display data for the compose_comic accepted page.
 func newComposeAcceptedData(jobID string) acceptedData {
 	return acceptedData{
 		JobID:         jobID,
@@ -30,9 +30,9 @@ func newComposeAcceptedData(jobID string) acceptedData {
 	}
 }
 
-// newDesignSheetAcceptedData は generate_design_sheet 受付画面の表示データを構築します。
-// キャラクターを1人だけ選択した場合はそのキャラクターページへ、複数選択（合成）の場合は
-// キャラクター一覧へ誘導します。
+// newDesignSheetAcceptedData builds the display data for the generate_design_sheet accepted page.
+// With a single character chosen it leads to that character's page; with several (composed)
+// it leads to the character list.
 func newDesignSheetAcceptedData(jobID string, characterIDs []string) acceptedData {
 	progressURL := "/characters"
 	if len(characterIDs) == 1 {

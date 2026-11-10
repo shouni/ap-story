@@ -43,7 +43,7 @@ window.App.deleteResource = async ({
     }
 };
 
-// 履歴一覧・詳細の削除ボタン
+// Delete buttons on the history list and detail pages
 document.addEventListener('click', (event) => {
     const btn = event.target.closest('.js-delete-history');
     if (!btn) return;
@@ -67,7 +67,7 @@ document.addEventListener('click', (event) => {
     });
 });
 
-// キャラクター詳細・生成履歴のデザインシート削除ボタン
+// Design-sheet delete buttons on the character detail and generation history pages
 document.addEventListener('click', (event) => {
     const btn = event.target.closest('.js-delete-design');
     if (!btn) return;
@@ -87,10 +87,10 @@ document.addEventListener('click', (event) => {
     });
 });
 
-// --- 再生成（作品詳細） ---
+// --- Regeneration (work detail page) ---
 
-// enqueueRegenerate は再生成系コマンドを投入します。
-// 生成は非同期なので、投入できた時点でボタンを止めて案内だけ出します。
+// enqueueRegenerate enqueues a regeneration command.
+// Generation is asynchronous, so once enqueued the button is stopped and only a notice is shown.
 window.App.enqueueRegenerate = async ({ jobId, payload, button, pendingLabel = '実行中…' }) => {
     const original = button ? button.innerHTML : null;
     if (button) {
@@ -133,12 +133,12 @@ window.App.enqueueRegenerate = async ({ jobId, payload, button, pendingLabel = '
     }
 };
 
-// randomSeed は再生成用の新しいシードを作ります。
-// シードを変えないと go-comic-kit は前回と同じ条件で生成するため、絵が変わりません。
+// randomSeed makes a new seed for regeneration.
+// Without a new seed go-comic-kit generates under the same conditions as before, so the art does not change.
 const randomSeed = () => Math.floor(Math.random() * 2147483647) + 1;
 
-// 画像生成の投入（コマ・ページの生成、章単位の生成、個別の再生成）。
-// 作品全体と章とで別のハンドラを持たないのは、送るものが command と対象だけで同じだからです。
+// Enqueueing image generation (generating panels and pages, per chapter, and individual regeneration).
+// The whole work and a chapter share one handler because what is sent is the same: a command and a target.
 document.addEventListener('click', (event) => {
     const btn = event.target.closest('.js-regenerate');
     if (!btn) return;
@@ -146,14 +146,14 @@ document.addEventListener('click', (event) => {
     const { jobId, command, target, mode, stage } = btn.dataset;
     const payload = { command };
 
-    // ページはコマを並べた合成物なので、コマの出来を見てから進める。
-    // ページ合成はコマが揃った状態で同じコマンドを投げれば走る（生成済みは飛ばされる）。
+    // A page is a composite of the panels, so move on only after checking the panels.
+    // Page composition runs when the same command is sent with all panels present (generated ones are skipped).
     if (stage === 'panels') {
         payload.stop_after_panels = true;
     }
 
-    // 画像を作るコマンドには、画面で選んだ画像モデルを添える。
-    // 初期選択は作品に記録された値なので、押し続ける限り作品内で揃う。
+    // Commands that make images carry the image model chosen on screen.
+    // The initial choice is the value recorded on the work, so as long as people keep pressing, the work stays consistent.
     if (command === 'render_comic' || command === 'regenerate_panel' || command === 'regenerate_page') {
         const model = document.querySelector('.js-image-model')?.value;
         if (model) {
@@ -161,7 +161,7 @@ document.addEventListener('click', (event) => {
         }
     }
 
-    // regenerate_panel は panel_id、regenerate_page は page で対象を指定する
+    // regenerate_panel targets with panel_id, regenerate_page with page
     if (command === 'regenerate_panel') {
         payload.panel_id = target;
     } else if (command === 'regenerate_page') {
@@ -169,7 +169,7 @@ document.addEventListener('click', (event) => {
     } else if (command === 'regenerate_chapter_script') {
         payload.chapter_id = target;
     } else if (command === 'render_comic' && target) {
-        // 章カードからの「この章の画像を生成」。target が無ければ作品全体になる。
+        // "この章の画像を生成" from a chapter card. Without a target it covers the whole work.
         payload.chapter_id = target;
     }
 
@@ -186,21 +186,21 @@ document.addEventListener('click', (event) => {
     window.App.enqueueRegenerate({ jobId, payload, button: btn });
 });
 
-// --- 台本の閲覧と校正（作品詳細のタブ） ---
+// --- Reading and proofreading the script (tab on the work detail page) ---
 //
-// 台本は画面のレンダリング時ではなく、タブを開いたときに API から取ります。
-// 詳細画面は開くだけで全コマの署名付きURLを引くので、そこへ台本まで載せると
-// 見ない人にも毎回コストを払わせることになります。
+// The script is fetched from the API when the tab is opened, not when the page is rendered.
+// Merely opening the detail page fetches signed URLs for every panel, so adding the script there
+// would make everyone pay the cost every time, even those who never look at it.
 
-// SOFT_LINE_LIMIT は台本プロンプトが作文に課しているセリフの長さです
-// （assets/prompts/chapter/default.md）。超えていても保存はできますが、
-// 吹き出しがコマの絵を隠すので、読みながら気づけるように印を付けます。
+// SOFT_LINE_LIMIT is the dialogue length the script prompt asks of the writing
+// (assets/prompts/chapter/default.md). Saving still works beyond it, but
+// the bubble hides the panel's art, so it is marked to be noticed while reading.
 const SOFT_LINE_LIMIT = 25;
 
 const DIALOGUE_KINDS = ['speech', 'shout', 'thought', 'narration', 'sfx'];
 
 window.App.script = {
-    // draft は API から取った台本です。編集はこのオブジェクトに直接書き込みます。
+    // draft is the script fetched from the API. Edits write directly into this object.
     draft: null,
     loaded: false
 };
@@ -215,8 +215,8 @@ const setScriptStatus = (selector, message, isError = false) => {
     el.classList.toggle('text-muted', !isError);
 };
 
-// renderScript は台本を「章 → ページ → コマ」の順に組み立てます。
-// ページの切れ目を見出しで示すのは、セリフを直したときに合成し直す単位がページだからです。
+// renderScript assembles the script in the order chapter → page → panel.
+// Page breaks are shown as headings because the page is the unit recomposed when dialogue is fixed.
 const renderScript = (draft) => {
     const body = document.querySelector('.js-script-body');
     if (!body) return;
@@ -259,7 +259,7 @@ const renderScript = (draft) => {
     document.querySelectorAll('.js-script-save, .js-script-save-json').forEach((b) => { b.disabled = false; });
 };
 
-// dialogueRow は1つの吹き出しの編集行です。
+// dialogueRow is the edit row for one speech bubble.
 const dialogueRow = (panelIndex, lineIndex, line) => {
     const text = line.text || '';
     const count = [...text].length;
@@ -282,7 +282,7 @@ const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 
-// loadScript はタブを最初に開いたときだけ台本を取りに行きます。
+// loadScript fetches the script only the first time the tab is opened.
 const loadScript = async () => {
     const root = scriptRoot();
     if (!root || window.App.script.loaded) return;
@@ -308,8 +308,8 @@ document.addEventListener('shown.bs.tab', (event) => {
     if (event.target.classList.contains('js-script-tab')) loadScript();
 });
 
-// 入力のたびに draft へ書き戻します。保存時に画面から読み直さないのは、
-// 表示していない行（別のタブで編集した内容）を取りこぼさないためです。
+// Every input is written back to draft. It is not re-read from the screen on save so that
+// rows not on display (edits made in another tab) are not missed.
 document.addEventListener('input', (event) => {
     const row = event.target.closest('.js-script-line');
     if (!row || !window.App.script.draft) return;
@@ -330,7 +330,7 @@ document.addEventListener('input', (event) => {
     counter.classList.toggle('text-muted', count <= SOFT_LINE_LIMIT);
 });
 
-// saveScript は台本を保存し、合成し直すべきページを結果から伝えます。
+// saveScript saves the script and reports from the result which pages need recomposing.
 const saveScript = async (draft, statusSelector, button) => {
     const root = scriptRoot();
     if (!root) return;
@@ -360,7 +360,7 @@ const saveScript = async (draft, statusSelector, button) => {
         const json = document.querySelector('.js-script-json');
         if (json) json.value = JSON.stringify(payload.script, null, 2);
 
-        // 保存はゴールではありません。絵に反映するにはページ合成が要ります。
+        // Saving is not the goal. Showing it in the art requires page composition.
         const pages = payload.affected_pages || [];
         setScriptStatus(statusSelector, pages.length
             ? `${payload.changed_lines}行を保存しました。ページ ${pages.join(', ')} を合成し直してください`

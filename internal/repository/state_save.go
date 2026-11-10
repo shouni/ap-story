@@ -10,16 +10,16 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// SaveState は state を comic_state.json へ書き戻します。
+// SaveState writes the state back to comic_state.json.
 //
-// go-comic-kit の store.Save は「常に上書き・常に最新」で、条件付き書き込み
-// （GCS の ifGenerationMatch）の口を持ちません。つまり生成ジョブと編集が同時に走ると、
-// 後から書いたほうが勝って先の変更が消えます。この競合はここでは防げないので、
-// 呼び出し側が実行中ジョブとの同時編集を断る責任を持ちます
-// （handlers.UpdateComicScript を参照）。
+// go-comic-kit's store.Save is "always overwrite, always latest" and has no entry for conditional writes
+// (GCS's ifGenerationMatch). So when a generation job and an edit run at the same time,
+// the later write wins and the earlier change is lost. This race cannot be prevented here, so
+// the caller is responsible for refusing edits concurrent with a running job
+// (see handlers.UpdateComicScript).
 //
-// 履歴一覧のキャッシュは保存後に落とします。タイトルや章の見出しは一覧にも出るため、
-// 残したままだと編集が反映されていない一覧を最大10分見せることになります。
+// The history list cache is dropped after saving. Titles and chapter headings also appear in the list,
+// so keeping it would show a list without the edit for up to 10 minutes.
 func (r *ComicRepository) SaveState(ctx context.Context, jobID string, state *kitcomic.MangaState) error {
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return err
@@ -33,7 +33,7 @@ func (r *ComicRepository) SaveState(ctx context.Context, jobID string, state *ki
 		return err
 	}
 	if _, err := store.Save(ctx, r.store, state, outputDir); err != nil {
-		return fmt.Errorf("state の保存に失敗しました (%s): %w", jobID, err)
+		return fmt.Errorf("failed to save the state (%s): %w", jobID, err)
 	}
 
 	r.deleteCachedHistory(jobID)

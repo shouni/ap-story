@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newRoleTestConfig は、役割ごとの検証だけを見たいときの土台になる設定を返します。
-// Web 面に固有の設定（OAuth・認可リスト・キュー）はあえて空にしてあり、
-// 各テストが必要に応じて埋めます。
+// newRoleTestConfig returns a base configuration for tests that only look at per-role validation.
+// Web-face settings (OAuth, the allowlist, the queue) are deliberately empty, and
+// each test fills in what it needs.
 func newRoleTestConfig(role serverrole.Role) *Config {
 	cfg := &Config{}
 	cfg.Server.ServiceURL = "https://ap-story.example.run.app"
@@ -23,13 +23,13 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://ap-story-worker.example.run.app"
 	cfg.Storage.GCSBucket = "ap-story"
-	// 画像モデルはどの役割でも必須。テキストモデルは台本を作る worker だけ。
+	// The image models are required for every role; the text models only for the worker, which writes the script.
 	cfg.AI.ImageModels = []string{"image-test"}
 	cfg.AI.GeminiModels = []string{"gemini-test"}
-	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
-	// 0 のままだと worker の検証が「無制限」を理由に落ちます。
+	// env defaults do not reach a bare struct, so set the same state as the real configuration.
+	// Left at 0, the worker validation would fail on "unlimited".
 	cfg.AI.PipelineTimeout = 25 * time.Minute
-	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
+	// env defaults do not reach a bare struct, so set the same state as the real configuration.
 	cfg.Tasks.DispatchDeadline = testDispatchDeadline
 	return cfg
 }
@@ -44,9 +44,9 @@ func withWebConfig(cfg *Config) *Config {
 	return cfg
 }
 
-// TestValidateEssentialConfigSkipsWebRequirementsForWorker は、Worker 専用プロセスが
-// OAuth 設定なしで起動できることを確認します。これが成り立たないと、
-// 使いもしない認証情報へのアクセス権を Worker のサービスアカウントに与える必要が生じます。
+// TestValidateEssentialConfigSkipsWebRequirementsForWorker checks that a worker-only process
+// starts without OAuth settings. Otherwise the worker's service account would need access to
+// credentials it never uses.
 func TestValidateEssentialConfigSkipsWebRequirementsForWorker(t *testing.T) {
 	cfg := newRoleTestConfig(serverrole.Worker)
 
@@ -64,18 +64,18 @@ func TestValidateEssentialConfigRequiresWebSettings(t *testing.T) {
 	}
 }
 
-// TestValidateEssentialConfigQueueIsWebOnly は、CLOUD_TASKS_QUEUE_ID が Web 面だけの
-// 要件であることを確認します。タスクを投入するのは Web 面だけで、
-// Worker はキュー名を知る必要がありません。
+// TestValidateEssentialConfigQueueIsWebOnly checks that CLOUD_TASKS_QUEUE_ID is a web-face
+// requirement only. Only the web face enqueues tasks, and the worker does not need to
+// know the queue name.
 func TestValidateEssentialConfigQueueIsWebOnly(t *testing.T) {
-	t.Run("worker はキュー名なしで起動できる", func(t *testing.T) {
+	t.Run("worker starts without a queue name", func(t *testing.T) {
 		cfg := newRoleTestConfig(serverrole.Worker)
 		cfg.Tasks.QueueID = ""
 
 		require.NoError(t, cfg.ValidateEssentialConfig())
 	})
 
-	t.Run("web はキュー名が必須", func(t *testing.T) {
+	t.Run("web requires a queue name", func(t *testing.T) {
 		cfg := withWebConfig(newRoleTestConfig(serverrole.Web))
 		cfg.Tasks.QueueID = ""
 
@@ -85,9 +85,9 @@ func TestValidateEssentialConfigQueueIsWebOnly(t *testing.T) {
 	})
 }
 
-// TestValidateEssentialConfigRequiresTaskAudienceForWorker は、Worker が
-// audience 未設定のまま起動しないことを確認します。未設定だと OIDC 検証器が
-// fail-closed になり、全タスクが 500 で失敗し続けます。
+// TestValidateEssentialConfigRequiresTaskAudienceForWorker checks that the worker does not
+// start without an audience. Unset, the OIDC verifier fails closed and every task keeps
+// failing with 500.
 func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.TaskAudienceURL = ""
@@ -97,12 +97,12 @@ func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 	require.Contains(t, err.Error(), "TASK_AUDIENCE_URL")
 }
 
-// TestValidateEssentialConfigServiceAccountIsWebOnly は、caller SA が
-// 「タスクを投入する側」＝ web 面の要件であることを確認します。
-// worker が受け付ける許可リストは ALLOWED_TASK_SERVICE_ACCOUNTS で別に指定するため、
-// worker 専用プロセスは caller SA を持たずに済みます。
+// TestValidateEssentialConfigServiceAccountIsWebOnly checks that the caller SA is a requirement
+// of "the side that enqueues tasks", i.e. the web face. The allowlist the worker accepts is
+// set separately with ALLOWED_TASK_SERVICE_ACCOUNTS, so a worker-only process needs
+// no caller SA.
 func TestValidateEssentialConfigServiceAccountIsWebOnly(t *testing.T) {
-	t.Run("web は caller SA が必須", func(t *testing.T) {
+	t.Run("web requires a caller SA", func(t *testing.T) {
 		cfg := withWebConfig(newRoleTestConfig(serverrole.Web))
 		cfg.Tasks.CallerServiceAccountEmail = ""
 
@@ -111,7 +111,7 @@ func TestValidateEssentialConfigServiceAccountIsWebOnly(t *testing.T) {
 		require.Contains(t, err.Error(), "TASK_CALLER_SERVICE_ACCOUNT_EMAIL")
 	})
 
-	t.Run("worker は許可リストを明示すれば caller SA 不要", func(t *testing.T) {
+	t.Run("worker needs no caller SA when the allowlist is explicit", func(t *testing.T) {
 		cfg := newRoleTestConfig(serverrole.Worker)
 		cfg.Tasks.CallerServiceAccountEmail = ""
 		cfg.Tasks.AllowedServiceAccounts = []string{"ap-story-web-runner@test-project.iam.gserviceaccount.com"}
@@ -120,9 +120,9 @@ func TestValidateEssentialConfigServiceAccountIsWebOnly(t *testing.T) {
 	})
 }
 
-// TestValidateEssentialConfigRequiresAllowlistForWorker は、受け付ける発行元が
-// 1 件も無いまま Worker が起動しないことを確認します。許可リストが空だと
-// OIDC 検証器は fail-closed になり、全タスクが失敗し続けます。
+// TestValidateEssentialConfigRequiresAllowlistForWorker checks that the worker does not start
+// with no accepted issuer at all. With an empty allowlist the OIDC verifier fails closed and
+// every task keeps failing.
 func TestValidateEssentialConfigRequiresAllowlistForWorker(t *testing.T) {
 	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.AllowedServiceAccounts = nil
@@ -141,17 +141,17 @@ func TestLoadConfigNormalizesServerRole(t *testing.T) {
 		wantInErr string
 	}{
 		{name: "both", raw: "both", want: serverrole.Both},
-		// 未設定を both に落とすと、本番の環境変数が 1 つ欠けただけで
-		// 公開 web に worker ルートが復活します。値が無いとデコーダは
-		// UnmarshalText を呼ばないため、normalize が環境変数名つきで返します。
-		{name: "未設定は拒否", raw: "", wantErr: true, wantInErr: "SERVER_ROLE"},
+		// Falling back to both when unset would bring the worker routes back on the public web
+		// as soon as one production env var went missing. With no value the decoder does not call
+		// UnmarshalText, so normalize returns the error with the env var name.
+		{name: "unset is rejected", raw: "", wantErr: true, wantInErr: "SERVER_ROLE"},
 		{name: "web", raw: "web", want: serverrole.Web},
 		{name: "worker", raw: "worker", want: serverrole.Worker},
-		{name: "大文字と空白を許容", raw: " Worker ", want: serverrole.Worker},
-		// 未知の値は env のデコード時点で弾かれます（serverrole.Role が
-		// encoding.TextUnmarshaler を実装しているため）。env が包むので環境変数名では
-		// なくフィールド名が出ますが、何が不正で何なら通るかは残ります。
-		{name: "未知の値は拒否", raw: "batch", wantErr: true, wantInErr: `"batch"`},
+		{name: "case and whitespace are tolerated", raw: " Worker ", want: serverrole.Worker},
+		// An unknown value is rejected when env decodes it (serverrole.Role implements
+		// encoding.TextUnmarshaler). env wraps the error, so the field name appears rather
+		// than the env var name, but what is wrong and what would pass are kept.
+		{name: "unknown value is rejected", raw: "batch", wantErr: true, wantInErr: `"batch"`},
 	}
 
 	for _, tt := range tests {
@@ -163,7 +163,7 @@ func TestLoadConfigNormalizesServerRole(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.wantInErr)
-				// どちらの経路でも、通る値が何かは示されている必要があります。
+				// On either path, the error must show which values pass.
 				require.Contains(t, err.Error(), `"web"`)
 				return
 			}
@@ -173,10 +173,10 @@ func TestLoadConfigNormalizesServerRole(t *testing.T) {
 	}
 }
 
-// TestTaskCallerServiceAccount は、caller SA の解決順を確認します。
+// TestTaskCallerServiceAccount checks how the caller SA is resolved.
 //
-// 新しい TASK_CALLER_SERVICE_ACCOUNT_EMAIL を優先し、無ければ旧 SERVICE_ACCOUNT_EMAIL に
-// フォールバックします。後者は Terraform を切り替えるまでの移行用で、適用後に削除します。
+// The new TASK_CALLER_SERVICE_ACCOUNT_EMAIL wins, falling back to the old SERVICE_ACCOUNT_EMAIL.
+// The latter is for the migration until Terraform switches over and is removed after it is applied.
 func TestTaskCallerServiceAccount(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -184,16 +184,16 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "新しい変数があればそれを使う",
+			name:   "uses the new variable when set",
 			caller: "caller@test-project.iam.gserviceaccount.com",
 			want:   "caller@test-project.iam.gserviceaccount.com",
 		},
 		{
-			name:   "前後の空白は落とす",
+			name:   "drops surrounding whitespace",
 			caller: "  caller@test-project.iam.gserviceaccount.com  ",
 			want:   "caller@test-project.iam.gserviceaccount.com",
 		},
-		{name: "未設定なら空"},
+		{name: "empty when unset"},
 	}
 
 	for _, tt := range tests {
@@ -206,18 +206,18 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 	}
 }
 
-// TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline は、
-// worker が「Cloud Tasks より先に自分で諦める」設定でしか起動しないことを確認します。
+// TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline checks that the
+// worker starts only with settings where it gives up on its own before Cloud Tasks does.
 //
-// 等号・超過・無制限のいずれも、打ち切りが Cloud Tasks 側から来る点で同じです。その場合は
-// プロセスごと止められるため失敗ハンドラも Slack 通知も走らず、max_attempts = 1 で再試行も
-// 無いので、ジョブが running のまま残ります。既定値がこの関係を満たすことも併せて固定します。
+// Equal, longer and unlimited are all the same in that the cut comes from Cloud Tasks. Then
+// the whole process is stopped, so neither the failure handler nor the Slack notice runs, and with
+// max_attempts = 1 and no retry the job stays at running. It also pins that the defaults satisfy this relation.
 func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
-	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
-	t.Run("既定値を持たない", func(t *testing.T) {
+	// There is no default. The source is the deployment configuration (Terraform), in one place.
+	t.Run("has no default", func(t *testing.T) {
 		field, ok := reflect.TypeFor[AIConfig]().FieldByName("PipelineTimeout")
 		require.True(t, ok)
-		require.Empty(t, field.Tag.Get("envDefault"), "既定値を持たせないでください")
+		require.Empty(t, field.Tag.Get("envDefault"), "do not give it a default")
 
 		require.NoError(t, newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig())
 	})
@@ -226,10 +226,10 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		name    string
 		timeout time.Duration
 	}{
-		{name: "打ち切りと等しいと落ちる", timeout: testDispatchDeadline},
-		{name: "打ち切りより長いと落ちる", timeout: testDispatchDeadline + time.Minute},
-		{name: "無制限は落ちる", timeout: 0},
-		{name: "負の無制限も落ちる", timeout: -1},
+		{name: "fails when equal to the cutoff", timeout: testDispatchDeadline},
+		{name: "fails when longer than the cutoff", timeout: testDispatchDeadline + time.Minute},
+		{name: "fails when unlimited", timeout: 0},
+		{name: "fails when negative (unlimited)", timeout: -1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newRoleTestConfig(serverrole.Worker)
@@ -241,8 +241,8 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		})
 	}
 
-	// web はパイプラインを組み立てないため、この検査の対象外です。
-	t.Run("web は無制限でも起動できる", func(t *testing.T) {
+	// The web face builds no pipeline, so it is outside this check.
+	t.Run("web starts even when unlimited", func(t *testing.T) {
 		cfg := withWebConfig(newRoleTestConfig(serverrole.Web))
 		cfg.AI.PipelineTimeout = 0
 
@@ -250,6 +250,6 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 	})
 }
 
-// testDispatchDeadline は、テストで使う打ち切りです。アプリは既定値を持たないため、
-// 実際のデプロイ設定と同じく明示します。
+// testDispatchDeadline is the cutoff used in tests. The app holds no default, so it is set
+// explicitly, as in the real deployment configuration.
 const testDispatchDeadline = 30 * time.Minute

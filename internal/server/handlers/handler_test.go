@@ -19,7 +19,7 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// testCharacters は固定のキャラクター一覧を持つテスト用フィクスチャです。
+// testCharacters is a test fixture with a fixed list of characters.
 func testCharacters(t *testing.T) *characterkit.Characters {
 	t.Helper()
 	chars, err := characterkit.NewCharacters([]characterkit.Character{
@@ -43,8 +43,8 @@ func testCharacters(t *testing.T) *characterkit.Characters {
 	return chars
 }
 
-// httptestRequestWithURLParam は、chi.URLParam で読み取れる URL パラメータを
-// context に埋め込んだテスト用リクエストを構築します。body が空文字の場合は空ボディになります。
+// httptestRequestWithURLParam builds a test request with URL parameters, readable by chi.URLParam,
+// embedded in the context. When body is empty the request has an empty body.
 func httptestRequestWithURLParam(t *testing.T, method, target, body, key, value string) *http.Request {
 	t.Helper()
 	var r io.Reader
@@ -61,7 +61,7 @@ type fakeTaskQueue struct {
 	lastTask domain.Task
 	called   int
 	err      error
-	// onEnqueue は呼び出し順の検証に使います（ジョブ状態の記録との前後関係）。
+	// onEnqueue is used to check call order (relative to recording the job status).
 	onEnqueue func()
 }
 
@@ -74,7 +74,7 @@ func (f *fakeTaskQueue) Enqueue(_ context.Context, task domain.Task) error {
 	return f.err
 }
 
-// fakeJobStatusStore は投入時のジョブ状態の記録を観測します。
+// fakeJobStatusStore observes the job status recorded at enqueue.
 type fakeJobStatusStore struct {
 	saved  []domain.JobStatus
 	onSave func()
@@ -142,8 +142,8 @@ func (f *fakeComicRepository) GetState(_ context.Context, jobID string) (*kitcom
 	}
 	state, ok := f.states[jobID]
 	if !ok {
-		// 本物の GetState は未存在を ErrStateNotFound で返します。素のエラーにすると、
-		// 「まだ無い」と「読めない」を分けて扱うハンドラーの検証がすり抜けます。
+		// The real GetState returns a missing state as ErrStateNotFound. A bare error would let
+		// the checks of handlers that treat "not there yet" and "unreadable" separately slip through.
 		return nil, fmt.Errorf("%w (job %q)", domain.ErrStateNotFound, jobID)
 	}
 	return state, nil
@@ -169,7 +169,7 @@ func (f *fakeComicRepository) DeleteHistory(_ context.Context, jobID string) err
 	return nil
 }
 
-// fakeSigner は Signer を満たすテスト用 fake です。
+// fakeSigner is a test fake satisfying Signer.
 type fakeSigner struct {
 	lastObjectURI string
 	lastExpires   time.Duration
@@ -209,8 +209,8 @@ func newTestHandlerFull(t *testing.T, q *fakeTaskQueue, repo *fakeComicRepositor
 		Characters:   testCharacters(t),
 		ImageModels:  []string{"image-model", "image-alt"},
 		GeminiModels: []string{"gemini-model", "gemini-alt"},
-		// 本番は assets/prompts 配下のテンプレート名が入ります。ここは選択肢の
-		// 検証だけが目的なので、既定モードと追加モードを1つずつ持たせます。
+		// In production these are template names under assets/prompts. Here the only purpose is
+		// validating the options, so it has one default mode and one extra mode.
 		ScriptModes: []prompts.ModeInfo{{Name: prompts.ModeDefault}, {Name: "alt"}},
 		StyleModes:  []prompts.ModeInfo{{Name: prompts.ModeDefault}, {Name: "watercolor"}},
 	})

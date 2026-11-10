@@ -8,15 +8,15 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// TestExecuteLabelsGoroutineWithJob は、job_id と command が pprof のゴルーチン
-// ラベルに載ることを検証します。
+// TestExecuteLabelsGoroutineWithJob checks that job_id and command are put on the pprof goroutine
+// labels.
 //
-// **これはログではなくパニックのトレースバックのための配線です。** Go 1.27 以降、
-// ラベルはトレースバックの見出し行に出るため、生成中に落ちたときにどのジョブ
-// だったかがスタックだけで特定できます。slogctx による相関は panic では効きません。
+// **This is wiring for panic tracebacks, not for logs.** Since Go 1.27 the labels
+// appear in the traceback's heading line, so when generation crashes, the stack alone
+// identifies the job. Correlation through slogctx does not work for a panic.
 //
-// ラベルは子ゴルーチンへ継承されるので、コマ・ページの並列生成の中で落ちても
-// 同じ job_id が付きます。ここではステップの中で読めることまでを見ます。
+// Labels are inherited by child goroutines, so a crash inside the parallel generation of panels or
+// pages carries the same job_id. Here it checks only that they can be read inside a step.
 func TestExecuteLabelsGoroutineWithJob(t *testing.T) {
 	got := map[string]string{}
 
@@ -26,14 +26,14 @@ func TestExecuteLabelsGoroutineWithJob(t *testing.T) {
 	}
 
 	if got["job_id"] != statusTestJobID {
-		t.Errorf("job_id ラベル = %q, want %q", got["job_id"], statusTestJobID)
+		t.Errorf("job_id label = %q, want %q", got["job_id"], statusTestJobID)
 	}
 	if want := string(domain.TaskCommandComposeComic); got["command"] != want {
-		t.Errorf("command ラベル = %q, want %q", got["command"], want)
+		t.Errorf("command label = %q, want %q", got["command"], want)
 	}
 }
 
-// labelProbeStep は、実行時のゴルーチンラベルを書き出すテスト用ステップです。
+// labelProbeStep is a test step that writes out the goroutine labels at run time.
 type labelProbeStep struct{ got map[string]string }
 
 func (labelProbeStep) Name() string { return "label-probe" }

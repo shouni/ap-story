@@ -9,11 +9,11 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// TaskAuth と Worker の片方だけが構成された形を Validate が弾くこと。
+// Validate rejects a build where only one of TaskAuth and Worker is configured.
 //
-// router.go は TaskAuth の有無だけを見てルート登録を省くため、この不整合を通すと
-// /tasks/generate が黙って 404 になります。設定漏れなのか実装バグなのかが
-// リクエストからは区別できないので、起動時に落とします。
+// router.go skips route registration based only on whether TaskAuth is present, so letting
+// this mismatch through would silently turn /tasks/generate into a 404. A request cannot
+// tell a missing setting from an implementation bug, so startup fails instead.
 func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 	t.Parallel()
 
@@ -22,14 +22,14 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 		h       *AppHandlers
 		wantErr bool
 	}{
-		{name: "どちらも nil (web ロール)", h: &AppHandlers{}},
+		{name: "both nil (web role)", h: &AppHandlers{}},
 		{
-			name:    "TaskAuth だけある",
+			name:    "only TaskAuth",
 			h:       &AppHandlers{TaskAuth: mustOIDC(t, "https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
 			wantErr: true,
 		},
 		{
-			name:    "Worker だけある",
+			name:    "only Worker",
 			h:       &AppHandlers{Worker: worker.NewHandler[domain.Task](nil)},
 			wantErr: true,
 		},
@@ -47,7 +47,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 	}
 }
 
-// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+// mustOIDC builds a configured verifier for tests (New returns an error when settings are missing).
 func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
 	t.Helper()
 	v, err := oidc.New(audience, allowed)

@@ -9,17 +9,17 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// homeHistoryLimit は Home 画面に表示する履歴件数です。
+// homeHistoryLimit is the number of history items shown on the Home page.
 const homeHistoryLimit = 5
 
-// homeData は home.html テンプレートに渡すデータです。
+// homeData is the data passed to the home.html template.
 type homeData struct {
 	History []domain.ComicHistory
 }
 
-// Home は GET / を処理し、直近の履歴を数件表示します。未認証アクセスは
-// protectedAccessMiddleware が /auth/login へリダイレクトするため、ここに到達するのは
-// 認証済みのリクエストのみです。
+// Home handles GET / and shows a few recent history items. Unauthenticated access is
+// redirected to /auth/login by protectedAccessMiddleware, so only authenticated requests
+// reach here.
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respond.Error(w, r, http.StatusMethodNotAllowed, "method not allowed")

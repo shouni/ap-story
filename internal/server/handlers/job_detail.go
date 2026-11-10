@@ -6,7 +6,7 @@ import (
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 )
 
-// detailPanel は詳細画面の1パネル分の表示データです。
+// detailPanel is the display data of one panel on the detail page.
 type detailPanel struct {
 	ID        string
 	Shot      string
@@ -14,33 +14,33 @@ type detailPanel struct {
 	Dialogues []string
 }
 
-// detailChapter は詳細画面の1章分の表示データです。
+// detailChapter is the display data of one chapter on the detail page.
 type detailChapter struct {
 	ID      string
 	Title   string
 	Summary string
 	Panels  []detailPanel
-	// PendingPanels / PendingPages は、その章に未生成のコマ・ページが残っているかです。
-	// ボタンを「コマを生成」と「ページを合成」で出し分けるために使います。
-	// コマが揃うまでページ合成を出さないのは、ページがコマを並べた合成物だからです
-	// （崩れたコマから2Kのページを作っても払い直しになります）。
+	// PendingPanels / PendingPages say whether the chapter still has panels or pages not yet generated.
+	// They are used to choose between the "コマを生成" and "ページを合成" buttons.
+	// Page composition is not offered until the panels are all there because a page is a composite of the panels
+	// (making a 2K page from broken panels means paying again).
 	PendingPanels bool
 	PendingPages  bool
 }
 
-// detailPage は詳細画面の1ページ分の表示データです。
+// detailPage is the display data of one page on the detail page.
 type detailPage struct {
 	Number   int
 	ImageURL string
 }
 
-// detailDesignSheet は詳細画面のデザインシート1枚分の表示データです。
+// detailDesignSheet is the display data of one design sheet on the detail page.
 type detailDesignSheet struct {
 	CharacterID string
 	ImageURL    string
 }
 
-// historyDetailData は history_detail.html テンプレートに渡すデータです。
+// historyDetailData is the data passed to the history_detail.html template.
 type historyDetailData struct {
 	JobID        string
 	Title        string
@@ -49,29 +49,29 @@ type historyDetailData struct {
 	Chapters     []detailChapter
 	Pages        []detailPage
 	DesignSheets []detailDesignSheet
-	// HasPendingImages は未生成のコマ・ページが残っているかです。
-	// 「画像生成へ進む」（render_comic）ボタンの表示条件に使います。
+	// HasPendingImages says whether panels or pages not yet generated remain.
+	// It is the condition for showing the "画像生成へ進む" (render_comic) button.
 	HasPendingImages bool
-	// HasAnyImage は画像が1枚でも生成済みかです。ボタンの文言を
-	// 「画像生成へ進む」と「続きを生成」で切り替えるために使います。
+	// HasAnyImage says whether even one image has been generated. It switches the button label
+	// between "画像生成へ進む" and "続きを生成".
 	HasAnyImage bool
-	// PendingPanels / PendingPages は作品全体での未生成の有無です（章ごとの同名項目と同じ役割）。
+	// PendingPanels / PendingPages say whether anything remains ungenerated across the work (the same role as the per-chapter fields).
 	PendingPanels bool
 	PendingPages  bool
-	// ImageModels は画像モデルの選択肢です。台本の時点ではコマ数も絵柄も分からないので、
-	// 選ぶのはここ（画像生成を始める画面）です。初期選択は state に記録された値で、
-	// 1作品が途中から別のモデルにならないようにしています。
+	// ImageModels are the image model options. At the script stage neither the panel count nor the look is known,
+	// so they are chosen here (the page that starts image generation). The initial choice is the value recorded
+	// in the state, so one work does not switch to a different model midway.
 	ImageModels []selectOption
 }
 
-// historyPendingData は history_pending.html テンプレートに渡すデータです。
+// historyPendingData is the data passed to the history_pending.html template.
 type historyPendingData struct {
 	JobID string
 }
 
-// buildDetailData は MangaState を詳細画面用の表示データへ変換します。
-// GCS 上の画像 URL（gs://）は、署名 URL へ 302 リダイレクトする既存の画像エンドポイント
-// （/api/comics/{jobID}/images/*）のパスに変換します。
+// buildDetailData converts a MangaState into the detail page's display data.
+// GCS image URLs (gs://) are converted into the paths of the existing image endpoint that 302-redirects
+// to a signed URL (/api/comics/{jobID}/images/*).
 func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) historyDetailData {
 	data := historyDetailData{
 		JobID:       jobID,
@@ -113,10 +113,10 @@ func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) hist
 		}
 		data.Pages = append(data.Pages, dp)
 	}
-	// state.Pages は合成した順に並びます（go-comic-kit の SetPageArtifact は
-	// 新規ページを末尾に足すだけ）。ページ3だけ先に作り直せば state 上は 3, 1, 2 に
-	// なるので、読む順に直します。サムネイル一覧なら番号ラベルで気づけますが、
-	// 通し読みでは順序が狂っていること自体に気づけません。
+	// state.Pages is in composition order (go-comic-kit's SetPageArtifact just appends
+	// a new page at the end). Remaking only page 3 first makes the state order 3, 1, 2,
+	// so they are put in reading order. A thumbnail list would show it through the number labels, but
+	// reading straight through one would not even notice the order is wrong.
 	slices.SortFunc(data.Pages, func(a, b detailPage) int { return a.Number - b.Number })
 
 	for _, ds := range state.DesignSheets {
@@ -135,11 +135,11 @@ func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) hist
 	return data
 }
 
-// pendingImages は、未生成のコマ・ページが残っているかを返します。
-// chapterID が空なら作品全体、指定があればその章だけを見ます。
+// pendingImages reports whether panels or pages not yet generated remain.
+// With chapterID empty it looks at the whole work; otherwise only at that chapter.
 //
-// ページを章で絞れるのは、Repaginate が章境界でページを割る（1ページに2章を混ぜない）
-// ためです。go-comic-kit の PagesForChapter が同じ前提に乗っています。
+// Pages can be narrowed by chapter because Repaginate splits pages at chapter boundaries (never mixing two
+// chapters on one page). go-comic-kit's PagesForChapter relies on the same premise.
 func pendingImages(state *kitcomic.MangaState, chapterID string) (panels, pages bool) {
 	targetPages := map[int]struct{}{}
 	for i := range state.Panels {
@@ -160,9 +160,9 @@ func pendingImages(state *kitcomic.MangaState, chapterID string) (panels, pages 
 	return panels, pages
 }
 
-// imageProgress は、未生成の画像が残っているか・1枚でも生成済みかを返します。
-// 台本だけの state（stop_after_script）と、途中で失敗した state のどちらでも
-// 「続きを生成」へ誘導できるようにするための判定です。
+// imageProgress reports whether ungenerated images remain and whether even one has been generated.
+// It is the check that leads to "続きを生成" both for a script-only state (stop_after_script)
+// and for a state that failed midway.
 func imageProgress(state *kitcomic.MangaState) (pending, generated bool) {
 	pageCount := map[int]struct{}{}
 	for i := range state.Panels {

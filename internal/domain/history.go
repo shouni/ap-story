@@ -2,7 +2,7 @@ package domain
 
 import "github.com/shouni/go-job-kit/paging"
 
-// ComicHistory は履歴一覧に表示する1作品分のサマリです。
+// ComicHistory is the summary of one work shown in the history list.
 type ComicHistory struct {
 	JobID        string `json:"job_id"`
 	Title        string `json:"title"`
@@ -14,19 +14,19 @@ type ComicHistory struct {
 	UpdatedAt    string `json:"updated_at,omitempty"`
 }
 
-// PageMeta は履歴一覧のページング表示に必要なメタデータです。
-// 実体は go-job-kit の paging.PageMeta です（JSON の形は従来と同じ）。
+// PageMeta is the metadata the history list needs for paging.
+// It is go-job-kit's paging.PageMeta (the JSON shape is unchanged).
 type PageMeta = paging.PageMeta
 
-// ComicHistoryPage はページング済みの履歴一覧です。
+// ComicHistoryPage is a paged history list.
 type ComicHistoryPage struct {
 	Items []ComicHistory `json:"items"`
 	PageMeta
 }
 
-// CharacterDesignHistoryItem は、あるキャラクター単体のデザインシート生成1回分の記録です。
-// comic_state.json は読まず、GCS 上の character/{characterID}/ 配下を直接列挙して得るため、
-// Seed 等の詳細情報は持ちません（画像とジョブIDのみ）。
+// CharacterDesignHistoryItem records one design-sheet generation for a single character.
+// It is obtained by listing character/{characterID}/ on GCS directly, without reading
+// comic_state.json, so it carries no details such as Seed (only the image and the job ID).
 type CharacterDesignHistoryItem struct {
 	JobID    string `json:"job_id"`
 	ImageURL string `json:"image_url"`

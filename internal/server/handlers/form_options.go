@@ -8,24 +8,24 @@ import (
 	"github.com/shouni/ap-story/internal/adapters/prompts"
 )
 
-// selectOption はフォームの <select> 1項目です。
-// モデル選択（GEMINI_MODELS / IMAGE_MODELS）とプロンプトモード選択
-// （台本モード・スタイルモード）で共有します。
+// selectOption is one item of a form's <select>.
+// It is shared by the model pickers (GEMINI_MODELS / IMAGE_MODELS) and the prompt mode pickers
+// (script mode and style mode).
 type selectOption struct {
 	Value string
 	Label string
-	// Hint は選択肢の補足説明（title 属性）です。空なら属性ごと出しません。
+	// Hint is the option's supplementary description (the title attribute). When empty, the attribute is omitted.
 	Hint     string
 	Selected bool
 }
 
-// modelOptions はモデル名の一覧を選択肢に変換します。先頭が既定モデルです。
-// 用途ごとの使い分けは持たないので、一覧をそのまま選択肢にします。
+// modelOptions converts a list of model names into options. The head is the default model.
+// There is no per-purpose split, so the list becomes the options as is.
 //
-// 「既定モデルを使う」という空の選択肢は置きません。ブラウザからは常に具体名を送らせ、
-// どのモデルで作られた作品かが state の記録から確実に分かるようにするためです
-// （空でも worker 側の設定へ落ちて動きはしますが、記録に残らず後から辿れません）。
-// 未選択は先頭＝既定モデルを選んだものとして扱います。モード選択と同じ寄せ方です。
+// There is no empty "use the default model" option. The browser is always made to send a concrete name,
+// so that the state's record reliably shows which model made the work
+// (empty would still run, falling to the worker's configuration, but it would leave no record to trace later).
+// Nothing chosen is treated as choosing the head = the default model, the same approach as mode selection.
 func modelOptions(models []string, selected string) []selectOption {
 	if selected == "" && len(models) > 0 {
 		selected = models[0]
@@ -45,11 +45,11 @@ func modelOptions(models []string, selected string) []selectOption {
 	return options
 }
 
-// modeOptions はプロンプトモードの一覧を選択肢に変換します。ラベルと補足説明は
-// テンプレート先頭の front matter（prompts.ModeInfo）から取ります。
+// modeOptions converts a list of prompt modes into options. The label and supplementary description
+// come from the template's front matter (prompts.ModeInfo).
 //
-// 未選択（空文字）は既定モードを選んだものとして扱います。ワーカー側も空文字を
-// 既定モードへ寄せるため、画面と実際の生成で選択が食い違わないようにするためです。
+// Nothing chosen (the empty string) is treated as choosing the default mode. The worker also maps the
+// empty string to the default mode, so the screen and the actual generation do not disagree on the choice.
 func modeOptions(modes []prompts.ModeInfo, selected string) []selectOption {
 	if selected == "" {
 		selected = prompts.ModeDefault
@@ -70,7 +70,7 @@ func modeOptions(modes []prompts.ModeInfo, selected string) []selectOption {
 	return options
 }
 
-// modeNames はモード一覧から名前だけを取り出します。選択値の検証に使います。
+// modeNames extracts just the names from a list of modes. It is used to validate the chosen value.
 func modeNames(modes []prompts.ModeInfo) []string {
 	names := make([]string, 0, len(modes))
 	for _, mode := range modes {
@@ -79,8 +79,8 @@ func modeNames(modes []prompts.ModeInfo) []string {
 	return names
 }
 
-// firstIfEmpty は、値が空なら一覧の先頭（＝既定）を返します。
-// 一覧が空になるのは設定漏れのときだけで、それは起動時検証で弾かれています。
+// firstIfEmpty returns the head of the list (= the default) when the value is empty.
+// The list is empty only when a setting is missing, and that is rejected by the startup validation.
 func firstIfEmpty(value string, list []string) string {
 	if strings.TrimSpace(value) != "" || len(list) == 0 {
 		return value
@@ -88,12 +88,12 @@ func firstIfEmpty(value string, list []string) string {
 	return list[0]
 }
 
-// validateAllowed は、指定された値が許可リストに含まれるかを確かめます。
-// 空文字は「既定を使う」意味なので常に有効です。
+// validateAllowed checks that the given value is in the allowlist.
+// The empty string means "use the default" and is always valid.
 //
-// domain.Task の検証ではなくここに置くのは、許可リストが env とテンプレート由来で
-// ドメイン層が知らないためです。ブラウザは <select> の選択肢に縛られますが、
-// JSON API は任意の文字列を送れます。
+// It lives here rather than in domain.Task's validation because the allowlist comes from env and the
+// templates, which the domain layer does not know. A browser is restricted to the <select> options, but
+// the JSON API can send any string.
 func validateAllowed(kind, value string, allowed []string) error {
 	value = strings.TrimSpace(value)
 	if value == "" || slices.Contains(allowed, value) {

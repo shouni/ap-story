@@ -8,29 +8,29 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// ModeInfo は、プロンプトテンプレート先頭の front matter に書かれたモードの説明です。
+// ModeInfo is a mode's description, written in the front matter at the head of a prompt template.
 //
-// モード名（ファイル名）だけでは「そのモードが何をするのか」が分からず、選ぶ側が
-// テンプレート本文を開くはめになります。フォームの選択肢とエージェント向けの説明を
-// テンプレート自身に持たせるための欄で、キー名は姉妹プロジェクトの
-// 同種のモード定義に合わせています。
+// The mode name (file name) alone does not say "what the mode does", and the person choosing
+// ends up opening the template body. This field lets the template itself carry the form's options
+// and the description for agents; the key names match the sister projects'
+// mode definitions of the same kind.
 //
-// front matter が無いテンプレートも許容します（Name だけの ModeInfo になります）。
-// 説明はテンプレート作者への強制ではなく、書けば画面に出るという位置づけです。
+// Templates without front matter are allowed too (giving a ModeInfo with only Name).
+// The description is not forced on template authors; if written, it shows on screen.
 type ModeInfo struct {
-	// Name はモード名（拡張子を除いたファイル名）です。front matter には書きません。
+	// Name is the mode name (the file name without its extension). It is not written in the front matter.
 	Name string `yaml:"-"`
-	// Direction はそのモードの方向性を一言で表します（選択肢のラベルに使います）。
+	// Direction sums up the mode's direction in a phrase (used as the option label).
 	Direction string `yaml:"direction"`
-	// UseWhen はどんなときに選ぶかです。
+	// UseWhen says when to choose it.
 	UseWhen string `yaml:"use_when"`
-	// Avoids はそのモードが避けること・向かない用途です。
+	// Avoids is what the mode avoids, or what it is not suited for.
 	Avoids string `yaml:"avoids"`
-	// Category は選択肢を束ねる表示上のグループ名です（任意）。
+	// Category is the display group the options are bundled into (optional).
 	Category string `yaml:"category"`
 }
 
-// Label は選択肢に表示する文字列を返します。
+// Label returns the text shown for the option.
 func (m ModeInfo) Label() string {
 	if m.Direction == "" {
 		return m.Name
@@ -38,7 +38,7 @@ func (m ModeInfo) Label() string {
 	return m.Name + " — " + m.Direction
 }
 
-// Hint は選択肢の補足説明（title 属性）に使う文字列を返します。
+// Hint returns the text used as the option's supplementary description (the title attribute).
 func (m ModeInfo) Hint() string {
 	var parts []string
 	if m.UseWhen != "" {
@@ -50,12 +50,12 @@ func (m ModeInfo) Hint() string {
 	return strings.Join(parts, " / ")
 }
 
-// parseModeInfo は front matter を ModeInfo へ読み取ります。
-// front matter が空なら名前だけの ModeInfo を返します。
+// parseModeInfo reads the front matter into a ModeInfo.
+// When the front matter is empty it returns a ModeInfo with only the name.
 func parseModeInfo(name, front string) (ModeInfo, error) {
 	info := ModeInfo{Name: name}
 	if err := frontmatter.Decode(front, &info, yaml.Unmarshal); err != nil {
-		return ModeInfo{}, fmt.Errorf("front matter の解析に失敗しました (mode: %s): %w", name, err)
+		return ModeInfo{}, fmt.Errorf("failed to parse the front matter (mode: %s): %w", name, err)
 	}
 	return info, nil
 }

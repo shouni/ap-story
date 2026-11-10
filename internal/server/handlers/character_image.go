@@ -11,31 +11,31 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// characterImagePrefix は、ジョブ（作品）に依存しない共有キャラクター資産
-// （AI生成デザインシート）が置かれる GCS 上のプレフィックス（バケット直下）です。
+// characterImagePrefix is the GCS prefix (directly under the bucket) holding shared character
+// assets (AI-generated design sheets) that belong to no job (work).
 const characterImagePrefix = "character"
 
-// characterReferenceImagePrefix は、キャラクターのマスター参照画像（characters.json の
-// reference_url / reference_urls）が置かれる GCS 上のプレフィックスです。AI生成の
-// デザインシート（characterImagePrefix）とは別管理です。
+// characterReferenceImagePrefix is the GCS prefix holding the characters' master reference images
+// (characters.json's reference_url / reference_urls). They are managed separately from the
+// AI-generated design sheets (characterImagePrefix).
 const characterReferenceImagePrefix = "character-reference"
 
-// CharacterImage は GET /characters/images/* を処理し、AI生成の
-// デザインシート（gs://{bucket}/character/... 配下）の GCS 署名 URL へ 302 リダイレクトします。
-// comics/{jobID}/ 配下のパネル・ページ画像とは異なり jobID を経由しません。
+// CharacterImage handles GET /characters/images/* and 302-redirects to the GCS signed URL of an
+// AI-generated design sheet (under gs://{bucket}/character/...).
+// Unlike the panel and page images under comics/{jobID}/, it does not go through a jobID.
 func (h *Handler) CharacterImage(w http.ResponseWriter, r *http.Request) {
 	h.redirectCharacterAsset(w, r, characterImagePrefix)
 }
 
-// CharacterReferenceImage は GET /characters/reference/* を処理し、
-// キャラクターのマスター参照画像（gs://{bucket}/character-reference/... 配下）の
-// GCS 署名 URL へ 302 リダイレクトします。
+// CharacterReferenceImage handles GET /characters/reference/* and 302-redirects to
+// the GCS signed URL of a character's master reference image (under
+// gs://{bucket}/character-reference/...).
 func (h *Handler) CharacterReferenceImage(w http.ResponseWriter, r *http.Request) {
 	h.redirectCharacterAsset(w, r, characterReferenceImagePrefix)
 }
 
-// redirectCharacterAsset は、指定プレフィックス配下のキャラクター資産を署名 URL へ
-// 302 リダイレクトする共通処理です。
+// redirectCharacterAsset is the shared code that 302-redirects a character asset under the given
+// prefix to a signed URL.
 func (h *Handler) redirectCharacterAsset(w http.ResponseWriter, r *http.Request, prefix string) {
 	relPath := chi.URLParam(r, "*")
 	objectPath, err := resolveCharacterAssetPath(prefix, relPath)
@@ -54,9 +54,9 @@ func (h *Handler) redirectCharacterAsset(w http.ResponseWriter, r *http.Request,
 	http.Redirect(w, r, signedURL, http.StatusFound)
 }
 
-// resolveCharacterAssetPath は、相対パスから GCS 上のキャラクター資産オブジェクトパス
-// （バケット名を除く）を安全に組み立てます。生の入力に ".." を含むものは拒否します
-// （path.Clean によるルート超えの無害化には頼らない設計。comics 側の同名ロジックと同じ方針）。
+// resolveCharacterAssetPath safely builds the GCS object path of a character asset (without the
+// bucket name) from a relative path. Raw input containing ".." is rejected
+// (by design it does not rely on path.Clean neutralising escapes past the root; the same policy as the comics-side logic of the same name).
 func resolveCharacterAssetPath(prefix, relPath string) (string, error) {
 	relPath = strings.TrimSpace(relPath)
 	if relPath == "" {

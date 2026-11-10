@@ -10,33 +10,33 @@ import (
 	"github.com/shouni/go-remote-io/remoteio"
 )
 
-// LoadCharacters は、CHARACTERS_JSON_PATH（GCS URI またはローカルパス）から
-// キャラクター定義を読み込みます。埋め込み（go:embed）ではなく
-// 実行時にロードするのは、キャラクター追加・更新のたびに再デプロイを不要にするためです。
-// path が空文字の場合は go-character-kit の埋め込みデフォルトキャラクター定義を使います。
+// LoadCharacters loads the character definitions from CHARACTERS_JSON_PATH (a GCS URI or a
+// local path). They are loaded at run time rather than embedded (go:embed) so that adding or
+// updating a character needs no redeploy.
+// When path is empty, go-character-kit's embedded default character definitions are used.
 func LoadCharacters(ctx context.Context, reader remoteio.Reader, path string) (*characterkit.Characters, error) {
 	if path == "" {
 		characters, err := assets.LoadCharacters()
 		if err != nil {
-			return nil, fmt.Errorf("デフォルトのキャラクター定義の読み込みに失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to load the default character definitions: %w", err)
 		}
 		return characters, nil
 	}
 
 	rc, err := reader.Open(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("characters.json のオープンに失敗しました (%s): %w", path, err)
+		return nil, fmt.Errorf("failed to open characters.json (%s): %w", path, err)
 	}
 	defer func() { _ = rc.Close() }()
 
 	data, err := io.ReadAll(rc)
 	if err != nil {
-		return nil, fmt.Errorf("characters.json の読み込みに失敗しました (%s): %w", path, err)
+		return nil, fmt.Errorf("failed to read characters.json (%s): %w", path, err)
 	}
 
 	characters, err := characterkit.ParseCharacters(data)
 	if err != nil {
-		return nil, fmt.Errorf("characters.json のパースに失敗しました (%s): %w", path, err)
+		return nil, fmt.Errorf("failed to parse characters.json (%s): %w", path, err)
 	}
 
 	return characters, nil

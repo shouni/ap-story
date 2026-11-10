@@ -1,4 +1,4 @@
-// ap-story は、AI 漫画生成ジョブを統括するオーケストレータサービスです。
+// ap-story is the orchestrator service that drives AI comic generation jobs.
 package main
 
 import (
@@ -15,13 +15,13 @@ import (
 	"github.com/shouni/ap-story/internal/server"
 )
 
-// logLevelEnvKey はログ出力レベルを指定する環境変数名です。
+// logLevelEnvKey is the environment variable that sets the log level.
 const logLevelEnvKey = "LOG_LEVEL"
 
 func main() {
-	// ロガーの設定（LOG_LEVEL 対応・Cloud Logging 互換の構造化ログ）。
-	// 出力フォーマットは cloudlog、context 属性の付与は slogctx が担い、
-	// 両者の組み立てだけをアプリ側で行う。
+	// Logger setup (honours LOG_LEVEL; structured logs compatible with Cloud Logging).
+	// cloudlog owns the output format and slogctx attaches context attributes;
+	// the app only wires the two together.
 	level := slogctx.ParseLevel(os.Getenv(logLevelEnvKey))
 	slog.SetDefault(slog.New(cloudlog.NewHandler(os.Stdout, level)))
 
@@ -30,15 +30,15 @@ func main() {
 	}
 }
 
-// run はアプリケーションの初期化とサーバー起動を行います。defer によるクリーンアップが
-// os.Exit で無視されないよう、終了コードの決定は main 側に委ねます。
+// run initialises the application and starts the server. The exit code is decided in
+// main so that the deferred cleanup is not skipped by os.Exit.
 func run() error {
-	// シグナルに反応するコンテキストの作成
-	// これにより、SIGINT/SIGTERM受信時に ctx.Done() が閉じる
+	// Create a context that reacts to signals,
+	// so that ctx.Done() is closed on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 設定のロードとバリデーション
+	// Load and validate the configuration.
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("Config load failed", "error", err)
@@ -50,7 +50,7 @@ func run() error {
 	}
 	cfg.WarnOnContradictoryGenerationSettings()
 
-	// サーバーの実行
+	// Run the server.
 	if err := server.Run(ctx, cfg); err != nil {
 		slog.Error("Application failed", "error", err)
 		return err

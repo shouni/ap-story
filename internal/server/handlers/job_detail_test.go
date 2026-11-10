@@ -88,7 +88,7 @@ func TestServeDetailsRendersStateWithImageLinks(t *testing.T) {
 		"/characters/images/zundamon/job-1.png",
 		"zundamon: なのだ！",
 		"そして時は動き出す",
-		"未生成", // 画像なしの ch01-p02
+		"未生成", // ch01-p02, which has no image
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -136,25 +136,25 @@ func renderDetail(t *testing.T, state *kitcomic.MangaState) string {
 	return rec.Body.String()
 }
 
-// コマとページはボタンを分けます。ページはコマを並べた合成物なので、
-// コマの出来を見てから合成へ進めるようにするためです。
+// Panels and pages get separate buttons. A page is a composite of the panels, so
+// composition waits until the panels have been checked.
 func TestServeDetailsOffersPanelsFirstForScriptOnlyState(t *testing.T) {
 	t.Parallel()
 
 	body := renderDetail(t, scriptOnlyState())
 
 	if !strings.Contains(body, `data-stage="panels"`) {
-		t.Error("台本だけの state に「コマを生成」ボタンが出ていない")
+		t.Error("a script-only state shows no \"コマを生成\" button")
 	}
 	if !strings.Contains(body, "コマを生成") {
-		t.Error("画像が1枚も無いのに「続きのコマを生成」表記になっている")
+		t.Error("with no image at all, the label reads \"続きのコマを生成\"")
 	}
 	if strings.Contains(body, "ページを合成") {
-		t.Error("コマが1枚も無いのにページ合成ボタンが出ている")
+		t.Error("with no panel at all, a page-composition button is shown")
 	}
 }
 
-// コマが揃ったら、次はページ合成だけを出します。
+// Once the panels are all there, only page composition is offered next.
 func TestServeDetailsOffersPageCompositionAfterPanels(t *testing.T) {
 	t.Parallel()
 
@@ -166,10 +166,10 @@ func TestServeDetailsOffersPageCompositionAfterPanels(t *testing.T) {
 	body := renderDetail(t, state)
 
 	if !strings.Contains(body, "ページを合成") {
-		t.Error("コマが揃ったのにページ合成ボタンが出ていない")
+		t.Error("the panels are all there but no page-composition button is shown")
 	}
 	if strings.Contains(body, `data-stage="panels"`) {
-		t.Error("コマが揃っているのにコマ生成ボタンが残っている")
+		t.Error("the panels are all there but a panel-generation button remains")
 	}
 }
 
@@ -184,10 +184,10 @@ func TestServeDetailsOffersResumeForPartiallyGeneratedState(t *testing.T) {
 	body := renderDetail(t, state)
 
 	if !strings.Contains(body, `data-stage="panels"`) {
-		t.Error("未生成のコマが残る state に再開ボタンが出ていない")
+		t.Error("a state with panels still missing shows no resume button")
 	}
 	if !strings.Contains(body, "続きのコマを生成") {
-		t.Error("生成済みがあるのに「続きのコマを生成」表記になっていない")
+		t.Error("with some panels generated, the label does not read \"続きのコマを生成\"")
 	}
 }
 
@@ -206,7 +206,7 @@ func TestServeDetailsHidesRenderButtonWhenComplete(t *testing.T) {
 
 	for _, unwanted := range []string{`data-stage="panels"`, "ページを合成"} {
 		if strings.Contains(body, unwanted) {
-			t.Errorf("全て生成済みなのに %q のボタンが出ている", unwanted)
+			t.Errorf("everything is generated but a %q button is shown", unwanted)
 		}
 	}
 }
@@ -234,7 +234,7 @@ func TestServeDetailsRendersRegenerateControls(t *testing.T) {
 		`data-mode="edit"`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("再生成コントロールに %q が無い", want)
+			t.Errorf("the regenerate controls lack %q", want)
 		}
 	}
 }
@@ -242,17 +242,17 @@ func TestServeDetailsRendersRegenerateControls(t *testing.T) {
 func TestServeDetailsHidesEditForUngeneratedPanel(t *testing.T) {
 	t.Parallel()
 
-	// 編集モードは既存画像が前提なので、未生成のコマには出してはいけない
-	// （go-comic-kit は生成済み画像が無い場合エラーになる）。
+	// Edit mode presupposes an existing image, so it must not appear for a panel not yet generated
+	// (go-comic-kit fails when there is no generated image).
 	body := renderDetail(t, scriptOnlyState())
 
 	if strings.Contains(body, `data-mode="edit"`) {
-		t.Error("画像が無いコマに編集ボタンが出ている")
+		t.Error("an edit button is shown for a panel with no image")
 	}
 }
 
-// 章カードには「この章の画像を生成」が並びます。画像はいちばん高価な工程なので、
-// 作品まるごとではなく章単位で試せる入口を、台本再生成と同じ場所に置いています。
+// Chapter cards carry "この章の画像を生成". Images are the most expensive stage, so an entry point for trying
+// per chapter rather than the whole work sits in the same place as script regeneration.
 func TestServeDetailsRendersChapterRenderControl(t *testing.T) {
 	t.Parallel()
 
@@ -264,12 +264,12 @@ func TestServeDetailsRendersChapterRenderControl(t *testing.T) {
 		`この章のコマを生成`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("章カードに %q が無い", want)
+			t.Errorf("the chapter card lacks %q", want)
 		}
 	}
 }
 
-// 台本がまだ無い章に画像生成のボタンを出しても、押せば0件で終わるだけです。
+// A chapter with no script yet gains nothing from an image-generation button; pressing it would end with 0 items.
 func TestServeDetailsHidesChapterRenderWithoutPanels(t *testing.T) {
 	t.Parallel()
 
@@ -278,12 +278,12 @@ func TestServeDetailsHidesChapterRenderWithoutPanels(t *testing.T) {
 	state.Chapters[0].PanelIDs = nil
 
 	if body := renderDetail(t, state); strings.Contains(body, `この章のコマを生成`) {
-		t.Error("コマの無い章に画像生成ボタンが出ている")
+		t.Error("an image-generation button is shown for a chapter with no panels")
 	}
 }
 
-// 画像モデルは台本生成のフォームではなく、画像生成を始めるこの画面で選びます。
-// 初期選択は state に記録された値で、押し続ける限り作品内で揃います。
+// The image model is chosen not on the script form but on this page, where image generation starts.
+// The initial choice is the value recorded in the state, so as long as people keep pressing, the work stays consistent.
 func TestServeDetailsOffersImageModelDefaultedToRecorded(t *testing.T) {
 	t.Parallel()
 
@@ -293,25 +293,25 @@ func TestServeDetailsOffersImageModelDefaultedToRecorded(t *testing.T) {
 	body := renderDetail(t, state)
 
 	if !strings.Contains(body, "js-image-model") {
-		t.Fatal("画像モデルの選択が出ていない")
+		t.Fatal("no image model picker is shown")
 	}
 	if !strings.Contains(body, `<option value="image-alt" selected>`) {
-		t.Errorf("記録済みのモデルが初期選択になっていない:\n%s", body)
+		t.Errorf("the recorded model is not the initial choice:\n%s", body)
 	}
 }
 
-// まだ記録が無い作品（台本だけ）は、一覧の先頭が初期選択になります。
+// A work with nothing recorded yet (script only) gets the head of the list as the initial choice.
 func TestServeDetailsDefaultsImageModelToHeadWhenUnrecorded(t *testing.T) {
 	t.Parallel()
 
 	body := renderDetail(t, scriptOnlyState())
 
 	if !strings.Contains(body, `<option value="image-model" selected>`) {
-		t.Errorf("既定モデルが初期選択になっていない:\n%s", body)
+		t.Errorf("the default model is not the initial choice:\n%s", body)
 	}
 }
 
-// 生成し終えた作品には、押すボタンが無いので選択も出しません。
+// A finished work has no button to press, so no picker either.
 func TestServeDetailsHidesImageModelWhenComplete(t *testing.T) {
 	t.Parallel()
 
@@ -324,15 +324,15 @@ func TestServeDetailsHidesImageModelWhenComplete(t *testing.T) {
 	}
 
 	if body := renderDetail(t, state); strings.Contains(body, "js-image-model") {
-		t.Error("生成が済んでいるのに画像モデルの選択が出ている")
+		t.Error("generation is done but an image model picker is shown")
 	}
 }
 
-// TestServeDetailsOrdersPagesByNumber は、ページが読む順に並ぶことを確認します。
+// TestServeDetailsOrdersPagesByNumber checks that the pages are listed in reading order.
 //
-// state.Pages は合成した順に並びます（go-comic-kit の SetPageArtifact は新規ページを
-// 末尾に足すだけ）。ページ3だけ先に作り直すと state 上は 3, 1, 2 の順になり、
-// 通し読みでは順序が狂っていること自体に気づけません。
+// state.Pages is in composition order (go-comic-kit's SetPageArtifact just appends a new page
+// at the end). Remaking page 3 first makes the state order 3, 1, 2, and reading straight through
+// one would not even notice the order is wrong.
 func TestServeDetailsOrdersPagesByNumber(t *testing.T) {
 	t.Parallel()
 
@@ -346,7 +346,7 @@ func TestServeDetailsOrdersPagesByNumber(t *testing.T) {
 	}
 	state := &kitcomic.MangaState{
 		Title: "テスト作品",
-		// ページ3を先に作り直した状態
+		// The state after page 3 was remade first
 		Pages: []kitcomic.PageArtifact{page(3), page(1), page(2)},
 	}
 	repo := &fakeComicRepository{states: map[string]*kitcomic.MangaState{"job-1": state}}
@@ -365,10 +365,10 @@ func TestServeDetailsOrdersPagesByNumber(t *testing.T) {
 	for n := 1; n <= 3; n++ {
 		at := strings.Index(body, fmt.Sprintf("comic_page_%d.png", n))
 		if at < 0 {
-			t.Fatalf("ページ %d が出力されていません", n)
+			t.Fatalf("page %d is not rendered", n)
 		}
 		if at < last {
-			t.Errorf("ページ %d が前のページより先に出ています（読む順に並んでいません）", n)
+			t.Errorf("page %d comes before the previous page (not in reading order)", n)
 		}
 		last = at
 	}

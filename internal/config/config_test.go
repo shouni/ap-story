@@ -14,12 +14,12 @@ func setDefaultURLConfigEnv(t *testing.T) {
 	t.Setenv("SERVICE_URL", "http://localhost:8080")
 	t.Setenv("WORKER_URL", "")
 	t.Setenv("TASK_AUDIENCE_URL", "")
-	// SERVER_ROLE は明示が必須。役割に関心のないテストはローカル開発と同じ both で読む。
+	// SERVER_ROLE must be set explicitly. Tests that do not care about the role read as both, like local development.
 	t.Setenv("SERVER_ROLE", string(serverrole.Both))
 }
 
-// WORKER_URL / SERVICE_URL からの導出は worker サービスの URL までを返し、
-// タスクのパスは付けません。継ぎ足すのは投入の直前（tasks.Config.WorkerPath）です。
+// Deriving from WORKER_URL / SERVICE_URL returns only the worker service's URL and
+// adds no task path. The path is appended just before enqueueing (tasks.Config.WorkerPath).
 func TestLoadConfigNormalizesWorkerURL(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -96,8 +96,8 @@ func TestLoadConfigParsesAllowedM2MServiceAccounts(t *testing.T) {
 	require.Equal(t, []string{"sa-a@project.iam.gserviceaccount.com", "sa-b@project.iam.gserviceaccount.com"}, cfg.Auth.AllowedM2MServiceAccounts)
 }
 
-// TestLoadConfigParsesAllowedTaskServiceAccounts は、カンマ区切りの許可リストが
-// 前後の空白を落として読み込まれることを確認します。
+// TestLoadConfigParsesAllowedTaskServiceAccounts checks that a comma-separated allowlist
+// is read with surrounding whitespace dropped.
 func TestLoadConfigParsesAllowedTaskServiceAccounts(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 	t.Setenv("ALLOWED_TASK_SERVICE_ACCOUNTS", " web@test.iam.gserviceaccount.com , worker@test.iam.gserviceaccount.com ")
@@ -111,8 +111,8 @@ func TestLoadConfigParsesAllowedTaskServiceAccounts(t *testing.T) {
 	}, cfg.Tasks.AllowedServiceAccounts)
 }
 
-// モデル名に既定値はありません。既定値へ黙って落ちると、古いモデルを使い続けたまま
-// 気付けないためです。画風は設定ではなく assets/prompts/styles.json が持ちます。
+// Model names have no default. Silently falling back to a default would keep an old model
+// in use unnoticed. The art style is not configuration; assets/prompts/styles.json holds it.
 func TestLoadConfigAppliesAIDefaults(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 
@@ -131,17 +131,17 @@ func TestLoadConfigProducesValidKitConfig(t *testing.T) {
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 
-	// モデル名さえ与えれば go-comic-kit の必須項目を満たすこと。キットが必須項目を
-	// 増やしたときに、本番の起動時ではなくここで落ちるようにするための番人。
-	// 順序は workflow.New と同じ（ApplyDefaults → Validate）にします。
+	// Giving just the model names must satisfy go-comic-kit's required fields. This is the guard
+	// that fails here, rather than at production startup, when the kit adds a required field.
+	// The order matches workflow.New (ApplyDefaults → Validate).
 	//
-	// 画風はキットの必須項目ではありません（プリセットから呼び出しごとに渡します）。
+	// The art style is not a required field of the kit (it is passed per call from the preset).
 	kit := cfg.AI.KitConfig()
 	kit.ApplyDefaults()
 	require.NoError(t, kit.Validate())
 }
 
-// モデル一覧は先頭が既定で、残りはフォームの選択肢になります。
+// The head of a model list is the default and the rest become the form's options.
 func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 	t.Setenv("GEMINI_MODELS", " gemini-explicit , gemini-alt ")
@@ -154,8 +154,8 @@ func TestLoadConfigKeepsExplicitAISettings(t *testing.T) {
 	require.Equal(t, []string{"image-explicit", "image-alt"}, cfg.AI.ImageModels)
 }
 
-// キットへ渡すのは実行制御だけです。モデル・画風・比率・解像度は作品ごとに変わる値なので、
-// 設定ではなく生成の呼び出しごとに渡します（渡し先は pipeline のステップ）。
+// Only execution control goes to the kit. Model, art style, aspect ratio and resolution vary
+// per work, so they are passed per generation call rather than configured (to the pipeline steps).
 func TestAIConfigKitConfigMapsFields(t *testing.T) {
 	ai := AIConfig{
 		MaxConcurrency:      3,
@@ -188,7 +188,7 @@ func essentialConfigEnv(t *testing.T) {
 	t.Setenv("CHARACTERS_JSON_PATH", "gs://bucket/characters.json")
 	t.Setenv("GEMINI_MODELS", "gemini-test")
 	t.Setenv("IMAGE_MODELS", "image-test")
-	// 三段のタイムアウトはデプロイ設定が決めるため、アプリは既定値を持ちません。
+	// The three-tier timeouts are decided by the deployment, so the app holds no defaults.
 	t.Setenv("TASK_DISPATCH_DEADLINE", "30m")
 	t.Setenv("PIPELINE_TIMEOUT", "25m")
 }
@@ -200,11 +200,11 @@ func TestValidateEssentialConfigPassesWithAllRequiredFields(t *testing.T) {
 	require.NoError(t, cfg.ValidateEssentialConfig())
 }
 
-// モデル一覧は Web 面だけの要件です。フォームの選択肢と投入時の許可リストに使い、
-// worker は読みません（ジョブが必ず自分のモデル名を運ぶため）。
+// The model lists are a web-face requirement only: they feed the form's options and the
+// allowlist at enqueue, and the worker does not read them (every job carries its own model names).
 func TestValidateEssentialConfigRequiresModelsOnWebOnly(t *testing.T) {
 	for _, name := range []string{"IMAGE_MODELS", "GEMINI_MODELS"} {
-		t.Run(name+" は Web 面で必須", func(t *testing.T) {
+		t.Run(name+" is required on the web face", func(t *testing.T) {
 			for _, role := range []serverrole.Role{serverrole.Web, serverrole.Both} {
 				essentialConfigEnv(t)
 				t.Setenv("SERVER_ROLE", string(role))
@@ -215,7 +215,7 @@ func TestValidateEssentialConfigRequiresModelsOnWebOnly(t *testing.T) {
 			}
 		})
 
-		t.Run(name+" は worker では不要", func(t *testing.T) {
+		t.Run(name+" is not needed on the worker", func(t *testing.T) {
 			essentialConfigEnv(t)
 			t.Setenv("SERVER_ROLE", string(serverrole.Worker))
 			t.Setenv(name, "")
@@ -241,7 +241,7 @@ func TestValidateEssentialConfigRequiresGoogleOAuthFields(t *testing.T) {
 			t.Setenv(env, "")
 			cfg, err := LoadConfig()
 			require.NoError(t, err)
-			require.ErrorContains(t, cfg.ValidateEssentialConfig(), "google OAuth")
+			require.ErrorContains(t, cfg.ValidateEssentialConfig(), "Google OAuth")
 		})
 	}
 }
@@ -252,7 +252,7 @@ func TestValidateEssentialConfigRequiresAllowedEmailsOrDomains(t *testing.T) {
 	t.Setenv("ALLOWED_DOMAINS", "")
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
-	require.ErrorContains(t, cfg.ValidateEssentialConfig(), "認可リスト")
+	require.ErrorContains(t, cfg.ValidateEssentialConfig(), "allowlist")
 }
 
 func TestValidateEssentialConfigRequiresStorageFields(t *testing.T) {
@@ -279,13 +279,13 @@ func TestValidateEssentialConfigAllowsEmptyCharactersJSONPath(t *testing.T) {
 }
 
 func TestWarnOnContradictoryGenerationSettings(t *testing.T) {
-	// 警告はログにしか出ないため、ここでは「呼んでも落ちない」ことだけを担保する。
-	// 組み合わせの意味づけはコメントと README に書いてあり、挙動は go-comic-kit 側の責務。
+	// Warnings only reach the log, so all this guarantees is that calling it does not fail.
+	// What each combination means is written in the comments and README; the behaviour is go-comic-kit's job.
 	cases := map[string]AIConfig{
-		"並列とレート制限が両立していない": {MaxConcurrency: 4, RateInterval: 10 * time.Second},
-		"タイムアウトが短すぎる":      {RequestTimeout: 30 * time.Second},
-		"既定値":              {MaxConcurrency: 1, RateInterval: 10 * time.Second, RequestTimeout: 5 * time.Minute},
-		"ゼロ値":              {},
+		"concurrency and rate limit conflict": {MaxConcurrency: 4, RateInterval: 10 * time.Second},
+		"timeout too short":                   {RequestTimeout: 30 * time.Second},
+		"defaults":                            {MaxConcurrency: 1, RateInterval: 10 * time.Second, RequestTimeout: 5 * time.Minute},
+		"zero value":                          {},
 	}
 	for name, ai := range cases {
 		t.Run(name, func(*testing.T) {
@@ -295,8 +295,8 @@ func TestWarnOnContradictoryGenerationSettings(t *testing.T) {
 	}
 }
 
-// バケット「名」であって URI ではありません。コンソールから貼ると `gs://story/`
-// の形になり、素通しすると成果物の URI が `gs://gs://story//...` になります。
+// A bucket *name*, not a URI. Pasting from the console gives the form `gs://story/`, and
+// passing it through makes artifact URIs `gs://gs://story//...`.
 func TestLoadConfigNormalizesGCSBucket(t *testing.T) {
 	setDefaultURLConfigEnv(t)
 	t.Setenv("STORY_BUCKET", " gs://story-bucket/ ")

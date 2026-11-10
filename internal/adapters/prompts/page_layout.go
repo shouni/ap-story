@@ -9,7 +9,7 @@ import (
 	"github.com/shouni/go-comic-kit/comic"
 )
 
-// 段内での位置です。右開きなので、番号の小さいコマが右に来ます。
+// The position within a tier. Pages read right to left, so lower-numbered panels go on the right.
 const (
 	columnFull  = "FULL"
 	columnRight = "RIGHT"
@@ -17,39 +17,39 @@ const (
 )
 
 const (
-	// fullWidthWeight は全幅の見せゴマに回す重みの下限です。演出のないコマは 1.0。
+	// fullWidthWeight is the minimum weight for a full-width feature panel. A panel with no staging is 1.0.
 	fullWidthWeight = 1.5
-	// widthTiltWeight は段内を 60:40 に振る重みの差です。これ未満なら半々。
+	// widthTiltWeight is the weight difference that tilts a tier to 60:40. Below it, the split is even.
 	widthTiltWeight = 0.5
-	// 段の高さは均等割りの何倍まで振れてよいか。極端な帯にすると絵が入りません。
+	// How many times the even share a tier's height may swing to. An extreme strip leaves no room for the art.
 	minTierShare = 0.7
 	maxTierShare = 1.7
-	// companionShare は、同じ段に並ぶ相方のコマが段の高さへ寄与する割合です。
-	// 高い方だけで決めると、2コマ入る段が1コマの段と同じ高さに潰れます。
+	// companionShare is how much the partner panel in the same tier contributes to the tier's height.
+	// Deciding by the taller one alone squashes a two-panel tier to the height of a one-panel tier.
 	companionShare = 0.3
 )
 
-// panelPlacement は1コマの割り付けです。Tier は1始まりの段番号。
+// panelPlacement is the placement of one panel. Tier is the 1-based tier number.
 type panelPlacement struct {
 	Tier   int
 	Tiers  int
 	Column string
-	Width  int // 段内での幅（%）
-	Height int // ページ高さに対する、その段の高さ（%）
+	Width  int // width within the tier (%)
+	Height int // the tier's height relative to the page height (%)
 }
 
-// tierView は段ごとのまとめです。Panels はコマの位置（0始まり）を右から左の順で持ちます。
+// tierView groups by tier. Panels holds the panels' positions (0-based) from right to left.
 type tierView struct {
 	Number int
 	Height int
 	Panels []int
 }
 
-// planPageLayout はコマの内容からページの段組みを決めます。
+// planPageLayout decides the page's tier layout from the panels' content.
 //
-// 引きの画・叫び・場面転換・吹き出しの多いコマほど広い面積を要求し、それを段に詰めます。
-// 一律の2列グリッドだと、章頭に必ず来る wide のコマが半幅に潰れ、間を取るための
-// 無言の寄りが決めゴマと同じ大きさで並びます。
+// Long shots, shouts, scene changes and panels with many speech bubbles ask for more area, and are packed into tiers.
+// With a uniform two-column grid, the wide panel that always opens a chapter is squashed to half width,
+// and the silent close-ups meant to make a pause sit at the same size as the key panels.
 func planPageLayout(panels []comic.Panel) []panelPlacement {
 	n := len(panels)
 	switch n {
@@ -87,7 +87,7 @@ func planPageLayout(panels []comic.Panel) []panelPlacement {
 	return out
 }
 
-// groupTiers は割り付けを段ごとにまとめ直します（配置マップの出力用）。
+// groupTiers regroups the placements by tier (for the placement-map output).
 func groupTiers(layout []panelPlacement) []tierView {
 	if len(layout) == 0 {
 		return nil
@@ -101,7 +101,7 @@ func groupTiers(layout []panelPlacement) []tierView {
 	return views
 }
 
-// columnOf は段内の位置から左右を決めます。1コマだけの段は全幅です。
+// columnOf decides left or right from the position within the tier. A tier with one panel is full width.
 func columnOf(pos, inTier int) string {
 	switch {
 	case inTier == 1:
@@ -113,7 +113,7 @@ func columnOf(pos, inTier int) string {
 	}
 }
 
-// panelWeight はコマが欲しがる面積です。演出のないコマを 1.0 として増減します。
+// panelWeight is the area a panel wants. A panel with no staging is 1.0, adjusted up or down from there.
 func panelWeight(panel, prev *comic.Panel, isLast bool) float64 {
 	weight := 1.0
 	lines := countSpokenLines(panel)
@@ -122,25 +122,25 @@ func panelWeight(panel, prev *comic.Panel, isLast bool) float64 {
 	case isWideShot(panel.Shot):
 		weight += 1.2
 	case isCloseShot(panel.Shot) && lines == 0:
-		weight -= 0.4 // 無言の寄りは間を作るコマなので、小さくてよい
+		weight -= 0.4 // a silent close-up makes a pause, so it can be small
 	}
 	if hasImpactLine(panel) {
 		weight += 0.6
 	}
 	if lines > 1 {
-		weight += 0.3 * float64(lines-1) // 吹き出しが増えるほど絵を隠す。その分の幅が要る
+		weight += 0.3 * float64(lines-1) // more speech bubbles hide more of the art and need the width
 	}
 	if prev != nil && panel.Setting != "" && !strings.EqualFold(panel.Setting, prev.Setting) {
-		weight += 0.4 // 場面転換。どこへ移ったのかを見せる広さが要る
+		weight += 0.4 // a scene change needs room to show where it moved to
 	}
 	if isLast {
-		weight += 0.5 // ページ最後は次への引き
+		weight += 0.5 // the last panel on a page pulls into the next
 	}
 	return weight
 }
 
-// isWideShot / isCloseShot は台本の shot（close-up / medium / wide / bird's-eye）を
-// 表記ゆれごと拾います。台本は自由記述もできるため、前方一致では取りこぼします。
+// isWideShot / isCloseShot pick up the script's shot (close-up / medium / wide / bird's-eye)
+// including spelling variants. The script allows free text, so a prefix match would miss some.
 func isWideShot(shot string) bool {
 	return containsAny(shot, "wide", "bird", "establish", "long shot", "aerial", "俯瞰", "引き")
 }
@@ -159,7 +159,7 @@ func containsAny(s string, keywords ...string) bool {
 	return false
 }
 
-// hasImpactLine は叫び・効果音を含むコマかを返します。
+// hasImpactLine reports whether the panel contains a shout or a sound effect.
 func hasImpactLine(panel *comic.Panel) bool {
 	for _, line := range panel.Dialogues {
 		if strings.TrimSpace(line.Text) == "" {
@@ -172,7 +172,7 @@ func hasImpactLine(panel *comic.Panel) bool {
 	return false
 }
 
-// chooseFullWidth は全幅にするコマを重み順に選びます。
+// chooseFullWidth picks the full-width panels in order of weight.
 func chooseFullWidth(weights []float64) []bool {
 	n := len(weights)
 	order := make([]int, n)
@@ -189,7 +189,7 @@ func chooseFullWidth(weights []float64) []bool {
 		}
 		count++
 	}
-	// 半幅が奇数だと余った1コマの段が結局全幅になり、段だけが増える。数を揃えておく。
+	// With an odd number of half-width panels, the leftover one's tier ends up full width anyway and only adds a tier. Keep the count even.
 	if (n-count)%2 == 1 {
 		if count < limit {
 			count++
@@ -205,7 +205,7 @@ func chooseFullWidth(weights []float64) []bool {
 	return full
 }
 
-// maxFullWidth は1ページに置く全幅コマの上限です。増やすほどページが横帯の積み重ねになります。
+// maxFullWidth caps the full-width panels on one page. The more there are, the more the page becomes a stack of horizontal strips.
 func maxFullWidth(n int) int {
 	if n == 3 {
 		return 1
@@ -213,7 +213,7 @@ func maxFullWidth(n int) int {
 	return 2
 }
 
-// packTiers は並び順を保ったままコマを段へ詰めます。全幅コマは単独の段になります。
+// packTiers packs the panels into tiers, keeping their order. A full-width panel gets a tier of its own.
 func packTiers(full []bool) [][]int {
 	var tiers [][]int
 	for i := 0; i < len(full); {
@@ -222,13 +222,13 @@ func packTiers(full []bool) [][]int {
 			i += 2
 			continue
 		}
-		tiers = append(tiers, []int{i}) // 相方のいない半幅はそのまま全幅に上げる
+		tiers = append(tiers, []int{i}) // a half-width panel with no partner is promoted to full width
 		i++
 	}
 	return tiers
 }
 
-// tierWidths は段内の幅（%）を返します。重みに差があるときだけ 60:40 に振ります。
+// tierWidths returns the widths (%) within a tier. It tilts to 60:40 only when the weights differ.
 func tierWidths(tier []int, weights []float64) []int {
 	if len(tier) == 1 {
 		return []int{100}
@@ -250,7 +250,7 @@ func tierWidths(tier []int, weights []float64) []int {
 	}
 }
 
-// tierHeights は段の高さ（%）を重みから配分します。合計は必ず 100 です。
+// tierHeights distributes the tiers' heights (%) by weight. The total is always 100.
 func tierHeights(tiers [][]int, weights []float64) []int {
 	count := len(tiers)
 	if count == 1 {
@@ -269,7 +269,7 @@ func tierHeights(tiers [][]int, weights []float64) []int {
 		total += shares[i]
 	}
 
-	// 均等割りからの振れ幅を抑えてから正規化する。
+	// Limit the swing from the even share, then normalise.
 	even := 1.0 / float64(count)
 	sum := 0.0
 	for i := range shares {
@@ -280,8 +280,8 @@ func tierHeights(tiers [][]int, weights []float64) []int {
 	return distributePercent(shares, sum, count)
 }
 
-// distributePercent は取り分を刻み単位の百分率へ丸めます。端数は小数部の大きい段から配り、
-// 合計を必ず 100 にします（丸め誤差でページの高さが余ると、そこが空白の帯になります）。
+// distributePercent rounds the shares to percentages in steps. The remainder goes to the tiers with the
+// largest fractional parts, so the total is always 100 (if rounding left page height over, it would become a blank strip).
 func distributePercent(shares []float64, sum float64, count int) []int {
 	step := 5
 	if count > 20 {

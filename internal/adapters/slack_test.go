@@ -11,21 +11,21 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// recordingNotifier は送信された notify.Message を記録するフェイクです。
-// 実際の Slack 記法への変換は go-notify 側の責務なので、ここでは
-// ap-story が組み立てた見出しと本文だけを検証します。
+// recordingNotifier is a fake that records the notify.Message values sent.
+// Converting to Slack markup is go-notify's job, so this only checks the heading and
+// body that ap-story assembled.
 type recordingNotifier struct {
 	got []notify.Message
 }
 
-// Notify は notify.Notifier を実装し、受け取った Message を記録します。
+// Notify implements notify.Notifier and records the Message it receives.
 func (r *recordingNotifier) Notify(_ context.Context, msg notify.Message) error {
 	r.got = append(r.got, msg)
 	return nil
 }
 
-// newTestAdapter は Notifier を差し替えたアダプターを組み立てます。
-// 見出しは送信時に WithTitles で決まるため、ここでは空の Titles で足ります。
+// newTestAdapter assembles an adapter with the Notifier replaced.
+// The heading is decided by WithTitles at send time, so empty Titles are enough here.
 func newTestAdapter(n notify.Notifier, serviceURL string) *SlackAdapter {
 	return &SlackAdapter{
 		pipeline:   notify.NewPipeline(n, notify.Titles{}),
@@ -33,11 +33,11 @@ func newTestAdapter(n notify.Notifier, serviceURL string) *SlackAdapter {
 	}
 }
 
-// last は最後に送信された Message を返します。
+// last returns the last Message sent.
 func (r *recordingNotifier) last(t *testing.T) notify.Message {
 	t.Helper()
 	if len(r.got) == 0 {
-		t.Fatal("通知が送信されていません")
+		t.Fatal("no notice was sent")
 	}
 	return r.got[len(r.got)-1]
 }
@@ -162,8 +162,8 @@ func TestSlackContentOmitsHistoryLinkWithoutServiceURL(t *testing.T) {
 	}
 }
 
-// TestNotifyCompleteSendsTitleAndBody は、完了通知がコマンドに応じた見出しと
-// 組み立てた本文で送信されることを確認します。
+// TestNotifyCompleteSendsTitleAndBody checks that the completion notice is sent with the heading for
+// the command and the assembled body.
 func TestNotifyCompleteSendsTitleAndBody(t *testing.T) {
 	t.Parallel()
 
@@ -188,8 +188,8 @@ func TestNotifyCompleteSendsTitleAndBody(t *testing.T) {
 	}
 }
 
-// TestNotifyErrorAppendsCause は、失敗通知が本文の末尾にエラー内容を
-// 追記して送信することを確認します。
+// TestNotifyErrorAppendsCause checks that the failure notice is sent with the error appended to the
+// end of the body.
 func TestNotifyErrorAppendsCause(t *testing.T) {
 	t.Parallel()
 
@@ -210,7 +210,7 @@ func TestNotifyErrorAppendsCause(t *testing.T) {
 	}
 }
 
-// TestNotifyErrorWithNilCause は、原因が nil でも通知が壊れないことを確認します。
+// TestNotifyErrorWithNilCause checks that the notice does not break when the cause is nil.
 func TestNotifyErrorWithNilCause(t *testing.T) {
 	t.Parallel()
 
@@ -226,14 +226,14 @@ func TestNotifyErrorWithNilCause(t *testing.T) {
 	}
 }
 
-// TestNotifySetsLevel は、完了・失敗が結果の種別を伴って送信されることを確認します。
-// Slack 側はこれを attachment の色に落とすため、見出しの絵文字とは別に必要です。
+// TestNotifySetsLevel checks that completion and failure are sent with the kind of result.
+// Slack turns it into the attachment colour, so it is needed separately from the heading's emoji.
 func TestNotifySetsLevel(t *testing.T) {
 	t.Parallel()
 
 	task := domain.Task{Command: domain.TaskCommandComposeComic, JobID: "job-1"}
 
-	t.Run("完了は成功", func(t *testing.T) {
+	t.Run("completion is success", func(t *testing.T) {
 		t.Parallel()
 
 		rec := &recordingNotifier{}
@@ -245,7 +245,7 @@ func TestNotifySetsLevel(t *testing.T) {
 		}
 	})
 
-	t.Run("失敗は失敗", func(t *testing.T) {
+	t.Run("failure is failure", func(t *testing.T) {
 		t.Parallel()
 
 		rec := &recordingNotifier{}

@@ -1,4 +1,4 @@
-// Package repository は、GCS 上の comic_state.json 群から履歴一覧・詳細取得・削除を行います。
+// Package repository serves the history list, detail reads and deletion from the comic_state.json files on GCS.
 package repository
 
 import (
@@ -14,28 +14,28 @@ import (
 
 const defaultHistoryCacheTTL = 10 * time.Minute
 
-// ComicRepository は GCS 上の comic_state.json を読み書きし、履歴一覧・詳細・削除を提供します。
+// ComicRepository reads and writes comic_state.json on GCS and provides the history list, details and deletion.
 type ComicRepository struct {
 	bucket string
-	// store は完全な URI を受け取るルートのストアです。成果物のディレクトリは
-	// domain が組み立てて go-comic-kit へも渡るため、ここでスコープは絞りません。
+	// store is the root store that takes full URIs. The artifact directories are assembled by
+	// domain and also passed to go-comic-kit, so the scope is not narrowed here.
 	store        remoteio.Store
 	historyCache *cache.TTL[domain.ComicHistory]
-	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
-	// 履歴サマリ本体のキャッシュ（historyCache）と違い、これが無いと履歴画面を開くたびに
-	// comics/ 配下全体の List が走ります。
+	// jobIDCache caches the job IDs from a listing scan for a short time.
+	// Unlike the cache of history summaries (historyCache), without it every opening of the history page
+	// would run a List over all of comics/.
 	jobIDCache *cache.IDList
 }
 
 var _ domain.ComicRepository = (*ComicRepository)(nil)
 
-// NewHistoryCache は ComicRepository に注入する履歴サマリ用キャッシュを生成します。
-// 期限切れエントリの回収は生成と同時に始まります。停止は Close で行ってください。
+// NewHistoryCache creates the history-summary cache injected into ComicRepository.
+// Collecting expired entries starts on creation. Stop it with Close.
 func NewHistoryCache() *cache.TTL[domain.ComicHistory] {
 	return cache.NewTTL[domain.ComicHistory](defaultHistoryCacheTTL)
 }
 
-// NewComicRepository は ComicRepository を構築します。
+// NewComicRepository builds a ComicRepository.
 func NewComicRepository(
 	storage config.StorageConfig,
 	store remoteio.Store,
@@ -49,12 +49,12 @@ func NewComicRepository(
 	}
 }
 
-// jobOutputDir は指定ジョブの成果物を格納する GCS URI を返します。
+// jobOutputDir returns the GCS URI holding the given job's artifacts.
 func (r *ComicRepository) jobOutputDir(jobID string) (string, error) {
 	return domain.JobOutputDir(r.bucket, jobID)
 }
 
-// stateObjectPath は指定ジョブの comic_state.json の GCS URI を返します。
+// stateObjectPath returns the GCS URI of the given job's comic_state.json.
 func (r *ComicRepository) stateObjectPath(jobID string) (string, error) {
 	outputDir, err := r.jobOutputDir(jobID)
 	if err != nil {
@@ -63,7 +63,7 @@ func (r *ComicRepository) stateObjectPath(jobID string) (string, error) {
 	return asset.StatePath(outputDir)
 }
 
-// キャッシュキーのジョブ ID 正規化は cache.TTL 側で行われます。
+// Job ID normalisation for the cache key is done in cache.TTL.
 func (r *ComicRepository) getCachedHistory(jobID string) (domain.ComicHistory, bool) {
 	return r.historyCache.Get(jobID)
 }

@@ -22,11 +22,11 @@ func TestStylesLoadsPresets(t *testing.T) {
 		style, err := s.Get(mode)
 		require.NoError(t, err, "mode=%s", mode)
 		require.NotEmpty(t, style.Suffix, "mode=%s", mode)
-		require.NotEmpty(t, style.Direction, "mode=%s: 選択肢の説明がありません", mode)
+		require.NotEmpty(t, style.Direction, "mode=%s: the option has no description", mode)
 	}
 }
 
-// 空文字は既定モードを指します。フォーム未選択と worker 側の解決を一致させるためです。
+// The empty string means the default mode, so that an unselected form and the worker's resolution agree.
 func TestStylesEmptyModeIsDefault(t *testing.T) {
 	t.Parallel()
 
@@ -40,7 +40,7 @@ func TestStylesEmptyModeIsDefault(t *testing.T) {
 	require.Equal(t, def, empty)
 }
 
-// 未知のモードは既定へ落とさずエラーにします（指定したつもりの画風で生成されない事故を防ぐ）。
+// An unknown mode is an error rather than falling back to the default (preventing generation in an art style other than the one intended).
 func TestStylesUnknownModeFails(t *testing.T) {
 	t.Parallel()
 
@@ -51,8 +51,8 @@ func TestStylesUnknownModeFails(t *testing.T) {
 	require.Error(t, err)
 }
 
-// 画風とネガティブプロンプトが噛み合っていること。共通側に画風の語が残っていると、
-// モノクロのプリセットが自分の指定と正面衝突します。
+// The art style and the negative prompt fit together. If art-style words remained on the shared side,
+// a monochrome preset would clash head-on with its own instruction.
 func TestStylePresetsDoNotContradictSharedNegativePrompts(t *testing.T) {
 	t.Parallel()
 
@@ -62,7 +62,7 @@ func TestStylePresetsDoNotContradictSharedNegativePrompts(t *testing.T) {
 	for _, shared := range []string{panelNegativePrompt, pageNegativePrompt} {
 		for _, word := range []string{"monochrome", "greyscale", "screentone", "color"} {
 			require.NotContains(t, shared, word,
-				"共通のネガティブプロンプトに画風の語 %q が残っています（プリセット側で持ってください）", word)
+				"the shared negative prompt still has the art-style word %q (keep it in the preset)", word)
 		}
 	}
 
@@ -72,7 +72,7 @@ func TestStylePresetsDoNotContradictSharedNegativePrompts(t *testing.T) {
 	require.NotContains(t, mono.Negative, "monochrome")
 }
 
-// パネルとページのプロンプトが、選ばれた画風の指定とネガティブを反映すること。
+// The panel and page prompts reflect the chosen art style's instruction and negative.
 func TestPromptsUseSelectedStyle(t *testing.T) {
 	t.Parallel()
 
@@ -102,7 +102,7 @@ func TestPromptsUseSelectedStyle(t *testing.T) {
 	require.Contains(t, panelUser, mono.Suffix)
 	require.NotContains(t, panelUser, "設定の画風")
 	require.Contains(t, panelNegative, mono.Negative)
-	require.Contains(t, panelNegative, "bad anatomy", "共通のネガティブプロンプトが落ちています")
+	require.Contains(t, panelNegative, "bad anatomy", "the shared negative prompt was dropped")
 
 	pageSystem, _, pageNegative, err := PagePrompt{Styles: styles}.BuildPage(&ports.PagePromptData{
 		Panels:     []comic.Panel{panel},
@@ -112,10 +112,10 @@ func TestPromptsUseSelectedStyle(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, pageSystem, mono.Suffix)
 	require.Contains(t, pageNegative, mono.Negative)
-	require.Contains(t, pageNegative, "extra panels", "共通のネガティブプロンプトが落ちています")
+	require.Contains(t, pageNegative, "extra panels", "the shared negative prompt was dropped")
 }
 
-// 未知のモードはプロンプト構築の時点でエラーにします。
+// An unknown mode is an error at prompt construction.
 func TestPanelPromptRejectsUnknownStyleMode(t *testing.T) {
 	t.Parallel()
 
@@ -135,7 +135,7 @@ func TestPanelPromptRejectsUnknownStyleMode(t *testing.T) {
 	require.Error(t, err)
 }
 
-// 台本モードの選択肢は front matter から説明を引きます。
+// The script mode options take their descriptions from the front matter.
 func TestScriptPromptsModeInfosCarryFrontMatter(t *testing.T) {
 	t.Parallel()
 
@@ -152,14 +152,14 @@ func TestScriptPromptsModeInfosCarryFrontMatter(t *testing.T) {
 		}
 	}
 	require.Equal(t, ModeDefault, def.Name)
-	require.NotEmpty(t, def.Direction, "既定モードの front matter に direction がありません")
+	require.NotEmpty(t, def.Direction, "the default mode's front matter has no direction")
 	require.True(t, strings.HasPrefix(def.Label(), ModeDefault))
 	require.Contains(t, def.Hint(), "向いている用途")
 }
 
-// デザインシートはパネル用ではなくシート用の画風指定を使うこと。
-// パネル用には cinematic lighting 等の演出が入っており、シートに焼くと
-// その照明が参照経由で下流の全生成へ伝染します。
+// Design sheets use the sheet art style, not the panel one.
+// The panel one includes staging such as cinematic lighting, and baked into a sheet that lighting
+// spreads through the reference to every downstream generation.
 func TestDesignSheetUsesSheetSafeStyle(t *testing.T) {
 	t.Parallel()
 
@@ -175,14 +175,14 @@ func TestDesignSheetUsesSheetSafeStyle(t *testing.T) {
 			StyleMode:    mode,
 		})
 		require.NoError(t, err, "mode=%s", mode)
-		require.Contains(t, user, style.DesignSuffix, "mode=%s: シート用の画風指定が使われていません", mode)
-		require.NotContains(t, user, "cinematic lighting", "mode=%s: 演出照明がシートに焼き付いています", mode)
-		require.NotContains(t, user, "rim lighting", "mode=%s: 演出照明がシートに焼き付いています", mode)
-		require.Contains(t, negative, "color swatches", "mode=%s: 共通のネガティブプロンプトが落ちています", mode)
+		require.Contains(t, user, style.DesignSuffix, "mode=%s: the sheet art style is not used", mode)
+		require.NotContains(t, user, "cinematic lighting", "mode=%s: staging lighting is baked into the sheet", mode)
+		require.NotContains(t, user, "rim lighting", "mode=%s: staging lighting is baked into the sheet", mode)
+		require.Contains(t, negative, "color swatches", "mode=%s: the shared negative prompt was dropped", mode)
 	}
 }
 
-// プリセットのシート用画風には演出語を入れないこと（テンプレート側の番人）。
+// The preset's sheet art style must contain no staging words (a guard on the template side).
 func TestDesignStylesCarryNoLightingDirection(t *testing.T) {
 	t.Parallel()
 
@@ -194,7 +194,7 @@ func TestDesignStylesCarryNoLightingDirection(t *testing.T) {
 		require.NoError(t, err)
 		for _, word := range []string{"cinematic", "rim light", "dramatic", "lens flare", "color grading"} {
 			require.NotContains(t, strings.ToLower(style.DesignSuffix), word,
-				"mode=%s: design_style に演出語 %q が入っています", mode, word)
+				"mode=%s: design_style contains the staging word %q", mode, word)
 		}
 	}
 }

@@ -6,13 +6,13 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// 本ファイルは、state や characters.json に記録された GCS URI を、署名 URL へ
-// 302 リダイレクトする配信エンドポイントのパスへ変換します。バケット外や想定外の
-// プレフィックスの URI は空文字を返し、画像リンク自体を出しません。
+// This file converts GCS URIs recorded in the state or characters.json into the paths of the
+// serving endpoints that 302-redirect to a signed URL. A URI outside the bucket or with an
+// unexpected prefix gives the empty string, and no image link is shown at all.
 
-// comicImageWebPath は、state に記録された GCS 画像 URI（gs://bucket/comics/{jobID}/...）を
-// 署名 URL リダイレクトエンドポイントのパス（/jobs/{jobID}/images/...）へ変換します。
-// ジョブディレクトリ外の URI や不正な形式は空文字を返します（画像リンクを出さない）。
+// comicImageWebPath converts a GCS image URI recorded in the state (gs://bucket/comics/{jobID}/...)
+// into the path of the signed-URL redirect endpoint (/jobs/{jobID}/images/...).
+// A URI outside the job directory or in an invalid form gives the empty string (no image link).
 func (h *Handler) comicImageWebPath(jobID, imageURI string) string {
 	prefix, err := domain.JobObjectPrefix(jobID)
 	if err != nil {
@@ -26,10 +26,10 @@ func (h *Handler) comicImageWebPath(jobID, imageURI string) string {
 	return "/jobs/" + jobID + "/images/" + rel
 }
 
-// characterImageWebPath は、state に記録されたキャラクター画像の GCS URI
-// （gs://bucket/character/...、ジョブに依存しない共有アセット）を、署名 URL
-// リダイレクトエンドポイントのパス（/characters/images/...）へ変換します。
-// バケット外や想定外のプレフィックスの URI は空文字を返します（画像リンクを出さない）。
+// characterImageWebPath converts the GCS URI of a character image recorded in the state
+// (gs://bucket/character/..., a shared asset that belongs to no job) into the path of the signed-URL
+// redirect endpoint (/characters/images/...).
+// A URI outside the bucket or with an unexpected prefix gives the empty string (no image link).
 func (h *Handler) characterImageWebPath(imageURI string) string {
 	base := "gs://" + h.bucket + "/" + characterImagePrefix + "/"
 	rel, ok := strings.CutPrefix(imageURI, base)
@@ -39,10 +39,10 @@ func (h *Handler) characterImageWebPath(imageURI string) string {
 	return "/characters/images/" + rel
 }
 
-// characterReferenceWebPath は、characters.json の reference_url / reference_urls に
-// 記録されたマスター参照画像の GCS URI（gs://bucket/character-reference/...）を、
-// 署名 URL リダイレクトエンドポイントのパス（/characters/reference/...）へ変換します。
-// バケット外や想定外のプレフィックスの URI は空文字を返します（画像リンクを出さない）。
+// characterReferenceWebPath converts the GCS URI of a master reference image recorded in characters.json's
+// reference_url / reference_urls (gs://bucket/character-reference/...) into the path of the
+// signed-URL redirect endpoint (/characters/reference/...).
+// A URI outside the bucket or with an unexpected prefix gives the empty string (no image link).
 func (h *Handler) characterReferenceWebPath(imageURI string) string {
 	base := "gs://" + h.bucket + "/" + characterReferenceImagePrefix + "/"
 	rel, ok := strings.CutPrefix(imageURI, base)

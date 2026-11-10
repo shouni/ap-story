@@ -8,8 +8,8 @@ import (
 	"github.com/shouni/go-utils/jobid"
 )
 
-// legacyJobID は v1.5.0 以前に採番していた形式の ID です（2026-07-17 11:30:45 UTC）。
-// 過去のジョブは GCS の成果物パスにこの形式で残り続けます。
+// legacyJobID is an ID in the format minted up to v1.5.0 (2026-07-17 11:30:45 UTC).
+// Past jobs stay in GCS artifact paths in this format.
 const legacyJobID = "c20260717-113045-1a2b3c4d"
 
 func TestNewJobIDFormat(t *testing.T) {
@@ -35,9 +35,9 @@ func TestNewJobIDFormat(t *testing.T) {
 	}
 }
 
-// TestNewJobIDCarriesCreatedAt は、採番した ID から生成時刻を復元できることを確認します。
-// 履歴一覧の日時表示と並び順はこの復元に依存しているため、採番形式を変えると
-// jobid.CreatedAt が読めなくなり、一覧の日時が無言で空欄になります。
+// TestNewJobIDCarriesCreatedAt checks that the creation time can be recovered from a minted ID.
+// The history list's dates and ordering depend on this recovery, so changing the ID format
+// would make jobid.CreatedAt unreadable and the list's dates would silently go blank.
 func TestNewJobIDCarriesCreatedAt(t *testing.T) {
 	t.Parallel()
 
@@ -57,12 +57,12 @@ func TestNewJobIDCarriesCreatedAt(t *testing.T) {
 	}
 }
 
-// TestNewJobIDSortsAgainstLegacyIDs は、新形式で採番した ID が旧形式の ID と混在しても
-// 作成日時の降順に並ぶことを確認します。
+// TestNewJobIDSortsAgainstLegacyIDs checks that IDs minted in the new format sort by
+// creation time, descending, even mixed with legacy IDs.
 //
-// 採番形式を jobid.New へ寄せたことで、辞書順では新旧が分離します（"c-" < "c2" のため、
-// 新形式の ID が常に旧形式より後ろに回る）。履歴の並び順は paging.LoadPage の sortKey（jobid.SortKey）
-// に依存しており、既定の ID 降順へ戻すと一覧はエラーにならず静かに並び替わります。
+// Since minting moved to jobid.New, old and new separate in lexical order ("c-" < "c2", so
+// new IDs always sort after legacy ones). History ordering depends on paging.LoadPage's sortKey (jobid.SortKey),
+// and reverting to the default descending ID order would reorder the list silently, with no error.
 func TestNewJobIDSortsAgainstLegacyIDs(t *testing.T) {
 	t.Parallel()
 
@@ -73,12 +73,12 @@ func TestNewJobIDSortsAgainstLegacyIDs(t *testing.T) {
 
 	key, legacyKey := jobid.SortKey(id), jobid.SortKey(legacyJobID)
 	if key == "" {
-		t.Fatalf("jobid.SortKey(%q) が空です。採番形式から生成時刻を復元できません", id)
+		t.Fatalf("jobid.SortKey(%q) is empty; the creation time cannot be recovered from the ID format", id)
 	}
 	if legacyKey == "" {
-		t.Fatalf("jobid.SortKey(%q) が空です。旧形式の ID が読めなくなっています", legacyJobID)
+		t.Fatalf("jobid.SortKey(%q) is empty; legacy IDs can no longer be read", legacyJobID)
 	}
-	// 新しく採番した ID の方が必ず後の時刻になる。
+	// A newly minted ID always has the later time.
 	if key <= legacyKey {
 		t.Errorf("SortKey(%q) = %q, want > SortKey(%q) = %q", id, key, legacyJobID, legacyKey)
 	}
@@ -87,8 +87,8 @@ func TestNewJobIDSortsAgainstLegacyIDs(t *testing.T) {
 func TestValidateJobID(t *testing.T) {
 	t.Parallel()
 
-	// アンダースコアは go-utils/jobid への統一で許容されるようになりました
-	// （姉妹プロジェクト由来の規則に揃えたため）。URL・GCS パスのいずれでも安全な文字です。
+	// Underscores became allowed with the move to go-utils/jobid
+	// (to match the rule that came from the sister projects). They are safe in both URLs and GCS paths.
 	valid := []string{"c20260717-113045-1a2b3c4d", "abc", "ABC-123", "a_b"}
 	for _, id := range valid {
 		if err := ValidateJobID(id); err != nil {
@@ -96,7 +96,7 @@ func TestValidateJobID(t *testing.T) {
 		}
 	}
 
-	// 先頭のハイフン・アンダースコアと 128 文字超も、統一規則で新たに拒否されます。
+	// Leading hyphens or underscores and more than 128 characters are newly rejected by the unified rule.
 	invalid := []string{"", "a/b", "../etc", "a b", "日本語", "a.b",
 		"-leading", "_leading", strings.Repeat("a", 129)}
 	for _, id := range invalid {
@@ -109,13 +109,13 @@ func TestValidateJobID(t *testing.T) {
 func TestSanitizeJobID(t *testing.T) {
 	t.Parallel()
 
-	// パス風の値は Base で正規化される
+	// Path-like values are normalised by Base
 	got, err := SanitizeJobID("comics/c123-abc")
 	if err != nil || got != "c123-abc" {
 		t.Errorf("SanitizeJobID = %q, %v; want c123-abc", got, err)
 	}
 
-	// トラバーサルは正規化後の検証で拒否される
+	// Traversal is rejected by the validation after normalisation
 	for _, id := range []string{"../..", "a/../..", "/", "."} {
 		if _, err := SanitizeJobID(id); err == nil {
 			t.Errorf("SanitizeJobID(%q) = nil error, want rejection", id)
@@ -144,13 +144,13 @@ func TestJobObjectPrefix(t *testing.T) {
 		t.Errorf("JobObjectPrefix = %q, %v; want comics/c123-abc", got, err)
 	}
 
-	// パス風の値は Base で無害化される（結果にトラバーサルが残らない）
+	// Path-like values are neutralised by Base (no traversal remains in the result)
 	got, err = JobObjectPrefix("../escape")
 	if err != nil || got != "comics/escape" {
 		t.Errorf("JobObjectPrefix(../escape) = %q, %v; want comics/escape (sanitized)", got, err)
 	}
 
-	// 無害化しても不正な値は拒否される
+	// Values that are invalid even after neutralising are rejected
 	if _, err := JobObjectPrefix("../.."); err == nil {
 		t.Error("JobObjectPrefix(../..) succeeded, want error")
 	}

@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	// pageSystemPrompt はページ合成時にモデルへ与えるシステム指示です。
-	// パネル数・レイアウトの厳守と、参照画像とのキャラクター同一性を最優先させます。
+	// pageSystemPrompt is the system instruction given to the model at page composition.
+	// It puts strict adherence to the panel count and layout, and character identity with the reference images, first.
 	pageSystemPrompt = `You are a master digital manga artist. You MUST follow the exact panel count and layout rules. Character identity MUST match the character master reference files.
 
 ### FORMAT RULES ###
@@ -24,27 +24,27 @@ const (
 - GUTTERS: Pure white space between panels.
 - READING FLOW: Right-to-Left, Top-to-Bottom.`
 
-	// pageNegativePrompt はページ画像に含めたくない要素を指定する負のプロンプトです。
-	// パネル数の暴走・手の崩れ・透かしなど、画風によらないものだけを並べます。
+	// pageNegativePrompt is the negative prompt listing what the page image should not contain.
+	// It lists only things independent of art style, such as runaway panel counts, broken hands and watermarks.
 	//
-	// 彩色の指定（monochrome / screentone 等の排除）はスタイルプリセットの negative が
-	// 持ちます。ここでフルカラーを強制すると、モノクロのスタイルを選べなくなります。
+	// Colouring instructions (excluding monochrome / screentone and so on) belong to the style preset's
+	// negative. Forcing full colour here would make monochrome styles impossible to choose.
 	pageNegativePrompt = "watermark, signature, deformed faces, bad anatomy, disfigured, poorly drawn hands, extra fingers, missing fingers, extra panels, unexpected panels, more than specified panels, split panels"
 
-	// pageEditInstruction は編集モードでレイアウトの維持を指示する共通プレフィックスです。
+	// pageEditInstruction is the shared prefix that instructs keeping the layout in edit mode.
 	pageEditInstruction = "Edit the attached manga page image. Keep the panel layout, compositions, dialogue balloons, and art style unchanged. Apply ONLY this change: "
 )
 
-// PagePrompt は ap-story のページ合成プロンプトです。
-// コマ割り・フキダシ・写植の指示を含む、作品固有の作り込みを持ちます。
+// PagePrompt is ap-story's page-composition prompt.
+// It carries the work-specific refinements, including instructions for panel layout, speech bubbles and lettering.
 type PagePrompt struct {
-	// Styles は画風プリセットです（PanelPrompt.Styles と同じ役割）。
+	// Styles are the art-style presets (the same role as PanelPrompt.Styles).
 	Styles *Styles
 }
 
 var _ ports.PagePrompt = PagePrompt{}
 
-// BuildPage はページ合成のプロンプトを構築します。
+// BuildPage builds the page-composition prompt.
 func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, string, error) {
 	if data == nil {
 		return "", "", "", fmt.Errorf("page prompt data is required")
@@ -59,15 +59,15 @@ func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, strin
 	if numPanels == 0 {
 		return "", "", "", fmt.Errorf("page prompt requires at least one panel")
 	}
-	// 割り付けは一度だけ決め、配置マップとコマごとの指示の両方をここから書く。
-	// 別々に組み立てると、同じページに食い違う位置指示が並ぶ。
+	// Decide the layout once and write both the placement map and the per-panel instructions from it.
+	// Built separately, the same page would carry conflicting position instructions.
 	layout := planPageLayout(data.Panels)
 
 	var sb strings.Builder
 	sb.WriteString("# PAGE PRODUCTION REQUEST\n")
 	sb.WriteString("- OUTPUT: ONE single portrait manga page image.\n")
-	// 彩色はスタイルプリセットの指定（ART STYLE として後置される）に従わせます。
-	// ここでフルカラーを言い切ると、モノクロのスタイルと真逆の指示になります。
+	// Colouring follows the style preset's instruction (appended as ART STYLE).
+	// Insisting on full colour here would directly contradict a monochrome style.
 	sb.WriteString("- COLOR: Follow the ARTISTIC STYLE instruction exactly.\n")
 	fmt.Fprintf(&sb, "- PANEL COUNT: [ %d ] (STRICTLY ONLY %d PANELS. DO NOT ADD ANY MORE).\n\n", numPanels, numPanels)
 
@@ -78,12 +78,12 @@ func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, strin
 	return p.systemPrompt(styleSuffix), strings.TrimRight(sb.String(), "\n"), negative, nil
 }
 
-// BuildPageEdit は既存ページ画像への編集指示を構築します。
+// BuildPageEdit builds the edit instruction for an existing page image.
 func (p PagePrompt) BuildPageEdit(editPrompt string) (string, string, string, error) {
 	return pageSystemPrompt, pageEditInstruction + editPrompt, pageNegativePrompt, nil
 }
 
-// systemPrompt はスタイル指定を後置したシステムプロンプトを返します。
+// systemPrompt returns the system prompt with the style instruction appended.
 func (PagePrompt) systemPrompt(styleSuffix string) string {
 	if styleSuffix == "" {
 		return pageSystemPrompt
@@ -91,8 +91,8 @@ func (PagePrompt) systemPrompt(styleSuffix string) string {
 	return pageSystemPrompt + "\n\n### ARTISTIC STYLE ###\n" + styleSuffix
 }
 
-// writeLayoutStructure は段組み（段ごとの高さ・コマの左右と幅）を出力します。
-// 右開きなので、段の中は番号の小さいコマが右です。
+// writeLayoutStructure writes the tier layout (each tier's height, and each panel's side and width).
+// Pages read right to left, so within a tier the lower-numbered panel is on the right.
 func writeLayoutStructure(sb *strings.Builder, layout []panelPlacement) {
 	sb.WriteString("## MANDATORY PAGE STRUCTURE\n")
 	sb.WriteString("- READING ORDER: Japanese Style (Right-to-Left, then Top-to-Bottom).\n")
@@ -121,14 +121,14 @@ func writeLayoutStructure(sb *strings.Builder, layout []panelPlacement) {
 	sb.WriteString("- FRAME STYLE: Deep black borders. GUTTERS: Pure white.\n\n")
 }
 
-// writeCharacterReferences はキャラクターマスター参照の一覧を出力します。
-// input_file の番号は CharacterFile（実際の添付順）に従います。
-// writeCharacterReferences は、コマ画像に写っていないキャラクターだけマスター参照を並べます。
+// writeCharacterReferences writes the list of character master references.
+// The input_file numbers follow CharacterFile (the actual attachment order).
+// writeCharacterReferences lists master references only for characters not shown in a panel image.
 //
-// コマ画像に写っているキャラは、そのコマが正解です（各コマの CHARACTER_IDENTITY 参照）。
-// ここで「立ち絵に合わせろ」と重ねて言うと、コマ単位の指示と competing になります。
-// 説明文（visual_cues）はデザインシート用に書かれていて、ピンの配置まで並ぶ長さです。
-// ページの中で数百ピクセルに縮むキャラに当てる粒度ではなく、出すだけ雑音になります。
+// For a character shown in a panel image, that panel is the reference (each panel's CHARACTER_IDENTITY reference).
+// Saying "match the character sheet" on top of that here would compete with the per-panel instructions.
+// The descriptions (visual_cues) are written for design sheets and run long enough to list pin placements.
+// That granularity does not suit a character shrunk to a few hundred pixels on a page; including it is only noise.
 func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 	if len(data.CharacterFile) == 0 {
 		return
@@ -138,7 +138,7 @@ func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 	seen := make(map[string]struct{})
 	for _, panel := range data.Panels {
 		if _, hasGuide := data.PanelFile[panel.ID]; hasGuide {
-			// このコマの絵はある。ここに出るキャラは、そのコマが手本になる。
+			// This panel's art exists. For a character shown here, that panel is the model.
 			continue
 		}
 		for _, id := range panel.ReferencedCharacterIDs() {
@@ -173,7 +173,7 @@ func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 	sb.WriteString("\n")
 }
 
-// writePanelBreakdown はパネルごとの内訳（配置・演出・登場キャラ・セリフ）を出力します。
+// writePanelBreakdown writes each panel's breakdown (placement, staging, characters, dialogue).
 func writePanelBreakdown(sb *strings.Builder, data *ports.PagePromptData, layout []panelPlacement) {
 	sb.WriteString("## PANEL BREAKDOWN\n")
 	for i := range data.Panels {
@@ -186,7 +186,7 @@ func writePanelBreakdown(sb *strings.Builder, data *ports.PagePromptData, layout
 	}
 }
 
-// writePanelHeader はパネルの見出しと配置指示を出力します。
+// writePanelHeader writes the panel heading and placement instruction.
 func writePanelHeader(sb *strings.Builder, index int, panel *comic.Panel, place panelPlacement) {
 	switch {
 	case place.Tiers == 1 && place.Column == columnFull:
@@ -202,8 +202,8 @@ func writePanelHeader(sb *strings.Builder, index int, panel *comic.Panel, place 
 	}
 }
 
-// fullWidthComposition は全幅にした理由から構図の狙いを書きます。
-// 引きの画・叫びの決めゴマ・ただの間では、同じ全幅でも欲しい絵が違います。
+// fullWidthComposition writes the intent of the composition from the reason the panel went full width.
+// A long shot, a key panel on a shout and a mere pause each want a different picture, though all are full width.
 func fullWidthComposition(panel *comic.Panel) string {
 	var hints []string
 	if isWideShot(panel.Shot) {
@@ -218,7 +218,7 @@ func fullWidthComposition(panel *comic.Panel) string {
 	return strings.Join(hints, ". ") + "."
 }
 
-// writePanelScene はシーン演出と構図ガイド（生成済みパネル画像）を出力します。
+// writePanelScene writes the scene staging and the composition guide (the generated panel image).
 func writePanelScene(sb *strings.Builder, panel *comic.Panel, data *ports.PagePromptData) {
 	if panel.Shot != "" {
 		fmt.Fprintf(sb, "- SHOT: %s\n", panel.Shot)
@@ -234,11 +234,11 @@ func writePanelScene(sb *strings.Builder, panel *comic.Panel, data *ports.PagePr
 	}
 }
 
-// stripTextExclusions は、構図メモに紛れ込んだ「文字やフキダシを描くな」の指定を落とします。
+// stripTextExclusions drops "do not draw text or speech bubbles" instructions that slipped into the composition notes.
 //
-// コマ生成では正しい指定ですが、ページ合成はフキダシを描くのが仕事です。そのまま渡すと
-// 同じプロンプトの中で「描くな」と「この文字を描け」を同時に指示することになります。
-// 台本側でも書かせないようにしましたが、それ以前に作られた state のために here でも落とします。
+// That is right for panel generation, but page composition's job is to draw speech bubbles. Passed on as is,
+// the same prompt would instruct "do not draw" and "draw this text" at once.
+// The script side no longer writes them, but they are dropped here too for states made before that.
 func stripTextExclusions(anchor string) string {
 	parts := strings.Split(anchor, ",")
 	kept := make([]string, 0, len(parts))
@@ -259,7 +259,7 @@ func stripTextExclusions(anchor string) string {
 	return strings.Join(kept, ", ")
 }
 
-// writePanelCharacters は登場キャラクターの同一性・演出指示を出力します。
+// writePanelCharacters writes the identity and staging instructions for the characters who appear.
 func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.PagePromptData) {
 	for i := range panel.Characters {
 		pc := &panel.Characters[i]
@@ -274,12 +274,12 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 		sheet, hasSheet := data.CharacterFile[pc.CharacterID]
 		switch guide, hasGuide := data.PanelFile[panel.ID]; {
 		case hasGuide && hasSheet:
-			// このコマの絵は既にあり、そこに描かれた人物がこの作品での正解です。
-			// 立ち絵は比率も絵柄も違う別の絵なので、優先させると寄せ直しが起きます。
+			// This panel's art already exists, and the figure drawn there is the reference for this work.
+			// A character sheet is a different picture with a different ratio and style, and prioritising it causes re-fitting.
 			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] already appears in input_file_%d — keep exactly that face, hair, and outfit. Consult input_file_%d (character sheet) only for details input_file_%d does not show clearly.\n",
 				char.Name, guide, sheet, guide)
 		case hasSheet:
-			// コマ画像が無いページ（個別再合成など）。このときだけ立ち絵が唯一の手がかりです。
+			// A page with no panel image (an individual recomposition and the like). Only then is the character sheet the sole clue.
 			fmt.Fprintf(sb, "- CHARACTER_IDENTITY: [ %s ] from input_file_%d. (Face, hair, and outfit MUST match input_file_%d exactly).\n", char.Name, sheet, sheet)
 		default:
 			fmt.Fprintf(sb, "- SUBJECT: %s\n", char.Name)
@@ -300,10 +300,10 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 	}
 }
 
-// writePanelDialogues はセリフ・ナレーション・SFX の描画指示を kind 別に出力します。
+// writePanelDialogues writes the drawing instructions for dialogue, narration and SFX per kind.
 //
-// 同じコマに複数の発話があるときは読む順序を明示します。順序を言わないと吹き出しの
-// 配置が絵の都合で決まり、掛け合いが逆順に読めてしまいます。
+// When the same panel has several utterances, the reading order is stated. Without it, bubble
+// placement is decided by the art's convenience and an exchange can read in reverse.
 func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters, width int) {
 	if lines := countSpokenLines(panel); lines > 1 {
 		sb.WriteString("- BALLOON ORDER: Place the balloons below in the listed order, read right-to-left then top-to-bottom within this panel.\n")
@@ -326,7 +326,7 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 		case comic.DialogueKindSFX:
 			sb.WriteString("- SFX: Stylized sound-effect lettering integrated into the artwork.\n")
 		default:
-			// SpeakerID が空のセリフはナレーション/キャプション扱い（comic.DialogueLine 参照）
+			// Dialogue with an empty SpeakerID is treated as narration/caption (see comic.DialogueLine)
 			if strings.TrimSpace(line.SpeakerID) == "" {
 				sb.WriteString("- NARRATION: Rectangular caption box.\n")
 			} else {
@@ -337,7 +337,7 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 
 		direction := "Vertical (Tategaki)"
 		layoutDesc := "traditional Japanese manga style layout"
-		// 短い叫びなどはインパクト重視で「横書き」も許可する
+		// Short shouts and the like may also be written horizontally, for impact
 		if len([]rune(text)) <= 10 && strings.ContainsAny(text, "!?！？") {
 			direction = "Horizontal (Yokogaki) or Vertical"
 			layoutDesc = "bold and high impact placement"
@@ -348,7 +348,7 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 	}
 }
 
-// countSpokenLines は、そのコマの空でない発話の数を返します。
+// countSpokenLines returns the number of non-empty utterances in the panel.
 func countSpokenLines(panel *comic.Panel) int {
 	n := 0
 	for _, line := range panel.Dialogues {
@@ -359,7 +359,7 @@ func countSpokenLines(panel *comic.Panel) int {
 	return n
 }
 
-// speakerName は話者IDから表示名を引きます。未知IDは空文字列です。
+// speakerName looks up the display name from a speaker ID. An unknown ID gives the empty string.
 func speakerName(characters *comic.Characters, speakerID string) string {
 	if speakerID == "" || characters == nil {
 		return ""

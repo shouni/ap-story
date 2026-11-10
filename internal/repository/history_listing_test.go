@@ -6,10 +6,10 @@ import (
 	"io"
 	"iter"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 
+	kitports "github.com/shouni/go-comic-kit/ports"
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/memio"
 
@@ -17,26 +17,26 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// memStore は remoteio.InputReader / remoteio.OutputWriter を満たすインメモリ fake です。
-// buildHistoriesConcurrently が並行して Open/GetState を呼ぶため、mu で保護します。
-// memStore は memio を包んだストレージのフェイクです。
+// memStore satisfies remoteio.InputReader / remoteio.OutputWriter as an in-memory fake.
+// buildHistoriesConcurrently calls Open/GetState concurrently, so it is protected by mu.
+// memStore is a storage fake wrapping memio.
 //
-// 一覧の畳み込み・不在の返し方・削除の単位といったストレージの振る舞いは memio が
-// 受け持ちます（本物のハンドラと同じ適合性スイートを通っています）。ここに残しているのは
-// 「どこを開いたか」「どこを走査したか」という呼び出しの記録だけです。
+// Storage behaviour such as folding listings, how absence is returned and the unit of deletion belongs
+// to memio (which passes the same conformance suite as the real handlers). All that is left here is the
+// record of calls: "what was opened" and "what was scanned".
 //
-// 以前はこのフェイクが Delete をプレフィックス一括削除として実装していました。
-// 本物の Delete は単一オブジェクトなので、production では消えないものが
-// テストでは消えていました。
+// This fake used to implement Delete as a prefix delete. The real Delete
+// removes a single object, so things that would not be deleted in production
+// were deleted in tests.
 type memStore struct {
 	remoteio.Store
 	h *memio.Handler
 
 	mu      sync.Mutex
 	deleted []string
-	// opens は Open されたパスの記録です（読み込み回数のアサーション用）。
+	// opens records the paths opened (for assertions on the read count).
 	opens []string
-	// lists は List されたプレフィックスの記録です（一覧走査回数のアサーション用）。
+	// lists records the prefixes listed (for assertions on the scan count).
 	lists []string
 }
 
@@ -67,18 +67,18 @@ func (m *memStore) Delete(ctx context.Context, name string) error {
 	return m.Store.Delete(ctx, name)
 }
 
-// Sub をライブラリの Sub へ委譲します。埋め込みから昇格した Sub をそのまま使うと、
-// スコープの土台が埋め込まれた Store になり、上の記録が素通しされます。
+// Sub delegates to the library's Sub. Using the Sub promoted from the embedding as is would make the
+// scope's base the embedded Store, and the recording above would be bypassed.
 func (m *memStore) Sub(prefix string) remoteio.Store { return remoteio.Sub(m, prefix) }
 
-// put は前提となるオブジェクトを置きます。
+// put places a precondition object.
 func (m *memStore) put(uri, body string) {
 	if err := m.h.Seed(uri, []byte(body)); err != nil {
 		panic(err)
 	}
 }
 
-// get は保存されている内容を返します。
+// get returns the stored content.
 func (m *memStore) get(t *testing.T, uri string) []byte {
 	t.Helper()
 	data, err := remoteio.ReadAll(context.Background(), m.Store, uri)
@@ -88,7 +88,7 @@ func (m *memStore) get(t *testing.T, uri string) []byte {
 	return data
 }
 
-// has は対象が保存されているかを返します。
+// has reports whether the target is stored.
 func (m *memStore) has(uri string) bool {
 	ok, err := m.Exists(context.Background(), uri)
 	return err == nil && ok
@@ -107,7 +107,7 @@ func TestListHistoryPageBuildsSummariesFromState(t *testing.T) {
 
 	store := newMemStore()
 	putState(store, "job-1", `{"version":1,"id":"job-1","title":"夜明けのデプロイ","chapters":[{"id":"ch01"}],"panels":[{"id":"p1"},{"id":"p2"}]}`)
-	// ジョブ配下の成果物は疑似ディレクトリへ畳まれ、ジョブが二重に数えられない
+	// Artifacts under a job are folded into a pseudo-directory, so a job is not counted twice
 	store.put("gs://test-bucket/comics/job-1/images/panel_1.png", "binary")
 
 	repo := newTestRepository(store)
@@ -129,9 +129,9 @@ func TestListHistoryPageExcludesLegacyJobsWithoutChapters(t *testing.T) {
 	t.Parallel()
 
 	store := newMemStore()
-	// 旧形式では単体生成ジョブの state も comics/ に保存されていた。
-	// 現行形式（design-jobs/）では列挙自体に現れないが、旧データが残っていても
-	// 章立ての有無で表示から除外される。
+	// In the legacy format, a standalone job's state was also saved in comics/.
+	// In the current format (design-jobs/) it does not appear in the listing at all, but even if legacy
+	// data remains, it is excluded from display by whether it has chapters.
 	putState(store, "job-design-sheet-only", `{"version":1,"id":"job-design-sheet-only","title":"単体生成","panels":[]}`)
 
 	repo := newTestRepository(store)
@@ -149,7 +149,7 @@ func TestListHistoryPageIgnoresDesignJobsPrefix(t *testing.T) {
 
 	store := newMemStore()
 	putState(store, "job-comic", `{"version":1,"id":"job-comic","title":"作品","chapters":[{"id":"ch01"}],"panels":[]}`)
-	// 現行形式の単体生成ジョブ state は design-jobs/ 配下のため列挙対象外
+	// A standalone job's state in the current format is under design-jobs/, so it is not listed
 	store.put("gs://test-bucket/design-jobs/job-design/comic_state.json", `{"version":1,"id":"job-design","title":"単体生成","panels":[]}`)
 
 	repo := newTestRepository(store)
@@ -179,7 +179,7 @@ func TestListHistoryPageLoadsOnlySelectedPageStates(t *testing.T) {
 	if len(page.Items) != 2 || page.Total != 5 {
 		t.Fatalf("page = %+v, want 2 items of total 5", page)
 	}
-	// ページングは ID の列挙だけで行い、state を読むのは選択されたページの分だけ
+	// Paging uses only the ID listing; the state is read only for the selected page
 	if len(store.opens) != 2 {
 		t.Errorf("opened %d state files %v, want 2 (only the selected page)", len(store.opens), store.opens)
 	}
@@ -196,7 +196,7 @@ func TestListHistoryPageExcludesUnreadableState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHistoryPage failed: %v", err)
 	}
-	// 読み込み失敗時のフォールバック値は ChapterCount == 0 のため、/history のフィルタで除外される。
+	// The fallback value on a read failure has ChapterCount == 0, so the /history filter excludes it.
 	if len(page.Items) != 0 {
 		t.Errorf("Items = %+v, want empty (unreadable state falls back to ChapterCount 0)", page.Items)
 	}
@@ -214,7 +214,7 @@ func TestGetStateRoundTrip(t *testing.T) {
 		t.Fatalf("GetState failed: %v", err)
 	}
 	if state.Title != "夜明けのデプロイ" {
-		t.Errorf("Title = %q, want 夜明けのデプロイ", state.Title)
+		t.Errorf("Title = %q, want %q", state.Title, "夜明けのデプロイ")
 	}
 }
 
@@ -243,7 +243,7 @@ func TestDeleteHistoryRemovesStateAndCache(t *testing.T) {
 	putState(store, "job-1", `{"version":1,"id":"job-1","title":"t","panels":[]}`)
 	repo := newTestRepository(store)
 
-	// キャッシュに載せてから削除し、キャッシュも消えることを確認する
+	// Put it in the cache, delete it, and check the cache is cleared too
 	if _, err := repo.buildHistory(context.Background(), "job-1"); err != nil {
 		t.Fatalf("buildHistory failed: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestDeleteHistoryRemovesStateAndCache(t *testing.T) {
 	}
 }
 
-// countLists は指定プレフィックスへの List 回数を返します。
+// countLists returns the number of List calls on the given prefix.
 func (m *memStore) countLists(prefix string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -275,9 +275,9 @@ func (m *memStore) countLists(prefix string) int {
 	return n
 }
 
-// 一覧は区切り文字付きの List に乗るため、1 ジョブが成果物の数だけ重複して現れず、
-// ジョブの疑似ディレクトリ 1 件として集まること。1 作品でパネル・ページ画像が数十枚に
-// なるため、ここが崩れると一覧走査がその倍数で効きます。
+// The listing uses a List with a delimiter, so a job does not appear once per artifact but
+// gathers into one pseudo-directory. One work has dozens of panel and page images, so if this
+// breaks, the listing scan costs that many times over.
 func TestListJobIDsFoldsJobArtifactsIntoOneEntry(t *testing.T) {
 	t.Parallel()
 
@@ -286,7 +286,7 @@ func TestListJobIDsFoldsJobArtifactsIntoOneEntry(t *testing.T) {
 	store.put("gs://test-bucket/comics/job-1/images/panel_1.png", "binary")
 	store.put("gs://test-bucket/comics/job-1/images/comic_page_1.png", "binary")
 	putState(store, "job-2", `{"version":1,"id":"job-2","title":"作品2","chapters":[{"id":"ch01"}],"panels":[]}`)
-	// comics/ 直下のオブジェクトはジョブディレクトリではない
+	// Objects directly under comics/ are not job directories
 	store.put("gs://test-bucket/comics/stray.json", "{}")
 
 	repo := newTestRepository(store)
@@ -302,8 +302,8 @@ func TestListJobIDsFoldsJobArtifactsIntoOneEntry(t *testing.T) {
 	}
 }
 
-// 履歴一覧はバケット全体の走査になるため、ジョブ ID 一覧はキャッシュされ、
-// 2 回目以降のページ表示で List が再実行されないこと。
+// The history list scans the whole bucket, so the job ID list is cached and List is not
+// run again for the second and later page views.
 func TestListHistoryPageCachesJobIDList(t *testing.T) {
 	t.Parallel()
 
@@ -319,12 +319,12 @@ func TestListHistoryPageCachesJobIDList(t *testing.T) {
 	}
 
 	if got := store.countLists("gs://test-bucket/comics/"); got != 1 {
-		t.Errorf("comics/ への List 回数 = %d, want 1（ジョブ ID 一覧がキャッシュされていません）", got)
+		t.Errorf("List calls on comics/ = %d, want 1 (the job ID list is not cached)", got)
 	}
 }
 
-// 削除したジョブが TTL のあいだ一覧に残らないよう、DeleteHistory がジョブ ID 一覧の
-// キャッシュを破棄すること。破棄されないと、サマリ本体だけ消えた行が一覧に現れます。
+// DeleteHistory discards the cached job ID list so that a deleted job does not stay in the list
+// for the TTL. Otherwise a row whose summary alone is gone appears in the list.
 func TestDeleteHistoryInvalidatesJobIDList(t *testing.T) {
 	t.Parallel()
 
@@ -350,24 +350,24 @@ func TestDeleteHistoryInvalidatesJobIDList(t *testing.T) {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
 	if len(page.Items) != 0 {
-		t.Errorf("削除後の len(items) = %d, want 0（一覧キャッシュが破棄されていません）", len(page.Items))
+		t.Errorf("len(items) after delete = %d, want 0 (the list cache was not discarded)", len(page.Items))
 	}
 	if got := store.countLists("gs://test-bucket/comics/"); got != 2 {
-		t.Errorf("comics/ への List 回数 = %d, want 2（削除後に再走査されていません）", got)
+		t.Errorf("List calls on comics/ = %d, want 2 (not rescanned after the delete)", got)
 	}
 }
 
-// state がまだ無いのか、あるのに読めないのかを区別して返すこと。
+// It tells apart a state that does not exist yet from one that exists but cannot be read.
 //
-// 以前はどちらも「見つかりません」に潰し、原因のエラーも捨てていたため、
-// 権限エラーも GCS 障害も画面には「作品がありません」と出て、ログにも理由が
-// 残りませんでした。両者は取るべき判断が正反対（進んでよい／待つべき）です。
+// Both used to be collapsed into "not found" with the causing error discarded, so a
+// permission error and a GCS outage alike showed on screen as 「作品がありません」, with no
+// reason in the logs. The two call for opposite decisions (go ahead / wait).
 func TestGetStateSeparatesMissingFromUnreadable(t *testing.T) {
 	t.Parallel()
 
 	const jobID = "c20260718-000000-aaaa1111"
 
-	t.Run("state がまだ無い", func(t *testing.T) {
+	t.Run("state does not exist yet", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := newTestRepository(newMemStore()).GetState(context.Background(), jobID)
@@ -375,16 +375,16 @@ func TestGetStateSeparatesMissingFromUnreadable(t *testing.T) {
 			t.Fatalf("GetState() error = %v, want ErrStateNotFound", err)
 		}
 		if errors.Is(err, domain.ErrStateUnavailable) {
-			t.Error("未記録が「読めない」にも一致している")
+			t.Error("an unrecorded state also matches \"unreadable\"")
 		}
 	})
 
-	t.Run("あるのに読めない", func(t *testing.T) {
+	t.Run("exists but unreadable", func(t *testing.T) {
 		t.Parallel()
 
 		store := newMemStore()
-		// 壊れた JSON は「存在するが読めない」側。未存在と同じ扱いにすると、
-		// 破損に気づかないまま生成が終わったものとして扱われます。
+		// Broken JSON is on the "exists but cannot be read" side. Treating it like a missing state would
+		// treat the corruption as a finished generation without anyone noticing.
 		store.put("gs://test-bucket/comics/"+jobID+"/comic_state.json", "{ broken")
 
 		_, err := newTestRepository(store).GetState(context.Background(), jobID)
@@ -392,11 +392,12 @@ func TestGetStateSeparatesMissingFromUnreadable(t *testing.T) {
 			t.Fatalf("GetState() error = %v, want ErrStateUnavailable", err)
 		}
 		if errors.Is(err, domain.ErrStateNotFound) {
-			t.Error("読めないだけの state が「無い」にも一致している")
+			t.Error("a merely unreadable state also matches \"missing\"")
 		}
-		// 原因を捨てないこと。捨てると、なぜ読めないのかがどこにも残りません。
-		if !strings.Contains(err.Error(), "パース") {
-			t.Errorf("原因が失われている: %v", err)
+		// Keep the cause. Discarding it leaves no trace of why it cannot be read.
+		// Check the sentinel go-comic-kit's store.Load wraps a parse failure in, not its wording.
+		if !errors.Is(err, kitports.ErrInvalidRequest) {
+			t.Errorf("the cause was lost: %v", err)
 		}
 	})
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// signedURLExpiration は画像配信用の署名 URL の有効期限です。
+// signedURLExpiration is the lifetime of the signed URLs used to serve images.
 const signedURLExpiration = 30 * time.Minute
 
 var (
@@ -23,9 +23,9 @@ var (
 	errInvalidImagePath  = errors.New("invalid image path")
 )
 
-// JobImage は GET /jobs/{jobID}/images/* を処理し、指定された画像
-// （デザインシート・パネル・ページ）の GCS 署名 URL へ 302 リダイレクトします。
-// 画像バイト列そのものはアプリから配信しません。
+// JobImage handles GET /jobs/{jobID}/images/* and 302-redirects to the GCS signed URL of the
+// given image (design sheet, panel or page).
+// The app never serves the image bytes itself.
 func (h *Handler) JobImage(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobID")
 	if err := domain.ValidateJobID(jobID); err != nil {
@@ -50,18 +50,18 @@ func (h *Handler) JobImage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, signedURL, http.StatusFound)
 }
 
-// resolveComicImagePath は jobID と相対パスから、GCS 上の画像オブジェクトパス
-// （バケット名を除く）を安全に組み立てます。ジョブディレクトリの外に出るパス
-// （".." を含むもの）は拒否します。
+// resolveComicImagePath safely builds the GCS image object path (without the bucket name) from the
+// jobID and a relative path. A path leaving the job directory
+// (containing "..") is rejected.
 func resolveComicImagePath(jobID, relPath string) (string, error) {
 	relPath = strings.TrimSpace(relPath)
 	if relPath == "" {
 		return "", errImagePathRequired
 	}
-	// path.Clean は "/../escape" のようなルート超えを "/escape" へ無害化してしまい、
-	// 意図しないパスを黙って受理してしまうため、生の入力の時点で ".." セグメントを拒否する。
-	// 部分一致ではなくセグメント単位で判定し、"image..01.png" のような正当なファイル名を
-	// 誤って弾かないようにする。
+	// path.Clean neutralises an escape past the root such as "/../escape" into "/escape",
+	// silently accepting an unintended path, so ".." segments are rejected in the raw input.
+	// It checks per segment rather than by substring, so that a legitimate file name such as
+	// "image..01.png" is not rejected by mistake.
 	if strings.Contains(relPath, "../") || strings.HasSuffix(relPath, "..") || relPath == ".." {
 		return "", errInvalidImagePath
 	}

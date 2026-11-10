@@ -28,7 +28,7 @@ func TestServeCharactersRendersRosterWithMasterReferenceThumbnail(t *testing.T) 
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Zundamon", "/characters/zundamon",
-		"/characters/reference/zundamon/default.png", // マスター参照画像がサムネイルに使われる
+		"/characters/reference/zundamon/default.png", // the master reference image is used as the thumbnail
 		"Metan", "/characters/metan",
 		"/characters/reference/metan/default.png",
 	} {
@@ -61,8 +61,8 @@ func TestServeCharacterDetailRendersReferencesAndHistoryNewestFirst(t *testing.T
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Zundamon",
-		"/characters/reference/zundamon/default.png", // マスター参照画像
-		"/characters/images/zundamon/job-2.png",      // 生成履歴（新しい順）
+		"/characters/reference/zundamon/default.png", // master reference image
+		"/characters/images/zundamon/job-2.png",      // generation history (newest first)
 		"/characters/images/zundamon/job-1.png",
 		"/compose/design-sheet?character_id=zundamon",
 	} {
@@ -126,7 +126,7 @@ func TestServeCharacterDetailReturns404ForUnknownCharacter(t *testing.T) {
 	}
 }
 
-// manyDesignHistoryItems は characterDetailHistoryLimit を超える件数の履歴フィクスチャを返します。
+// manyDesignHistoryItems returns a history fixture with more items than characterDetailHistoryLimit.
 func manyDesignHistoryItems(count int) []domain.CharacterDesignHistoryItem {
 	items := make([]domain.CharacterDesignHistoryItem, 0, count)
 	for i := count; i >= 1; i-- {
@@ -157,7 +157,7 @@ func TestServeCharacterDetailCapsHistoryWithLinkToFullList(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	// 新しい順の先頭 12 件は表示され、それ以降は表示されない
+	// The first 12, newest first, are shown and the rest are not
 	if !strings.Contains(body, "job-15.png") || !strings.Contains(body, "job-04.png") {
 		t.Errorf("body missing capped history entries")
 	}

@@ -15,9 +15,9 @@ import (
 	"github.com/shouni/ap-story/internal/config"
 )
 
-// buildOperations は、go-comic-kit の全操作（章立て・章台本・デザインシート・
-// パネル・ページ）を workflow.New で組み立てます。AI クライアントは Vertex AI を使い、
-// GCS URI を直接参照できるようにして File API アップロードのコストを抑えます。
+// buildOperations assembles every go-comic-kit operation (chapters, chapter script, design sheet,
+// panels, pages) with workflow.New. The AI client uses Vertex AI so that GCS URIs can be
+// referenced directly, avoiding the cost of File API uploads.
 func buildOperations(
 	ctx context.Context,
 	cfg *config.Config,

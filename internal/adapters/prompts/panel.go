@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	// panelSystemPrompt はパネル画像生成時にモデルへ与えるシステム指示です。
-	// 添付される参照画像とプロンプト内の [Subject N] は同じ順序で対応します。
+	// panelSystemPrompt is the system instruction given to the model when generating panel images.
+	// The attached reference images and the [Subject N] entries in the prompt correspond in the same order.
 	panelSystemPrompt = `You are a professional manga panel illustrator.
 Draw a single manga panel following the scene direction, with these rules:
 - Attached reference images correspond to [Subject N] in the prompt, in the same order. Strictly preserve each subject's identity from its reference image: hairstyle, hair color, eye color, outfit, and accessories. Never mix identities between subjects.
@@ -19,31 +19,31 @@ Draw a single manga panel following the scene direction, with these rules:
 - Anatomical correctness is critical: draw every hand with exactly five fingers and correct limb proportions.
 - Render absolutely no text, speech bubbles, sound effects lettering, or logos — dialogue is composited separately.`
 
-	// panelNegativePrompt はパネル画像に含めたくない要素を指定する負のプロンプトです。
-	// フキダシ・文字の排除に加え、手・指の崩れ対策を含みます。
+	// panelNegativePrompt is the negative prompt listing what panel images should not contain.
+	// Besides excluding speech bubbles and text, it covers broken hands and fingers.
 	//
-	// 画風に依る語（monochrome 等）はここに書きません。スタイルプリセット側が
-	// negative として持ち、選ばれた画風のものだけが足されます。ここに書くと、
-	// モノクロを選べるスタイルと真っ向から衝突します。
+	// Words that depend on art style (monochrome and so on) are not written here. The style preset holds them
+	// as its negative, and only those of the chosen style are added. Written here, they would clash
+	// head-on with a style that allows monochrome.
 	panelNegativePrompt = "speech bubble, dialogue balloon, text, alphabet, letters, words, signatures, watermark, username, malformed hands, fused fingers, extra fingers, missing fingers, extra limbs, deformed anatomy, low quality, distorted, bad anatomy"
 
-	// panelEditInstruction は編集モードで構図の維持を指示する共通プレフィックスです。
+	// panelEditInstruction is the shared prefix that instructs keeping the composition in edit mode.
 	panelEditInstruction = "Edit the attached manga panel image. Keep the composition, character poses, background, and art style unchanged. Apply ONLY this change: "
 )
 
-// PanelPrompt は ap-story のパネル画像生成プロンプトです。
+// PanelPrompt is ap-story's panel-image prompt.
 //
-// go-comic-kit の既定は形式を守らせる最小限の指示しか持たないため、演出語彙や
-// 画風の作り込みはこちら側で持ちます。
+// go-comic-kit's default carries only the minimal instructions that enforce the format, so the
+// staging vocabulary and art-style refinements live on this side.
 type PanelPrompt struct {
-	// Styles は画風プリセットです。キットが運ぶのはモード名だけなので、
-	// 画風指定とネガティブプロンプトの解決はここで行います。
+	// Styles are the art-style presets. The kit carries only the mode name, so resolving it into the
+	// art-style instruction and the negative prompt happens here.
 	Styles *Styles
 }
 
 var _ ports.PanelPrompt = PanelPrompt{}
 
-// BuildPanel はパネル画像生成のプロンプトを構築します。
+// BuildPanel builds the prompt for panel-image generation.
 func (p PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, string, error) {
 	if data == nil {
 		return "", "", "", fmt.Errorf("panel prompt data is required")
@@ -66,8 +66,8 @@ func (p PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, st
 		sb.WriteString(anchor)
 	}
 
-	// [Subject N] の N は参照画像の添付順（SubjectIDs の並び）と一致させる。
-	// ずれるとモデルは別人の参照画像を見ながら描くことになる。
+	// The N in [Subject N] matches the attachment order of the reference images (the order of SubjectIDs).
+	// If they drift, the model draws while looking at someone else's reference image.
 	for i, id := range data.SubjectIDs {
 		char := data.Characters.GetCharacter(id)
 		if char == nil {
@@ -90,15 +90,15 @@ func (p PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, st
 	return panelSystemPrompt, sb.String(), negative, nil
 }
 
-// BuildPanelEdit は既存パネル画像への編集指示を構築します。
-// 構図・ポーズ・背景を保ったまま、指示された箇所だけを変更させます。
+// BuildPanelEdit builds the edit instruction for an existing panel image.
+// It has only the specified parts changed, keeping the composition, pose and background.
 //
-// 編集は既存画像の画風を引き継ぐため、画風プリセットのネガティブは足しません。
+// An edit inherits the existing image's art style, so the preset's negative is not added.
 func (PanelPrompt) BuildPanelEdit(editPrompt string) (string, string, string, error) {
 	return panelSystemPrompt, panelEditInstruction + editPrompt, panelNegativePrompt, nil
 }
 
-// subjectLine は1キャラクター分の [Subject N] 記述を構築します。
+// subjectLine builds the [Subject N] description for one character.
 func subjectLine(index int, char *comic.Character, pc *comic.PanelCharacter) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "[Subject %d: %s", index, char.Name)
@@ -121,7 +121,7 @@ func subjectLine(index int, char *comic.Character, pc *comic.PanelCharacter) str
 	return sb.String()
 }
 
-// findPanelCharacter はパネル内のキャラクター指定を ID で引きます。
+// findPanelCharacter looks up a character in the panel by ID.
 func findPanelCharacter(panel *comic.Panel, charID string) *comic.PanelCharacter {
 	for i := range panel.Characters {
 		if panel.Characters[i].CharacterID == charID {
@@ -131,7 +131,7 @@ func findPanelCharacter(panel *comic.Panel, charID string) *comic.PanelCharacter
 	return nil
 }
 
-// backgroundExtras は background（モブ）キャラクターの一覧を返します。
+// backgroundExtras returns the list of background (crowd) characters.
 func backgroundExtras(panel *comic.Panel) string {
 	var extras []string
 	for i := range panel.Characters {
@@ -144,7 +144,7 @@ func backgroundExtras(panel *comic.Panel) string {
 	return strings.Join(extras, ", ")
 }
 
-// backgroundExtraDesc は background キャラクター1人分の記述を構築します。
+// backgroundExtraDesc builds the description of one background character.
 func backgroundExtraDesc(pc *comic.PanelCharacter) string {
 	desc := pc.CharacterID
 	if pc.Action != "" {

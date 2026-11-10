@@ -11,20 +11,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// browserAccept は、ブラウザが実際に送る Accept です。
-// application/json を含まないので、表現は HTML 側に倒れます。
+// browserAccept is the Accept a browser actually sends.
+// It does not include application/json, so the representation falls to HTML.
 const browserAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
-// 同じルートが、相手の求める表現で答えること。
+// The same route answers in the representation the caller asks for.
 //
-// MCP ゲートウェイの HTTP クライアントは全リクエストに Accept: application/json を付けるため、
-// /api の別名を消したあとも機械側は JSON を受け取り続けます。
+// The MCP gateway's HTTP client puts Accept: application/json on every request, so
+// machines keep receiving JSON after the /api aliases were removed.
 func TestCharactersServesBothAudiences(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler(t, &fakeTaskQueue{})
 
-	t.Run("機械には JSON を返す", func(t *testing.T) {
+	t.Run("JSON for machines", func(t *testing.T) {
 		t.Parallel()
 
 		req := httptest.NewRequest(http.MethodGet, "/characters", nil)
@@ -37,14 +37,14 @@ func TestCharactersServesBothAudiences(t *testing.T) {
 		}
 		var items []characterSummaryResponse
 		if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
-			t.Fatalf("JSON を読めません: %v", err)
+			t.Fatalf("cannot read the JSON: %v", err)
 		}
 		if len(items) == 0 {
-			t.Error("キャラクターが 1 件も返っていない")
+			t.Error("not a single character was returned")
 		}
 	})
 
-	t.Run("人には画面を返す", func(t *testing.T) {
+	t.Run("a page for people", func(t *testing.T) {
 		t.Parallel()
 
 		req := httptest.NewRequest(http.MethodGet, "/characters", nil)
@@ -60,8 +60,8 @@ func TestCharactersServesBothAudiences(t *testing.T) {
 		}
 	})
 
-	// 同じ URL が Accept で中身を変えるため、キャッシュへ伝える必要があります。
-	t.Run("Vary: Accept を立てること", func(t *testing.T) {
+	// The same URL changes its content by Accept, so the cache must be told.
+	t.Run("sets Vary: Accept", func(t *testing.T) {
 		t.Parallel()
 
 		req := httptest.NewRequest(http.MethodGet, "/characters", nil)
@@ -75,8 +75,8 @@ func TestCharactersServesBothAudiences(t *testing.T) {
 	})
 }
 
-// 不正なジョブ ID のエラーも、要求された表現で返ること。
-// 機械に HTML のエラーページを返しても解釈できません。
+// An invalid job ID's error is also returned in the requested representation.
+// A machine cannot interpret an HTML error page.
 func TestComicErrorFollowsTheRequestedFormat(t *testing.T) {
 	t.Parallel()
 

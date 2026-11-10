@@ -8,15 +8,15 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// recordQueuedStatus はジョブ状態に queued を記録します。
+// recordQueuedStatus records queued as the job status.
 //
-// **必ず enqueue の前に呼びます。** worker は受け取ったタスクの前に状態を読み、
-// succeeded なら「再配信された完了済みジョブ」と見なして飛ばします。Cloud Tasks の配信は
-// 数十ミリ秒で届くので、投入してから書くと、同じ作品への次の操作が1つ前の succeeded を
-// 読んで黙って捨てられます（ジョブ状態は job_id 単位で、コマンド別ではありません）。
+// **Always call it before the enqueue.** The worker reads the status before the task it received and,
+// if it is succeeded, skips it as "a completed job delivered again". Cloud Tasks delivers within
+// tens of milliseconds, so writing after enqueueing would let the next operation on the same work read the
+// previous succeeded and be silently dropped (the job status is per job_id, not per command).
 //
-// 記録に失敗しても受付は成功とします。ここで失敗するのは GCS 側の問題で、
-// タスクを止める理由にはなりません（状態が追えなくなるだけです）。
+// A failure to record still counts as accepted. A failure here is a GCS problem and
+// no reason to stop the task (the status just cannot be followed).
 func (h *Handler) recordQueuedStatus(r *http.Request, task domain.Task) {
 	if h.jobStatus == nil {
 		return

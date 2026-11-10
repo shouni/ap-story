@@ -8,23 +8,23 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// comicOptionsResponse は GET /comic-options のレスポンスです。
+// comicOptionsResponse is the response of GET /comic-options.
 //
-// フォームの <select> に出しているものと同じ一覧を JSON でも返します。ブラウザは
-// 選択肢を見て選べますが、JSON API の呼び出し側（MCP サーバー経由のエージェント）には
-// 何が指定できるのか知る手段がありません。投入時の許可リストはこの一覧なので、
-// 知らずに送れば 400 になります。
+// It returns as JSON the same lists shown in the form's <select>. A browser can choose
+// by looking at the options, but a JSON API caller (an agent through the MCP server) has
+// no way to know what can be specified. The allowlist at enqueue is this list, so
+// sending blind gives a 400.
 type comicOptionsResponse struct {
-	// ScriptModes / StyleModes は説明付きです。モード名だけでは選べません。
+	// ScriptModes / StyleModes come with descriptions. A mode name alone is not enough to choose.
 	ScriptModes []comicModeOption `json:"script_modes"`
 	StyleModes  []comicModeOption `json:"style_modes"`
-	// TextModels / ImageModels は先頭が既定モデルです。
+	// The head of TextModels / ImageModels is the default model.
 	TextModels  []string `json:"text_models"`
 	ImageModels []string `json:"image_models"`
 }
 
-// comicModeOption は台本モード・スタイルモード1件分の説明です。
-// テンプレート側の front matter / styles.json がそのまま出どころです。
+// comicModeOption describes one script mode or style mode.
+// Its source is the template's front matter / styles.json as is.
 type comicModeOption struct {
 	Name      string `json:"name"`
 	Direction string `json:"direction,omitempty"`
@@ -33,8 +33,8 @@ type comicModeOption struct {
 	Category  string `json:"category,omitempty"`
 }
 
-// ComicOptions は GET /comic-options を処理し、生成ジョブに指定できる
-// モードとモデルの一覧を返します。
+// ComicOptions handles GET /comic-options and returns the modes and models
+// a generation job can specify.
 func (h *Handler) ComicOptions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respond.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")

@@ -2,7 +2,7 @@ package pipeline
 
 import "context"
 
-// Step は、Worker パイプラインの1ステップを表すインターフェースです。
+// Step is the interface for one step of the worker pipeline.
 type Step interface {
 	Name() string
 	Execute(ctx context.Context, pc *Context) error

@@ -12,10 +12,10 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// JobRegenerate は POST /jobs/{jobID}/regenerate を処理し、指定ジョブに対する
-// 再生成コマンド（regenerate_chapter_script / generate_design_sheet / regenerate_panel /
-// regenerate_page）を投入します。jobID は必ず URL パスから取得し、リクエストボディの
-// job_id は無視します（新規ジョブの投入は POST /jobs を使ってください）。
+// JobRegenerate handles POST /jobs/{jobID}/regenerate and enqueues a regeneration command
+// (regenerate_chapter_script / generate_design_sheet / regenerate_panel / regenerate_page)
+// for the given job. The jobID always comes from the URL path, and job_id in the request body
+// is ignored (use POST /jobs to enqueue a new job).
 func (h *Handler) JobRegenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		respond.ErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed")

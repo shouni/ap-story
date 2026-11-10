@@ -22,9 +22,9 @@ body {
     background-color: var(--zunda-green);
 }
 
-/* ナビバーは緑地なので文字を白で抜きます。セレクタを .navbar で絞るのは、
-   これを素の .nav-link に当てるとページ本文のタブまで白文字になり、
-   白背景の上で見えなくなるためです（実際そうなっていました）。 */
+/* The navbar has a green background, so its text is knocked out in white. The selector is scoped to .navbar
+   because applying this to a bare .nav-link would turn the page body's tabs white too,
+   invisible on the white background (which is exactly what had happened). */
 .navbar .nav-link {
     color: rgba(255, 255, 255, 0.85) !important;
     transition: all 0.2s;
@@ -51,9 +51,9 @@ body {
     border-bottom: 2px solid white;
 }
 
-/* ページ本文のタブ。姉妹プロジェクトの同名クラスと同じ見た目に揃えています
-   （下線が伸びて現在地を示す形）。差し色だけは、この画面の基調である
-   ずんだ色を使います。 */
+/* Tabs in the page body. They match the look of the same-named class in the sister projects
+   (an underline that extends to show the current tab). Only the accent colour is this screen's
+   base colour, zunda green. */
 .app-tabs {
     border-bottom: 2px solid var(--app-border-color);
     background-color: transparent;
@@ -118,7 +118,7 @@ footer hr {
     background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba(255, 255, 255, 1)' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E") !important;
 }
 
-/* パネル・ページ画像のグリッド表示 */
+/* Grid of panel and page images */
 .comic-image-card img {
     width: 100%;
     object-fit: contain;
@@ -131,7 +131,7 @@ footer hr {
     overflow-y: auto;
 }
 
-/* 通し読みは1ページずつ縦に積みます。幅は --comic-reader-width の1か所で調整します。 */
+/* Reading straight through stacks one page at a time vertically. The width is adjusted in one place, --comic-reader-width. */
 .comic-reader {
     max-width: var(--comic-reader-width);
 }

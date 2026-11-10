@@ -1,4 +1,4 @@
-// Package app は、アプリケーションの依存関係を組み立てて保持する DI コンテナを提供します。
+// Package app provides the DI container that assembles and holds the application's dependencies.
 package app
 
 import (
@@ -16,42 +16,42 @@ import (
 	"github.com/shouni/gcp-kit/auth/session"
 )
 
-// Container はアプリケーションの依存関係（DIコンテナ）を保持します。
+// Container holds the application's dependencies (the DI container).
 type Container struct {
 	Config *config.Config
 	// I/O and Storage
-	// Store は読み書き・一覧・署名の窓口です。寿命はファクトリ側にあります。
+	// Store is the window for reads, writes, listings and signing. Its lifetime belongs to the factory.
 	Store remoteio.Store
-	// go-comic-kit の全操作（章立て・章台本・デザインシート・パネル・ページ）
+	// Every go-comic-kit operation (chapters, chapter script, design sheet, panels, pages)
 	Ops *ports.Operations
-	// Pipeline は Task のコマンドに応じて Ops の操作を実行する Worker パイプラインです。
+	// Pipeline is the worker pipeline that runs the Ops operation selected by the Task's command.
 	Pipeline domain.Pipeline
-	// TaskQueue は非同期ジョブ（Task）を Cloud Tasks に投入します。
+	// TaskQueue enqueues asynchronous jobs (Task) onto Cloud Tasks.
 	TaskQueue domain.TaskQueue
-	// SessionStore はログインセッションの保存先です。web 面だけが持ちます。
+	// SessionStore is where login sessions are kept. Only the web face has one.
 	SessionStore session.Store
-	// Repository は作品履歴の一覧・詳細・削除を提供します。
+	// Repository lists, reads and deletes the comic history.
 	Repository domain.ComicRepository
-	// JobStatus はジョブ進行状況の記録・参照を提供します。
+	// JobStatus records and reads job progress.
 	JobStatus domain.JobStatusStore
-	// HistoryCache は Repository が使う履歴サマリの TTL キャッシュです。
-	// Close で停止するために Container が保持します。
+	// HistoryCache is the TTL cache of history summaries used by Repository.
+	// Container holds it so that Close can stop it.
 	HistoryCache *cache.TTL[domain.ComicHistory]
-	// Characters は go-character-kit のキャラクター定義です。
+	// Characters holds the go-character-kit character definitions.
 	Characters *characterkit.Characters
-	// HTTPClient は外部 HTTP 通信（go-web-reader 等）に使う汎用クライアントです。
+	// HTTPClient is the general-purpose client for outbound HTTP (go-web-reader and so on).
 	HTTPClient httpkit.HTTPClient
-	// Closers は、組み立て時に開いた資源です。Container.Close がまとめて閉じます。
-	// Close が個々のフィールドを見ないのは、資源が増えたときに builder が append
-	// するだけで済ませるためです。HistoryCache だけは Close が error を返さず
-	// io.Closer を満たさないので、末尾で個別に閉じます。
+	// Closers are the resources opened during assembly; Container.Close closes them together.
+	// Close does not look at individual fields so that a new resource only needs the builder
+	// to append it. HistoryCache alone has a Close that returns no error and so does not
+	// satisfy io.Closer; it is closed separately at the end.
 	Closers []io.Closer
 }
 
-// Close は、Container が保持するすべての外部接続リソースを安全に解放します。
+// Close safely releases every external connection the Container holds.
 //
-// エラーを返さないのは、呼び出し元が server.Run の defer 1 箇所きりで、返したところで
-// slog.Error 以外の行き先が無いためです。
+// It returns no error because its only caller is the single defer in server.Run, and a
+// returned error would have nowhere to go but slog.Error.
 func (c *Container) Close() {
 	for _, closer := range c.Closers {
 		if closer == nil {

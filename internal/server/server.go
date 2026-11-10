@@ -11,7 +11,7 @@ import (
 	"github.com/shouni/ap-story/internal/config"
 )
 
-// Run はサーバーの構築、起動、およびライフサイクル管理を行います。
+// Run builds, starts and manages the lifecycle of the server.
 func Run(ctx context.Context, cfg *config.Config) error {
 	appCtx, err := builder.BuildContainer(ctx, cfg)
 	if err != nil {
@@ -29,7 +29,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	slog.InfoContext(ctx, "🚀 Server starting...", "port", cfg.Server.Port, "service_url", cfg.Server.ServiceURL)
 
-	// 起動・シグナル待ち・正常停止（猶予を超えたら強制クローズ）は cloudrun が持ちます。
+	// Startup, waiting for signals and graceful shutdown (force-closing past the grace period) belong to cloudrun.
 	return cloudrun.Serve(ctx, cloudrun.Config{
 		Port:    cfg.Server.Port,
 		Handler: NewRouter(h, cfg.GCP.ProjectID),

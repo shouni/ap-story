@@ -25,8 +25,8 @@ func TestDesignPromptBuildsSingleSubject(t *testing.T) {
 	if !strings.Contains(negative, "Do not include") {
 		t.Errorf("negative prompt = %q, want instruction-style exclusion list", negative)
 	}
-	// imagegen はネガティブプロンプトを平文としてプロンプトに連結するため、
-	// 欠陥語彙（extra fingers 等）はかえって崩れを誘発する。含まれないことを保証する。
+	// imagegen concatenates the negative prompt into the prompt as plain text, so
+	// defect vocabulary (extra fingers and so on) actually invites the breakage. This guarantees it is absent.
 	for _, defect := range []string{"extra fingers", "fused fingers", "extra limbs", "malformed"} {
 		if strings.Contains(negative, defect) {
 			t.Errorf("negative prompt contains defect vocabulary %q, which can induce the artifact", defect)

@@ -9,14 +9,14 @@ import (
 	"github.com/shouni/go-comic-kit/store"
 )
 
-// LoadStateStep は、Task.JobID の既存 state をロードして pc.Manga にセットします。
-// state が存在しない（新規ジョブ）場合はエラーになります。
+// LoadStateStep loads the existing state of Task.JobID and sets it on pc.Manga.
+// It fails when no state exists (a new job).
 type LoadStateStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (LoadStateStep) Name() string { return "load_state" }
 
-// Execute は既存 state をロードして pc.Manga にセットします。
+// Execute loads the existing state and sets it on pc.Manga.
 func (LoadStateStep) Execute(ctx context.Context, pc *Context) error {
 	statePath, err := stateObjectPath(pc)
 	if err != nil {
@@ -30,36 +30,36 @@ func (LoadStateStep) Execute(ctx context.Context, pc *Context) error {
 	return nil
 }
 
-// LoadStateStepOptional は LoadStateStep と同様ですが、state が存在しない場合は
-// エラーにせず pc.Manga を nil のままにします（generate_design_sheet の単発生成向け）。
-// 作品 state（comics/{jobID}）が見つからない場合はデザインシート単体生成ジョブと
-// 判断し、以降の保存先（pc.OutputDir）を design-jobs/{jobID} へ切り替えます。
-// 作品の履歴一覧が comics/ の列挙だけで完結するよう、単体生成の state は
-// comics/ に混ぜません。
+// LoadStateStepOptional is like LoadStateStep, but when no state exists it does not fail and
+// leaves pc.Manga nil (for one-off generate_design_sheet runs).
+// When the comic state (comics/{jobID}) is not found, the job is taken to be a standalone design-sheet
+// job, and the destination from then on (pc.OutputDir) switches to design-jobs/{jobID}.
+// Standalone states are kept out of comics/ so that the history list of works is complete
+// from a listing of comics/ alone.
 type LoadStateStepOptional struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (LoadStateStepOptional) Name() string { return "load_state_optional" }
 
-// Execute は既存 state のロードを試み、無ければ保存先を design-jobs/ へ切り替えます。
+// Execute tries to load the existing state and, if there is none, switches the destination to design-jobs/.
 func (LoadStateStepOptional) Execute(ctx context.Context, pc *Context) error {
 	statePath, err := stateObjectPath(pc)
 	if err != nil {
 		return err
 	}
-	// 「無い」と言えるのは ErrNotFound のときだけ。読み取り失敗まで「無い」に倒すと、
-	// 新規に生成した state で既存の記録を上書きします（LoadIfExists がその判定を持つ）。
+	// Only ErrNotFound means "missing". Treating a read failure as "missing" too would overwrite
+	// the existing record with a newly generated state (LoadIfExists makes that call).
 	manga, err := store.LoadIfExists(ctx, pc.Reader, statePath)
 	if err != nil {
-		return fmt.Errorf("既存 state の読み込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to read the existing state: %w", err)
 	}
 	if manga != nil {
 		pc.Manga = manga
 		return nil
 	}
 
-	// 作品 state がない = 単体生成ジョブ。同じジョブ ID の再実行（既存の単体生成
-	// state の更新）にも対応するため、design-jobs/ 側のロードも試みる。
+	// No comic state = a standalone job. Loading from design-jobs/ is tried too, so that a re-run
+	// of the same job ID (updating an existing standalone state) works.
 	pc.OutputDir = pc.DesignJobOutputDir
 	designStatePath, err := stateObjectPath(pc)
 	if err != nil {
@@ -67,37 +67,37 @@ func (LoadStateStepOptional) Execute(ctx context.Context, pc *Context) error {
 	}
 	manga, err = store.LoadIfExists(ctx, pc.Reader, designStatePath)
 	if err != nil {
-		return fmt.Errorf("既存 state の読み込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to read the existing state: %w", err)
 	}
 	if manga != nil {
 		pc.Manga = manga
 	}
-	return nil // state 未作成は正常系（新規に作られる）
+	return nil // no state yet is the normal path (one gets created)
 }
 
-// LoadStateIfExistsStep は、既存 state があれば pc.Manga に読み込みます。
-// 無ければ何もしません（新規ジョブは正常系）。
+// LoadStateIfExistsStep loads the existing state into pc.Manga if there is one.
+// If not, it does nothing (a new job is the normal path).
 //
-// compose_comic の先頭に置くことで、Cloud Tasks の再配信で同じジョブがやり直された
-// ときに、保存済みの台本と生成済み画像を引き継げます。これが無いと OutlineStep が
-// state を新品に差し替えてしまい、工程ごとに保存した意味が失われます。
+// Placed at the head of compose_comic, it lets a job that Cloud Tasks redelivers inherit the saved
+// script and generated images. Without it OutlineStep would replace the state with a fresh one,
+// defeating the point of saving at each stage.
 type LoadStateIfExistsStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (LoadStateIfExistsStep) Name() string { return "load_state_if_exists" }
 
-// Execute は既存 state があれば読み込みます。
+// Execute loads the existing state if there is one.
 func (LoadStateIfExistsStep) Execute(ctx context.Context, pc *Context) error {
 	statePath, err := stateObjectPath(pc)
 	if err != nil {
 		return err
 	}
-	// 未作成は正常系（これから作られる）。ただし「無い」と言えるのは ErrNotFound の
-	// ときだけで、読み取り失敗まで「無い」に倒すと、再配信のたびに新品の state で
-	// 保存済みの台本と画像を上書きします。
+	// Not created yet is the normal path (it is about to be). But only ErrNotFound means "missing";
+	// treating a read failure as "missing" too would overwrite the saved script and images with a
+	// fresh state on every redelivery.
 	manga, err := store.LoadIfExists(ctx, pc.Reader, statePath)
 	if err != nil {
-		return fmt.Errorf("既存 state の読み込みに失敗しました: %w", err)
+		return fmt.Errorf("failed to read the existing state: %w", err)
 	}
 	if manga == nil {
 		return nil
@@ -108,13 +108,13 @@ func (LoadStateIfExistsStep) Execute(ctx context.Context, pc *Context) error {
 	return nil
 }
 
-// SaveStateStep は、pc.Manga を state として保存します。
+// SaveStateStep saves pc.Manga as the state.
 type SaveStateStep struct{}
 
-// Name はステップ名を返します。
+// Name returns the step name.
 func (SaveStateStep) Name() string { return "save_state" }
 
-// Execute は pc.Manga を state として保存します。
+// Execute saves pc.Manga as the state.
 func (SaveStateStep) Execute(ctx context.Context, pc *Context) error {
 	if pc.Manga == nil {
 		return fmt.Errorf("save_state: manga state is nil")

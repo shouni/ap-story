@@ -7,73 +7,73 @@ import (
 	kitcomic "github.com/shouni/go-comic-kit/comic"
 )
 
-// ErrStateNotFound は、そのジョブの state がまだ無いことを表します。
+// ErrStateNotFound means the job has no state yet.
 //
-// 生成が始まる前や、state の保存前に落ちたジョブでも起こる正常な状態です。
-// ハンドラーはこれを 404（あるいは「処理中」の表示）へマップしてください。
+// It is a normal state before generation starts, or for a job that failed before saving its state.
+// Handlers should map it to 404 (or to the "in progress" page).
 var ErrStateNotFound = errors.New("comic state not found")
 
-// ErrStateUnavailable は、state が「あるはずなのに読めなかった」ことを表します。
+// ErrStateUnavailable means a state that "should exist could not be read".
 //
-// ErrStateNotFound と分けているのは、両者で取るべき判断が正反対だからです。
-// 権限不足や GCS 障害まで「無い」とみなすと、障害の間ずっと全作品が
-// 「まだありません」と表示され、原因を追う手掛かりも残りません。
-// ハンドラーはこれを 502（または 500）へマップし、原因をログへ残してください。
+// It is kept apart from ErrStateNotFound because the two call for opposite decisions.
+// Treating missing permissions or a GCS outage as "missing" would show every work as
+// "not there yet" for the whole outage and leave no clue to the cause.
+// Handlers should map it to 502 (or 500) and log the cause.
 var ErrStateUnavailable = errors.New("comic state unavailable")
 
-// Pipeline は、Task 1 件を最後まで処理する実行面です。
+// Pipeline is the execution surface that processes one Task to the end.
 //
-// 実体は internal/pipeline の Runner で、worker 面だけが持ちます。Web 面では nil の
-// ままなので、組み立て側はこの型で変数を宣言してください（具象のポインタ型で宣言して
-// から代入すると、nil のまま入れても interface としては非 nil になります）。
+// The implementation is internal/pipeline's Runner, which only the worker face has. It stays nil
+// on the web face, so the assembling side must declare the variable with this type (declaring it
+// with the concrete pointer type and assigning makes the interface non-nil even when nil goes in).
 type Pipeline interface {
 	Execute(ctx context.Context, task Task) error
 }
 
-// TaskQueue は非同期キューを抽象化します。
+// TaskQueue abstracts the asynchronous queue.
 type TaskQueue interface {
 	Enqueue(ctx context.Context, task Task) error
 }
 
-// ComicRepository は作品（ジョブ）の履歴取得・削除、および共有キャラクター資産
-// （デザインシート）の生成履歴取得を抽象化します。
-// 詳細（GetState）は go-comic-kit の MangaState をそのまま返します。ap-story では
-// MusicRecipe に相当する独自のドメイン型を持たず、state 自体が完結した表現だからです。
+// ComicRepository abstracts reading and deleting the history of works (jobs) and reading the
+// generation history of shared character assets (design sheets).
+// The details (GetState) return go-comic-kit's MangaState as is. ap-story has no domain type
+// of its own corresponding to MusicRecipe, because the state itself is a complete representation.
 type ComicRepository interface {
 	ListHistoryPage(ctx context.Context, page int, perPage int) (ComicHistoryPage, error)
 	GetState(ctx context.Context, jobID string) (*kitcomic.MangaState, error)
-	// SaveState は state をまるごと書き戻します。台本の手直しのための口で、
-	// 生成パイプライン（worker）は go-comic-kit の store を直接使うためここは通りません。
+	// SaveState writes the whole state back. It is the entry for touching up the script; the
+	// generation pipeline (worker) uses go-comic-kit's store directly and does not go through here.
 	SaveState(ctx context.Context, jobID string, state *kitcomic.MangaState) error
 	DeleteHistory(ctx context.Context, jobID string) error
-	// ListCharacterDesignHistory は、指定キャラクター単体のデザインシート生成履歴を
-	// 新しい順で返します。複数キャラクター合成生成のシートは対象外です
-	// （character/{単体キャラクターID}/ 配下にしか記録されないため）。
+	// ListCharacterDesignHistory returns the design-sheet generation history of one character,
+	// newest first. Sheets generated for several characters together are excluded
+	// (they are recorded only under character/{single character ID}/).
 	ListCharacterDesignHistory(ctx context.Context, characterID string) ([]CharacterDesignHistoryItem, error)
-	// DeleteCharacterDesign は、指定キャラクターの生成履歴1件（character/{characterID}/{jobID}.ext）を
-	// 削除します。ジョブがデザインシート単体生成（章立てなし）だった場合は、対応する
-	// state（comics/{jobID}/）も併せて削除します。作品ジョブの state は削除しません。
+	// DeleteCharacterDesign deletes one generation record of a character (character/{characterID}/{jobID}.ext).
+	// When the job was a standalone design-sheet generation (no chapters), the matching
+	// state (comics/{jobID}/) is deleted too. The state of a comic job is never deleted.
 	DeleteCharacterDesign(ctx context.Context, characterID string, jobID string) error
 }
 
-// Notifier はジョブ完了・失敗の通知（Slack 等）を抽象化します。
-// 実装は Webhook 未設定時など通知が無効な場合、エラーを返さず黙ってスキップして構いません
-// （通知の成否がジョブ自体の成否に影響してはならないため）。
+// Notifier abstracts job completion and failure notices (Slack and so on).
+// When notices are disabled, such as with no webhook configured, an implementation may skip
+// silently without returning an error (a notice must never affect whether the job itself succeeds).
 type Notifier interface {
 	NotifyComplete(ctx context.Context, task Task) error
 	NotifyError(ctx context.Context, task Task, cause error) error
 }
 
-// JobStatusStore は、ジョブの進行状況（queued/running/succeeded/failed）を永続化します。
-// Web プロセスが投入時の状態を、Worker プロセスが実行結果を書き込みます。
+// JobStatusStore persists job progress (queued/running/succeeded/failed).
+// The web process writes the state at enqueue and the worker process writes the outcome.
 //
-// Save / Get のシグネチャは go-job-kit の jobstatus.StatusStore に揃えてあります。
-// これにより *jobstatus.Store[JobStatus] がそのまま実装となり、jobstatus.Recorder へ
-// 渡すためのアダプタが要りません（以前はジョブ ID を状態に含める形だったため、
-// 形を合わせるだけのアダプタを 3 サービスがそれぞれ持っていました）。
+// The Save / Get signatures match go-job-kit's jobstatus.StatusStore.
+// That makes *jobstatus.Store[JobStatus] the implementation as is, with no adapter needed to
+// pass it to jobstatus.Recorder (the job ID used to be part of the status, so the three
+// services each kept an adapter that only reshaped it).
 type JobStatusStore interface {
-	// Save はジョブ状態を保存します。
+	// Save saves the job status.
 	Save(ctx context.Context, jobID string, status JobStatus) error
-	// Get はジョブ状態を取得します。未記録の場合はエラーを返します。
+	// Get reads the job status. It returns an error when nothing has been recorded.
 	Get(ctx context.Context, jobID string) (JobStatus, error)
 }

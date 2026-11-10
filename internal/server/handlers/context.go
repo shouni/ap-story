@@ -1,4 +1,4 @@
-// Package handlers は、Web UI（フォーム表示・生成・履歴閲覧等）のHTTPハンドラーを提供します。
+// Package handlers provides the HTTP handlers for the web UI (forms, generation, history and so on).
 package handlers
 
 import (
@@ -7,11 +7,11 @@ import (
 	"github.com/shouni/gcp-kit/auth/session"
 )
 
-// CSRFTokenFromContext は、コンテキストに保存された CSRF トークンを取得します。
+// CSRFTokenFromContext returns the CSRF token stored in the context.
 //
-// 格納するのは gcp-kit/auth の CSRFContextMiddleware なので、取得も同じキーを
-// 見る必要があります。ここで委譲しているのは、テンプレート描画側から見た呼び名を
-// handlers パッケージに残すためだけです。
+// It is stored by gcp-kit/auth's CSRFContextMiddleware, so reading it must use the same key.
+// This delegates only to keep the name the template-rendering side uses
+// in the handlers package.
 func CSRFTokenFromContext(ctx context.Context) string {
 	return session.CSRFTokenFromContext(ctx)
 }

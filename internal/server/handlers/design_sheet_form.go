@@ -9,45 +9,45 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// DefaultDesignSheetAspectRatio は、比率を指定せずにデザインシートを依頼したときに使う比率です。
+// DefaultDesignSheetAspectRatio is the aspect ratio used when a design sheet is requested without one.
 //
-// 既定のレイアウトが3面図ターンアラウンドなので、横長のほうが1体あたりの解像度を稼げます。
-// パネル・ページの参照アンカーにするシートは 3:4（+ 単一ポーズ）で作ってください。
+// The default layout is a three-view turnaround, so landscape gets more resolution per figure.
+// Make sheets meant as reference anchors for panels and pages at 3:4 (+ single pose).
 //
-// キット側にも未指定時のフォールバック（ports.Config.AspectRatio）がありますが、
-// そこへ落とさずここで埋めるのは、フォームと JSON API で答えが変わらないようにするためです。
+// The kit also has a fallback for an unspecified ratio (ports.Config.AspectRatio), but it is
+// filled here rather than left to that, so the form and the JSON API do not answer differently.
 const DefaultDesignSheetAspectRatio = "16:9"
 
-// designSheetCharacterOption は design_sheet_form.html に渡す1キャラクター分の選択肢です。
+// designSheetCharacterOption is one character's option passed to design_sheet_form.html.
 type designSheetCharacterOption struct {
 	ID      string
 	Name    string
 	Checked bool
 }
 
-// designSheetFormData は design_sheet_form.html テンプレートに渡すデータです。
-// エラー時は入力値（選択済みキャラクター等）を保持したままフォームを再表示します。
+// designSheetFormData is the data passed to the design_sheet_form.html template.
+// On error the form is shown again with the input (the chosen characters and so on) kept.
 type designSheetFormData struct {
 	Characters []designSheetCharacterOption
 	Models     []selectOption
-	// StyleModes は画風の選択肢です。シートはパネル用ではなくシート用の画風指定
-	// （styles.json の design_style）で生成されます。
+	// StyleModes are the art-style options. Sheets are generated with the sheet art style
+	// (styles.json's design_style), not the panel one.
 	StyleModes []selectOption
 	StyleMode  string
-	// ModelOverride は選択されたモデル名です（空文字なら既定モデル）。
+	// ModelOverride is the chosen model name (empty means the default model).
 	ModelOverride string
 	AspectRatio   string
 	Layout        string
-	// ReferenceURLOverride / VisualCuesOverride は、その場限りの参照画像・見た目特徴の
-	// 上書きです（go-comic-kit の DesignOverride に対応）。キャラクターを1人だけ選択した
-	// 場合のみ適用され、複数選択時（合成デザインシート）は無視されます。
+	// ReferenceURLOverride / VisualCuesOverride are one-off overrides of the reference image and
+	// visual features (they correspond to go-comic-kit's DesignOverride). They apply only when a single
+	// character is chosen and are ignored when several are chosen (a composed design sheet).
 	ReferenceURLOverride string
 	VisualCuesOverride   string
 	ErrorMessage         string
 }
 
-// buildDesignSheetFormData は選択済みキャラクターIDの集合とモデル選択肢を反映した
-// フォーム表示用データを構築します。
+// buildDesignSheetFormData builds the form display data reflecting the set of chosen character IDs
+// and the model options.
 func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormData {
 	checked := make(map[string]struct{}, len(selected))
 	for _, id := range selected {
@@ -68,8 +68,8 @@ func (h *Handler) buildDesignSheetFormData(selected []string) designSheetFormDat
 	return data
 }
 
-// splitVisualCues は、改行またはカンマ区切りの入力を見た目特徴のリストへ分割します。
-// 空行・前後の空白は除去します。
+// splitVisualCues splits newline- or comma-separated input into a list of visual features.
+// Empty lines and surrounding whitespace are removed.
 func splitVisualCues(raw string) []string {
 	if raw == "" {
 		return nil
@@ -86,17 +86,17 @@ func splitVisualCues(raw string) []string {
 	return cues
 }
 
-// ComposeDesignSheetForm は GET /compose/design-sheet を処理し、キャラクター単体のデザインシート
-// 生成フォームを表示します。既存の作品（jobID）に紐づかない単発生成です。
-// クエリパラメータ ?character_id=xxx で選択済み状態にできます
-// （/characters/{characterID} の「新規生成」ボタンから遷移する際に使用）。
+// ComposeDesignSheetForm handles GET /compose/design-sheet and shows the design-sheet form for
+// a single character. It is a one-off generation not tied to an existing work (jobID).
+// The query parameter ?character_id=xxx preselects a character
+// (used when coming from the "New" button on /characters/{characterID}).
 func (h *Handler) ComposeDesignSheetForm(w http.ResponseWriter, r *http.Request) {
 	preselected := r.URL.Query()["character_id"]
 	h.render(w, r, http.StatusOK, "design_sheet_form.html", "デザインシートを生成", h.buildDesignSheetFormData(preselected))
 }
 
-// designSheetTaskParams は generate_design_sheet ジョブ構築の入力です。
-// Web フォーム（POST /jobs（command=generate_design_sheet））と JSON API（POST /jobs（command=generate_design_sheet））で共有します。
+// designSheetTaskParams is the input for building a generate_design_sheet job.
+// It is shared by the web form (POST /jobs (command=generate_design_sheet)) and the JSON API (POST /jobs (command=generate_design_sheet)).
 type designSheetTaskParams struct {
 	CharacterIDs         []string
 	AspectRatio          string
@@ -108,9 +108,9 @@ type designSheetTaskParams struct {
 	Seed                 *int64
 }
 
-// newDesignSheetTask は generate_design_sheet の入力からジョブ ID を採番して Task を構築します。
-// job_id はユーザーに意識させず、サーバー側で新規採番します（state を伴わない単発生成のため
-// 既存作品との紐づけは不要）。
+// newDesignSheetTask mints a job ID from the generate_design_sheet input and builds the Task.
+// The user never deals with job_id; the server mints a new one (it is a one-off generation with no
+// state, so no link to an existing work is needed).
 func (h *Handler) newDesignSheetTask(p designSheetTaskParams) (domain.Task, error) {
 	jobID, err := domain.NewJobID()
 	if err != nil {
@@ -137,10 +137,10 @@ func (h *Handler) newDesignSheetTask(p designSheetTaskParams) (domain.Task, erro
 	}, nil
 }
 
-// resolveDesignSheetSeed は明示的な seed 指定を優先し、未指定かつキャラクターを1人だけ
-// 指定している場合に characters.json 側の登録 seed へフォールバックします。複数キャラクター
-// 指定時（合成デザインシート）はどちらのキャラクターの seed を使うべきか一意に決まらないため
-// フォールバックしません。
+// resolveDesignSheetSeed prefers an explicit seed; when none is given and exactly one character
+// is chosen, it falls back to the seed registered in characters.json. With several characters
+// (a composed design sheet) it does not fall back, since there is no single answer for whose seed
+// to use.
 func (h *Handler) resolveDesignSheetSeed(characterIDs []string, explicit *int64) *int64 {
 	if explicit != nil {
 		return explicit
@@ -155,8 +155,8 @@ func (h *Handler) resolveDesignSheetSeed(characterIDs []string, explicit *int64)
 	return char.Seed
 }
 
-// createDesignSheetForm は POST /jobs（command=generate_design_sheet） を処理し、フォーム入力から
-// generate_design_sheet ジョブを投入します。
+// createDesignSheetForm handles POST /jobs (command=generate_design_sheet) and enqueues a
+// generate_design_sheet job from the form input.
 func (h *Handler) createDesignSheetForm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -208,7 +208,7 @@ func (h *Handler) createDesignSheetForm(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 状態を先に書く（recordQueuedStatus 参照）。
+	// Write the status first (see recordQueuedStatus).
 	h.recordQueuedStatus(r, task)
 	if err := h.taskQueue.Enqueue(r.Context(), task); err != nil {
 		slog.Error("failed to enqueue task", "job_id", task.JobID, "command", task.Command, "error", err)

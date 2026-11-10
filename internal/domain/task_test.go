@@ -136,7 +136,7 @@ func TestTaskNameDiffersAcrossDifferentTargetsOfSameJobAndCommand(t *testing.T) 
 }
 
 func TestRenderComicValidation(t *testing.T) {
-	// render_comic の対象は state 全体なので job_id 以外の入力は不要
+	// render_comic targets the whole state, so it needs no input besides job_id
 	task := Task{Command: TaskCommandRenderComic, JobID: "job-abc"}
 	if err := task.ValidateSubmission(); err != nil {
 		t.Errorf("ValidateSubmission() = %v, want nil", err)
@@ -144,15 +144,15 @@ func TestRenderComicValidation(t *testing.T) {
 
 	missing := Task{Command: TaskCommandRenderComic}
 	if err := missing.ValidateSubmission(); err == nil {
-		t.Error("job_id 無しの render_comic が通っている")
+		t.Error("render_comic without job_id was accepted")
 	}
 }
 
 func TestTaskNameDiffersPerSubmissionForRepeatableCommands(t *testing.T) {
 	t.Parallel()
 
-	// 同じ対象への投げ直し（再開、および「気に入らないからもう一度」）が
-	// Cloud Tasks の重複排除で黙って捨てられないこと。
+	// Resubmitting to the same target (resuming, and "I don't like it, once more")
+	// must not be silently dropped by Cloud Tasks deduplication.
 	bases := []Task{
 		{Command: TaskCommandRenderComic, JobID: "job-abc"},
 		{Command: TaskCommandRegenerateChapterScript, JobID: "job-abc", ChapterID: "ch02"},
@@ -168,14 +168,14 @@ func TestTaskNameDiffersPerSubmissionForRepeatableCommands(t *testing.T) {
 			second.CreatedAt = time.Date(2026, 7, 31, 10, 5, 0, 0, time.UTC)
 
 			if first.TaskName() == second.TaskName() {
-				t.Errorf("投入時刻が違うのに同じタスク名になっている: %q", first.TaskName())
+				t.Errorf("different enqueue times produced the same task name: %q", first.TaskName())
 			}
 
-			// 同一投入（同じ時刻）は従来どおり1つにまとめられる
+			// An identical submission (the same time) is still merged into one, as before
 			same := base
 			same.CreatedAt = first.CreatedAt
 			if first.TaskName() != same.TaskName() {
-				t.Errorf("同一投入で名前が変わっている: %q vs %q", first.TaskName(), same.TaskName())
+				t.Errorf("the name changed for an identical submission: %q vs %q", first.TaskName(), same.TaskName())
 			}
 		})
 	}
@@ -184,8 +184,8 @@ func TestTaskNameDiffersPerSubmissionForRepeatableCommands(t *testing.T) {
 func TestComposeComicTaskNameIgnoresSubmissionTime(t *testing.T) {
 	t.Parallel()
 
-	// compose_comic は投入のたびに新しいジョブIDを採番するので名前はもともと
-	// 投入ごとに変わる。時刻まで混ぜると、同一リクエストの再送すら排除できなくなる。
+	// compose_comic mints a new job ID on every enqueue, so its name already changes per
+	// enqueue. Mixing in the time would stop even a resend of the same request from being deduplicated.
 	base := Task{Command: TaskCommandComposeComic, JobID: "job-abc"}
 
 	first := base
@@ -194,6 +194,6 @@ func TestComposeComicTaskNameIgnoresSubmissionTime(t *testing.T) {
 	retried.CreatedAt = time.Date(2026, 7, 31, 10, 5, 0, 0, time.UTC)
 
 	if first.TaskName() != retried.TaskName() {
-		t.Errorf("同じジョブの再送が別タスクになっている: %q vs %q", first.TaskName(), retried.TaskName())
+		t.Errorf("a resend of the same job became a different task: %q vs %q", first.TaskName(), retried.TaskName())
 	}
 }

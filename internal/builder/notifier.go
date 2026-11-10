@@ -10,8 +10,8 @@ import (
 	"github.com/shouni/ap-story/internal/domain"
 )
 
-// buildNotifier は Slack 通知アダプターを構築します。SLACK_WEBHOOK_URL が未設定でも
-// 動作し、その場合は通知を送らないアダプターを返します（運用の任意設定）。
+// buildNotifier builds the Slack notification adapter. It works without SLACK_WEBHOOK_URL,
+// in which case it returns an adapter that sends nothing (an optional operational setting).
 func buildNotifier(httpClient httpkit.HTTPClient, cfg *config.Config) (domain.Notifier, error) {
 	notifier, err := adapters.NewSlackAdapter(httpClient, cfg.Notification.SlackWebhookURL, cfg.Server.ServiceURL)
 	if err != nil {

@@ -22,29 +22,29 @@ import (
 
 const comicsPrefix = "comics"
 
-// historyLoadConcurrency は 1 ページ分の state を読み込むときの同時実行数です。
+// historyLoadConcurrency is the concurrency for loading one page's worth of states.
 const historyLoadConcurrency = 10
 
-// ListHistoryPage は履歴一覧をページングして取得します。
-// /history は実際の漫画作品だけを対象とします。デザインシート単体生成ジョブの state は
-// design-jobs/ 配下に保存されるため comics/ の列挙には現れず、ID の列挙・ページングは
-// state を読まずに完結します（読み込むのは選択されたページの分だけ）。
-// 章立てを持たない state（旧形式で comics/ に残った単体生成ジョブや読み込み失敗の
-// フォールバック値）は念のため表示から除外します。
+// ListHistoryPage fetches the history list with paging.
+// /history covers only actual comic works. The state of a standalone design-sheet job is saved
+// under design-jobs/, so it does not appear in the comics/ listing, and listing and paging IDs
+// completes without reading any state (only the selected page is loaded).
+// States with no chapters (standalone jobs left in comics/ in the legacy format, or the fallback
+// value of a failed read) are excluded from display just in case.
 func (r *ComicRepository) ListHistoryPage(ctx context.Context, page int, perPage int) (domain.ComicHistoryPage, error) {
 	jobIDs, err := r.listJobIDs(ctx)
 	if err != nil {
-		return domain.ComicHistoryPage{}, fmt.Errorf("GCS履歴のリスト取得に失敗しました: %w", err)
+		return domain.ComicHistoryPage{}, fmt.Errorf("failed to list the GCS history: %w", err)
 	}
 
-	// ID に埋め込まれた生成時刻で並べます。既定の ID 降順に頼れないのは、採番形式を
-	// "c{時刻}-{乱数}" から jobid.New の "c-{時刻}-{乱数}" へ移行したためです。
-	// 辞書順では "c-" < "c2" となり、新形式の ID が旧形式より常に後ろに回ります。
+	// Sort by the creation time embedded in the ID. The default descending ID order cannot be relied on
+	// because the ID format moved from "c{time}-{random}" to jobid.New's "c-{time}-{random}".
+	// Lexically "c-" < "c2", so new IDs always sort after legacy ones.
 	all, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, jobid.SortKey, r.loadHistoryOrFallback,
 		paging.WithConcurrency(historyLoadConcurrency),
 	)
 	if err != nil {
-		return domain.ComicHistoryPage{}, fmt.Errorf("GCS履歴の読み込みに失敗しました: %w", err)
+		return domain.ComicHistoryPage{}, fmt.Errorf("failed to load the GCS history: %w", err)
 	}
 
 	histories := make([]domain.ComicHistory, 0, len(all))
@@ -61,42 +61,42 @@ func (r *ComicRepository) ListHistoryPage(ctx context.Context, page int, perPage
 	}, nil
 }
 
-// jobIDListCacheKey はジョブ ID 一覧のキャッシュキーです。
-// 一覧対象は comics/ 直下の 1 種類だけなので固定キーで足ります。
+// jobIDListCacheKey is the cache key of the job ID list.
+// Only one kind is listed (directly under comics/), so a fixed key is enough.
 const jobIDListCacheKey = "job-ids"
 
-// listJobIDs は comics/ 直下のジョブディレクトリからジョブ ID を集めます。
-// バケット全体の走査になるため、短い TTL のキャッシュを挟みます。
+// listJobIDs collects job IDs from the job directories directly under comics/.
+// It scans the whole bucket, so a short-TTL cache sits in front of it.
 //
-// 走査そのものは joblist が担います（区切り文字を指定して、ジョブ 1 件を 1 エントリで
-// 受け取る形。指定しないと配下の成果物（images/ のパネル・ページ画像）が全件返り、
-// 呼び出し側でジョブ ID の重複を潰すことになります）。
+// The scan itself is joblist's job (with a delimiter, so each job comes back as one entry.
+// Without it every artifact underneath (the panel and page images in images/) would come back,
+// and the caller would have to collapse duplicate job IDs).
 //
-// 拾えるのはディレクトリ名だけなので、comic_state.json を持たないジョブ
-// （生成が state の保存前に落ちたもの）も ID としては現れます。それらは state を
-// 読めず ChapterCount == 0 のフォールバック値になるため、ListHistoryPage の
-// 章立てフィルタで表示から外れます。
+// Only directory names are picked up, so jobs without comic_state.json (generation that failed
+// before saving the state) appear as IDs too. Their state cannot be read and they become the
+// fallback value with ChapterCount == 0, so ListHistoryPage's chapter filter drops them from
+// display.
 func (r *ComicRepository) listJobIDs(ctx context.Context) ([]string, error) {
 	return r.jobIDCache.Load(ctx, jobIDListCacheKey, func(ctx context.Context) ([]string, error) {
 		return joblist.Collect(ctx, r.store, remoteio.BuildURI(remoteio.SchemeGCS, r.bucket, comicsPrefix))
 	})
 }
 
-// invalidateJobIDList は一覧キャッシュを破棄し、ジョブの削除を即座に反映させます。
+// invalidateJobIDList discards the list cache so that a job deletion shows up immediately.
 func (r *ComicRepository) invalidateJobIDList() {
 	r.jobIDCache.Invalidate(jobIDListCacheKey)
 }
 
-// loadHistoryOrFallback は 1 件分の履歴サマリを読み込みます。
+// loadHistoryOrFallback loads one history summary.
 //
-// state の読み込みに失敗しても一覧からは落とさず、ジョブID・タイトルのみのフォールバック値を
-// 返します（ChapterCount == 0 になるため、/history のフィルタで自然に除外されます）。
-// LoadPage は load がエラーを返した ID を一覧から取り除くので、残したいものは
-// エラーではなく代替値として返す必要があります。
+// Even when reading the state fails, the entry is not dropped from the list; a fallback value with only
+// the job ID and title is returned (with ChapterCount == 0, so the /history filter naturally excludes it).
+// LoadPage removes from the list any ID for which load returned an error, so anything to keep must be
+// returned as a substitute value, not an error.
 //
-// コンテキストのキャンセル・タイムアウトはフォールバックしません。ページ全体が
-// 代替値で埋まった一覧を「正常な結果」として返さないよう、エラーのまま LoadPage へ渡し、
-// 呼び出し元まで伝播させます。
+// Context cancellation and timeouts do not fall back. So that a list filled entirely with
+// substitute values is not returned as "a normal result", the error goes to LoadPage as is and
+// propagates to the caller.
 func (r *ComicRepository) loadHistoryOrFallback(ctx context.Context, jobID string) (domain.ComicHistory, error) {
 	history, err := r.buildHistory(ctx, jobID)
 	if err != nil {
@@ -144,15 +144,15 @@ func historyFromState(jobID string, state *kitcomic.MangaState) domain.ComicHist
 	}
 }
 
-// GetState は指定ジョブの MangaState を取得します。
+// GetState fetches the MangaState of the given job.
 //
-// state がまだ無い場合は domain.ErrStateNotFound、あるはずなのに読めなかった場合は
-// domain.ErrStateUnavailable を返します。切り分けは store.Load が返す go-comic-kit の
-// 番兵（ports.ErrNotFound）で行うので、ストレージへの往復は増えません。
+// It returns domain.ErrStateNotFound when there is no state yet, and domain.ErrStateUnavailable when
+// one should exist but could not be read. The split uses go-comic-kit's sentinel returned by store.Load
+// (ports.ErrNotFound), so it adds no round trip to storage.
 //
-// どちらにも原因のエラーを包んであります。以前はすべてを「見つかりません」に潰し、
-// 原因も捨てていたため、権限エラーも GCS 障害も画面には「作品がありません」と出て、
-// ログにも理由が残りませんでした。
+// Both wrap the causing error. Everything used to be collapsed into "not found" with the cause
+// discarded, so a permission error and a GCS outage alike showed on screen as 「作品がありません」,
+// with no reason in the logs.
 func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic.MangaState, error) {
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return nil, err
@@ -163,9 +163,9 @@ func (r *ComicRepository) GetState(ctx context.Context, jobID string) (*kitcomic
 	}
 	state, err := store.Load(ctx, r.store, statePath)
 	if err != nil {
-		// go-comic-kit v1.6.0 から store.Load は失敗を ports の番兵で分類します。
-		// 「まだ無い」は ports.ErrNotFound で、原因の os.ErrNotExist は包まれません。
-		// 壊れた state（ports.ErrInvalidRequest）は「あるのに読めない」側に倒します。
+		// Since go-comic-kit v1.6.0, store.Load classifies failures with the ports sentinels.
+		// "Not there yet" is ports.ErrNotFound, and the underlying os.ErrNotExist is not wrapped.
+		// A broken state (ports.ErrInvalidRequest) goes to the "exists but unreadable" side.
 		if errors.Is(err, kitports.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%w (job %q): %w", domain.ErrStateNotFound, jobID, err)
 		}
