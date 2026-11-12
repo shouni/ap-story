@@ -53,6 +53,9 @@
                 <select class="form-select" id="layout" name="layout">
                     <option value="" {{if not .Data.Layout}}selected{{end}}>3面図ターンアラウンド（既定）</option>
                     <option value="single" {{if eq .Data.Layout "single"}}selected{{end}}>単一ポーズ（参照アンカー向け）</option>
+                    <option value="expressions" {{if eq .Data.Layout "expressions"}}selected{{end}}>表情集（1 人ずつ）</option>
+                    <option value="outfit" {{if eq .Data.Layout "outfit"}}selected{{end}}>衣装（前と後ろ、1 人ずつ）</option>
+                    <option value="parts" {{if eq .Data.Layout "parts"}}selected{{end}}>パーツ・小物（1 人ずつ）</option>
                 </select>
             </div>
         </div>

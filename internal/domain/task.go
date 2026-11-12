@@ -130,6 +130,9 @@ func (t Task) ValidateSubmission() error {
 		if err := validateReferenceURLOverride(t.ReferenceURLOverride); err != nil {
 			return err
 		}
+		if err := validateDesignLayout(t.Layout, len(t.CharacterIDs)); err != nil {
+			return err
+		}
 		return nil
 	case TaskCommandRegeneratePanel:
 		if strings.TrimSpace(t.PanelID) == "" {
