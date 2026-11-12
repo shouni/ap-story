@@ -7,8 +7,8 @@ require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/shouni/gcp-kit v1.21.4
 	github.com/shouni/genai-kit v1.8.2
-	github.com/shouni/go-character-kit v1.3.2
-	github.com/shouni/go-comic-kit v1.10.15
+	github.com/shouni/go-character-kit v1.4.0
+	github.com/shouni/go-comic-kit v1.11.0
 	github.com/shouni/go-http-kit v1.13.6
 	github.com/shouni/go-job-kit v1.5.8
 	github.com/shouni/go-notify v1.6.6

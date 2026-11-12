@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/shouni/go-comic-kit/ports"
+
+	"github.com/shouni/ap-story/internal/domain"
 )
 
 func TestDesignPromptBuildsSingleSubject(t *testing.T) {
@@ -110,5 +112,94 @@ func TestDesignPromptRejectsEmptyDescriptions(t *testing.T) {
 	}
 	if _, _, _, err := testDesignPrompt(t).BuildDesignSheet(nil); err == nil {
 		t.Error("BuildDesignSheet(nil) succeeded, want error")
+	}
+}
+
+// A subject without a reference image (a new character's first sheet) must not be told to
+// follow one: with no image the model invents a look, with another subject's it borrows theirs.
+func TestDesignPromptDescribesWhichSubjectsHaveAReference(t *testing.T) {
+	t.Parallel()
+
+	build := func(descriptions []string, referenced []bool) string {
+		t.Helper()
+		system, _, _, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{
+			Descriptions: descriptions, Referenced: referenced,
+		})
+		if err != nil {
+			t.Fatalf("BuildDesignSheet failed: %v", err)
+		}
+		return system
+	}
+
+	all := build([]string{"Zundamon"}, []bool{true})
+	if !strings.Contains(all, "Treat each attached reference image as the ground truth") {
+		t.Errorf("all referenced: system = %q, want the ground-truth rule", all)
+	}
+	// an older caller passes no flags: every subject had a reference then
+	if legacy := build([]string{"Zundamon"}, nil); legacy != all {
+		t.Error("Referenced unset must read as every subject having a reference")
+	}
+
+	none := build([]string{"Akari (silver hair)"}, []bool{false})
+	if strings.Contains(none, "ground truth") || !strings.Contains(none, "No reference image is attached") {
+		t.Errorf("none referenced: system = %q, want the text-only rule and no ground-truth rule", none)
+	}
+
+	some := build([]string{"Metan", "Akari"}, []bool{true, false})
+	if !strings.Contains(some, "for these subjects only, in this order: Subject 1.") ||
+		!strings.Contains(some, "design that character from the text description alone") {
+		t.Errorf("some referenced: system = %q, want Subject 1 named and the others drawn from text", some)
+	}
+}
+
+// The same sheets serve the comics and the music series, so the system prompt names no work.
+func TestDesignSystemPromptNamesNoWork(t *testing.T) {
+	t.Parallel()
+
+	system, _, _, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{Descriptions: []string{"Akari"}})
+	if err != nil {
+		t.Fatalf("BuildDesignSheet failed: %v", err)
+	}
+	for _, word := range []string{"Zundamon", "Metan", "Tsumugi", "manga", "mecha"} {
+		if strings.Contains(system, word) {
+			t.Errorf("system prompt names %q; it serves every work", word)
+		}
+	}
+}
+
+// The supplementary sheets replace the full-body rules, which would forbid what they are made of
+// ("floating heads, partial bodies" for portraits, a body for a props sheet).
+func TestDesignPromptSupplementaryLayouts(t *testing.T) {
+	t.Parallel()
+
+	build := func(layout string) (string, string, string) {
+		t.Helper()
+		system, user, negative, err := testDesignPrompt(t).BuildDesignSheet(&ports.DesignSheetPromptData{
+			Descriptions: []string{"Akari (red armband on the right arm)"}, Referenced: []bool{true}, Layout: layout,
+		})
+		if err != nil {
+			t.Fatalf("BuildDesignSheet(%q) failed: %v", layout, err)
+		}
+		return system, user, negative
+	}
+
+	system, user, negative := build(domain.DesignLayoutExpressions)
+	if !strings.Contains(user, "six head-and-shoulders portraits") || strings.Contains(system, "floating heads") ||
+		strings.Contains(negative, "extra duplicate figures") {
+		t.Errorf("expressions: user = %q / system = %q / negative = %q", user, system, negative)
+	}
+
+	system, user, negative = build(domain.DesignLayoutParts)
+	if !strings.Contains(user, "with no person in the image") || !strings.Contains(system, "never a person") ||
+		strings.Contains(user, "five fingers") || strings.Contains(system, "head to toe") {
+		t.Errorf("parts: user = %q / system = %q", user, system)
+	}
+	if strings.Contains(negative, "close-up detail insets") {
+		t.Errorf("parts negative = %q, should not forbid what the sheet is made of", negative)
+	}
+
+	system, user, _ = build(domain.DesignLayoutOutfit)
+	if !strings.Contains(user, "front view and back view") || !strings.Contains(system, "one complete, physically connected body") {
+		t.Errorf("outfit: user = %q / system = %q, want full-body rules", user, system)
 	}
 }

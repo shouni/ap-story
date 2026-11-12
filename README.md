@@ -197,7 +197,7 @@ run the go-comic-kit operation → save the state", and `render_comic` skips pan
 | `model_override` | The model that draws panels, pages and design sheets. Empty means the head of `IMAGE_MODELS`. **It is recorded on the work at the first image generation and becomes the default from then on.** |
 | `stop_after_script` / `stop_after_panels` | Stop after the script / after the panels. A `compose_comic` from the form always carries the former. |
 | `chapter_id` / `panel_id` / `page` | The target chapter (`ch01`) / panel (`ch01-p03`) / page number (1-based). |
-| `character_ids`, `aspect_ratio`, `layout`, `reference_url_override`, `visual_cues_override` | Input to `generate_design_sheet`. `aspect_ratio` defaults to `16:9`. The two overrides apply only when a single character is given. |
+| `character_ids`, `aspect_ratio`, `layout`, `reference_url_override`, `visual_cues_override` | Input to `generate_design_sheet`. `aspect_ratio` defaults to `16:9`. The two overrides apply only when a single character is given. `layout` is empty (three-view turnaround), `single` (one full-body pose, a reference anchor), or one of the supplementary sheets `expressions` / `outfit` / `parts`, which take one character at a time; anything else is a 400. A character with no `reference_url` is drawn from her `visual_cues` alone (a new character's first sheet). |
 | `seed` / `edit_prompt` / `prompt_override` | Generation conditions for `regenerate_panel` / `regenerate_page` / `generate_design_sheet`. Omitting `seed` reuses the previous generation conditions, and adding `edit_prompt` makes it an edit that takes the generated image as input. |
 
 The choices of script mode, art-style mode and models are recorded in `comic_state.json`, and **jobs run later
