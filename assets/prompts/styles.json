@@ -38,5 +38,15 @@
     "style": "monochrome Japanese manga style, black and white ink drawing, screentone shading, sharp G-pen line art, strong contrast, hatching and speed lines, expressive eyes, high-quality print manga finish, no color, no 3D effect, high resolution",
     "design_style": "monochrome Japanese manga style character reference art, black and white ink drawing, sharp G-pen line art, light screentone shading, clear character features, no color, no 3D effect, high resolution",
     "negative": "color, colored illustration, vibrant colors, color grading, realistic photo, 3d render"
+  },
+  {
+    "name": "cel_graphic",
+    "direction": "平面的でグラフィックなセル塗り。色面と太いシルエット",
+    "use_when": "楽曲のカバー画像と同じ見た目にそろえたいとき。小さく表示されても形が残る",
+    "avoids": "滑らかなグラデーション、にじむ発光、映画的な照明",
+    "category": "カラー",
+    "style": "modern anime illustration, extremely sharp clean line art, cel-shaded flat color blocking, hard-edged shadows, limited high-chroma palette, posterized flat color bands, hard-edged rim light, bold readable silhouettes, strong figure-ground separation, expressive eyes, no 3D effect, high resolution",
+    "design_style": "modern anime character reference art, extremely sharp clean line art, cel-shaded flat color blocking, hard-edged shadows, limited high-chroma palette, bold readable silhouette, clear character features, no 3D effect, high resolution",
+    "negative": "monochrome, black and white, greyscale, screentone, hatching, dot shades, ink sketch, line art only, realistic photo, 3d render, soft airbrushed gradients, painterly brushwork, blurry bloom glow, lens flare, halftone dot texture, film grain"
   }
 ]

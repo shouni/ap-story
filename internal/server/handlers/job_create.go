@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shouni/ap-story/internal/adapters/prompts"
 	"github.com/shouni/ap-story/internal/domain"
 
 	"github.com/shouni/go-serve-kit/respond"
@@ -28,6 +29,13 @@ type composeComicRequest struct {
 	// With StopAfterScript it stops after the script. It is for checking the content before
 	// moving on to image generation; the rest is done with render_comic.
 	StopAfterScript bool `json:"stop_after_script"`
+	// Lang is the language the dialogue is written and lettered in (ja / en). Empty means Japanese.
+	Lang string `json:"lang"`
+	// AspectRatio is the ratio of the work's panels and pages. Empty means the deployment's default.
+	AspectRatio string `json:"aspect_ratio"`
+	// CharacterIDs are the only characters the script may use. Empty means the script mode's own
+	// cast, or every character when the mode declares none.
+	CharacterIDs []string `json:"character_ids"`
 }
 
 // enqueueResponse is the shared response of the enqueue endpoints.
@@ -60,6 +68,9 @@ func (h *Handler) newComposeTask(req composeComicRequest) (domain.Task, error) {
 		TextModel:       firstIfEmpty(req.TextModel, h.geminiModels),
 		ModelOverride:   firstIfEmpty(req.ImageModel, h.imageModels),
 		StopAfterScript: req.StopAfterScript,
+		Lang:            strings.TrimSpace(req.Lang),
+		AspectRatio:     strings.TrimSpace(req.AspectRatio),
+		CharacterIDs:    trimmedIDs(req.CharacterIDs),
 	}
 	return task, nil
 }
@@ -89,7 +100,55 @@ func (h *Handler) validateChoices(task domain.Task) error {
 			return err
 		}
 	}
+	return h.validateCast(task)
+}
+
+// validateCast checks that everyone a new comic is limited to is a registered character:
+// the cast the caller named, or the script mode's own when the caller named none.
+//
+// The worker would refuse an unregistered ID too, but only after the job has been accepted, and
+// the mode's cast is not something the caller typed. characters.json is replaced without a
+// deploy, so a mode can outlive a character it was written for; the form should say so, not a
+// failed job.
+func (h *Handler) validateCast(task domain.Task) error {
+	if task.Command != domain.TaskCommandComposeComic {
+		return nil
+	}
+	cast, source := task.CharacterIDs, "指定された"
+	if len(cast) == 0 {
+		cast, source = h.scriptModeCast(task.ScriptMode), "台本モードが使う"
+	}
+	for _, id := range cast {
+		if h.characters.GetCharacter(id) == nil {
+			return fmt.Errorf("%sキャラクターが登録されていません: %s", source, id)
+		}
+	}
 	return nil
+}
+
+// scriptModeCast returns the cast the given script mode declares. The empty name is the default mode.
+func (h *Handler) scriptModeCast(mode string) []string {
+	if mode == "" {
+		mode = prompts.ModeDefault
+	}
+	for _, info := range h.scriptModes {
+		if info.Name == mode {
+			return info.Cast
+		}
+	}
+	return nil
+}
+
+// trimmedIDs drops blank entries and surrounding spaces, so that an empty form field or a
+// trailing comma does not become a character with no name.
+func trimmedIDs(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // JobCreate enqueues a new job (POST /jobs).

@@ -165,9 +165,9 @@ func (p ScriptPanel) normalizedDialogues(knownSpeaker func(string) bool) ([]kitc
 		if speaker != "" && knownSpeaker != nil && !knownSpeaker(speaker) {
 			return nil, fmt.Errorf("%s の %d 番目のセリフの話者 %q は登録されていません", p.PanelID, i+1, speaker)
 		}
-		if speaker == "" && kind != kitcomic.DialogueKindNarration && kind != kitcomic.DialogueKindSFX {
-			return nil, fmt.Errorf("%s の %d 番目のセリフに話者がありません（話者なしで書けるのは %s と %s だけです）",
-				p.PanelID, i+1, kitcomic.DialogueKindNarration, kitcomic.DialogueKindSFX)
+		if speaker == "" && !speakerOptional(kind) {
+			return nil, fmt.Errorf("%s の %d 番目のセリフに話者がありません（話者なしで書けるのは %s・%s・%s だけです）",
+				p.PanelID, i+1, kitcomic.DialogueKindNarration, kitcomic.DialogueKindSFX, kitcomic.DialogueKindLyric)
 		}
 
 		lines = append(lines, kitcomic.DialogueLine{
@@ -238,7 +238,19 @@ func isKnownDialogueKind(kind string) bool {
 		kitcomic.DialogueKindThought,
 		kitcomic.DialogueKindShout,
 		kitcomic.DialogueKindNarration,
-		kitcomic.DialogueKindSFX:
+		kitcomic.DialogueKindSFX,
+		kitcomic.DialogueKindLyric:
+		return true
+	default:
+		return false
+	}
+}
+
+// speakerOptional reports whether a line of this kind may have no speaker: a caption, a sound
+// effect, and a sung line, which belongs to the song rather than to whoever is in the panel.
+func speakerOptional(kind string) bool {
+	switch kind {
+	case kitcomic.DialogueKindNarration, kitcomic.DialogueKindSFX, kitcomic.DialogueKindLyric:
 		return true
 	default:
 		return false

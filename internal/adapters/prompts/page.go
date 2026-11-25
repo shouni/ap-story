@@ -3,10 +3,13 @@ package prompts
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/shouni/go-comic-kit/comic"
 
 	"github.com/shouni/go-comic-kit/ports"
+
+	"github.com/shouni/ap-story/internal/domain"
 )
 
 const (
@@ -22,7 +25,12 @@ const (
 - NO FILLER: Do not add extra panels or decorative small frames. Fill the page with the given count.
 - BORDERS: Deep black, crisp frame borders for EVERY panel.
 - GUTTERS: Pure white space between panels.
-- READING FLOW: Right-to-Left, Top-to-Bottom.`
+` + readingFlowRTL
+
+	// The reading-flow line of the system prompt. It is the one line that depends on the
+	// language the page is lettered in, so it is kept apart and swapped (pageSystemPromptFor).
+	readingFlowRTL = "- READING FLOW: Right-to-Left, Top-to-Bottom."
+	readingFlowLTR = "- READING FLOW: Left-to-Right, Top-to-Bottom."
 
 	// pageNegativePrompt is the negative prompt listing what the page image should not contain.
 	// It lists only things independent of art style, such as runaway panel counts, broken hands and watermarks.
@@ -61,21 +69,26 @@ func (p PagePrompt) BuildPage(data *ports.PagePromptData) (string, string, strin
 	}
 	// Decide the layout once and write both the placement map and the per-panel instructions from it.
 	// Built separately, the same page would carry conflicting position instructions.
+	letters := letteringFor(data.Lang)
 	layout := planPageLayout(data.Panels)
+	if letters.leftToRight {
+		// The plan puts the lower-numbered panel of a tier on the right. Read left to right, it goes on the left.
+		mirrorColumns(layout)
+	}
 
 	var sb strings.Builder
 	sb.WriteString("# PAGE PRODUCTION REQUEST\n")
-	sb.WriteString("- OUTPUT: ONE single portrait manga page image.\n")
+	fmt.Fprintf(&sb, "- OUTPUT: ONE single %s manga page image.\n", pageShape(data.AspectRatio))
 	// Colouring follows the style preset's instruction (appended as ART STYLE).
 	// Insisting on full colour here would directly contradict a monochrome style.
 	sb.WriteString("- COLOR: Follow the ARTISTIC STYLE instruction exactly.\n")
 	fmt.Fprintf(&sb, "- PANEL COUNT: [ %d ] (STRICTLY ONLY %d PANELS. DO NOT ADD ANY MORE).\n\n", numPanels, numPanels)
 
-	writeLayoutStructure(&sb, layout)
+	writeLayoutStructure(&sb, layout, letters)
 	writeCharacterReferences(&sb, data)
-	writePanelBreakdown(&sb, data, layout)
+	writePanelBreakdown(&sb, data, layout, letters)
 
-	return p.systemPrompt(styleSuffix), strings.TrimRight(sb.String(), "\n"), negative, nil
+	return p.systemPrompt(styleSuffix, letters), strings.TrimRight(sb.String(), "\n"), negative, nil
 }
 
 // BuildPageEdit builds the edit instruction for an existing page image.
@@ -84,18 +97,66 @@ func (p PagePrompt) BuildPageEdit(editPrompt string) (string, string, string, er
 }
 
 // systemPrompt returns the system prompt with the style instruction appended.
-func (PagePrompt) systemPrompt(styleSuffix string) string {
-	if styleSuffix == "" {
-		return pageSystemPrompt
+func (PagePrompt) systemPrompt(styleSuffix string, letters lettering) string {
+	system := pageSystemPrompt
+	if letters.leftToRight {
+		system = strings.Replace(system, readingFlowRTL, readingFlowLTR, 1)
 	}
-	return pageSystemPrompt + "\n\n### ARTISTIC STYLE ###\n" + styleSuffix
+	if styleSuffix == "" {
+		return system
+	}
+	return system + "\n\n### ARTISTIC STYLE ###\n" + styleSuffix
+}
+
+// lettering is how a page's text is drawn in one language: which way the page reads and how
+// each line is set. Japanese is the default, and its wording is what every work made before the
+// language choice existed was composed with, so it must not change.
+type lettering struct {
+	leftToRight bool
+	// readingOrder is the READING ORDER line of the page structure.
+	readingOrder string
+	// balloonOrder is how several balloons in one panel are read.
+	balloonOrder string
+}
+
+// letteringFor returns the lettering rules of the given language. Anything other than English
+// is Japanese: the empty string is a work that recorded no language, and an unknown value has
+// already been refused at submission.
+func letteringFor(lang string) lettering {
+	if lang == domain.LangEnglish {
+		return lettering{
+			leftToRight:  true,
+			readingOrder: "Western Style (Left-to-Right, then Top-to-Bottom)",
+			balloonOrder: "left-to-right then top-to-bottom",
+		}
+	}
+	return lettering{
+		readingOrder: "Japanese Style (Right-to-Left, then Top-to-Bottom)",
+		balloonOrder: "right-to-left then top-to-bottom",
+	}
+}
+
+// pageShape words the page's shape from the ratio it is generated at. The tall 9:16 is named
+// because "portrait" alone lets the model compose a 3:4 page and pad it.
+func pageShape(aspectRatio string) string {
+	switch aspectRatio {
+	case "9:16":
+		return "tall portrait (9:16)"
+	case "1:1":
+		return "square (1:1)"
+	case "16:9":
+		return "landscape (16:9)"
+	default:
+		return "portrait"
+	}
 }
 
 // writeLayoutStructure writes the tier layout (each tier's height, and each panel's side and width).
-// Pages read right to left, so within a tier the lower-numbered panel is on the right.
-func writeLayoutStructure(sb *strings.Builder, layout []panelPlacement) {
+// Japanese pages read right to left, so within a tier the lower-numbered panel is on the right;
+// the layout arrives already mirrored for a language read left to right.
+func writeLayoutStructure(sb *strings.Builder, layout []panelPlacement, letters lettering) {
 	sb.WriteString("## MANDATORY PAGE STRUCTURE\n")
-	sb.WriteString("- READING ORDER: Japanese Style (Right-to-Left, then Top-to-Bottom).\n")
+	fmt.Fprintf(sb, "- READING ORDER: %s.\n", letters.readingOrder)
 
 	tiers := groupTiers(layout)
 	if len(layout) == 1 {
@@ -174,14 +235,14 @@ func writeCharacterReferences(sb *strings.Builder, data *ports.PagePromptData) {
 }
 
 // writePanelBreakdown writes each panel's breakdown (placement, staging, characters, dialogue).
-func writePanelBreakdown(sb *strings.Builder, data *ports.PagePromptData, layout []panelPlacement) {
+func writePanelBreakdown(sb *strings.Builder, data *ports.PagePromptData, layout []panelPlacement, letters lettering) {
 	sb.WriteString("## PANEL BREAKDOWN\n")
 	for i := range data.Panels {
 		panel := &data.Panels[i]
 		writePanelHeader(sb, i, panel, layout[i])
 		writePanelScene(sb, panel, data)
 		writePanelCharacters(sb, panel, data)
-		writePanelDialogues(sb, panel, data.Characters, layout[i].Width)
+		writePanelDialogues(sb, panel, data.Characters, layout[i].Width, letters)
 		sb.WriteString("\n")
 	}
 }
@@ -304,9 +365,9 @@ func writePanelCharacters(sb *strings.Builder, panel *comic.Panel, data *ports.P
 //
 // When the same panel has several utterances, the reading order is stated. Without it, bubble
 // placement is decided by the art's convenience and an exchange can read in reverse.
-func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters, width int) {
+func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *comic.Characters, width int, letters lettering) {
 	if lines := countSpokenLines(panel); lines > 1 {
-		sb.WriteString("- BALLOON ORDER: Place the balloons below in the listed order, read right-to-left then top-to-bottom within this panel.\n")
+		fmt.Fprintf(sb, "- BALLOON ORDER: Place the balloons below in the listed order, read %s within this panel.\n", letters.balloonOrder)
 		if width < 100 {
 			fmt.Fprintf(sb, "- BALLOON SPACE: %d balloons must fit inside this narrow panel. Keep the composition simple and leave the upper area clear.\n", lines)
 		}
@@ -325,8 +386,11 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 			fmt.Fprintf(sb, "- SHOUT: Jagged, explosive speech bubble for [%s].\n", speakerName(characters, line.SpeakerID))
 		case comic.DialogueKindSFX:
 			sb.WriteString("- SFX: Stylized sound-effect lettering integrated into the artwork.\n")
+		case comic.DialogueKindLyric:
+			// A sung line is neither speech nor a caption. Drawn in a balloon it reads as
+			// something a character said; drawn in a box it reads as the narrator.
+			sb.WriteString("- LYRIC: Sung words. Free-floating lettering with NO balloon, NO tail and NO box, flowing across open space in the panel with one small musical note beside it. Never cover a face.\n")
 		default:
-			// Dialogue with an empty SpeakerID is treated as narration/caption (see comic.DialogueLine)
 			if strings.TrimSpace(line.SpeakerID) == "" {
 				sb.WriteString("- NARRATION: Rectangular caption box.\n")
 			} else {
@@ -334,21 +398,58 @@ func writePanelDialogues(sb *strings.Builder, panel *comic.Panel, characters *co
 			}
 		}
 		fmt.Fprintf(sb, "  - TEXT_TO_RENDER: %q\n", text)
-
-		direction := "Vertical (Tategaki)"
-		layoutDesc := "traditional Japanese manga style layout"
-		// Short shouts and the like may also be written horizontally, for impact
-		if len([]rune(text)) <= 10 && strings.ContainsAny(text, "!?！？") {
-			direction = "Horizontal (Yokogaki) or Vertical"
-			layoutDesc = "bold and high impact placement"
-		}
-		fmt.Fprintf(sb, "  - TEXT_DIRECTION: %s\n", direction)
-		fmt.Fprintf(sb, "  - TYPOGRAPHY: Use professional Japanese manga font (Gothic/Mincho). %s.\n", layoutDesc)
-		sb.WriteString("  - LANGUAGE: Japanese characters. Ensure accurate rendering of Kanji/Kana.\n")
+		writeLineLettering(sb, text, line.Kind, letters)
 	}
 }
 
-// countSpokenLines returns the number of non-empty utterances in the panel.
+// writeLineLettering writes how one line of text is set: its direction, its typeface and the
+// script it is in.
+//
+// A line with no Japanese characters is set as Latin text even on a Japanese page. A song's hook
+// is often English ("Run!"), and telling the model such a line is "Japanese characters,
+// vertical" is how it comes out as invented kana.
+func writeLineLettering(sb *strings.Builder, text, kind string, letters lettering) {
+	short := len([]rune(text)) <= 10 && strings.ContainsAny(text, "!?！？")
+
+	if letters.leftToRight || !hasJapanese(text) {
+		layoutDesc := "clear, evenly spaced lettering"
+		if short {
+			layoutDesc = "bold and high impact placement"
+		}
+		if kind == comic.DialogueKindLyric {
+			layoutDesc = "light, flowing lettering that follows the movement of the artwork"
+		}
+		sb.WriteString("  - TEXT_DIRECTION: Horizontal, left to right\n")
+		fmt.Fprintf(sb, "  - TYPOGRAPHY: Use a professional comic lettering font. %s.\n", layoutDesc)
+		sb.WriteString("  - LANGUAGE: Latin letters. Spell every word exactly as written, letter for letter.\n")
+		return
+	}
+
+	direction := "Vertical (Tategaki)"
+	layoutDesc := "traditional Japanese manga style layout"
+	if short {
+		direction = "Horizontal (Yokogaki) or Vertical"
+		layoutDesc = "bold and high impact placement"
+	}
+	if kind == comic.DialogueKindLyric {
+		direction = "Vertical (Tategaki) or Horizontal, whichever follows the artwork"
+		layoutDesc = "light, flowing lettering, thinner than the dialogue"
+	}
+	fmt.Fprintf(sb, "  - TEXT_DIRECTION: %s\n", direction)
+	fmt.Fprintf(sb, "  - TYPOGRAPHY: Use professional Japanese manga font (Gothic/Mincho). %s.\n", layoutDesc)
+	sb.WriteString("  - LANGUAGE: Japanese characters. Ensure accurate rendering of Kanji/Kana.\n")
+}
+
+// hasJapanese reports whether the text contains kana or kanji.
+func hasJapanese(text string) bool {
+	for _, r := range text {
+		if unicode.In(r, unicode.Hiragana, unicode.Katakana, unicode.Han) {
+			return true
+		}
+	}
+	return false
+}
+
 func countSpokenLines(panel *comic.Panel) int {
 	n := 0
 	for _, line := range panel.Dialogues {

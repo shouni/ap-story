@@ -87,6 +87,45 @@ document.addEventListener('click', (event) => {
     });
 });
 
+// --- Another-language edition (work detail page) ---
+//
+// The copy carries the source's dialogue as it is, so the next page is the copy's own detail
+// page: its script tab is where the lines are translated before the pages are composed.
+document.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.js-duplicate');
+    if (!btn) return;
+
+    const { jobId, lang } = btn.dataset;
+    if (!jobId || !lang) return;
+    if (!confirm(`この作品を複製して ${lang} 版を作りますか？\n台本とコマ画像を写します。複製先で台本を訳してから、ページを組んでください。`)) {
+        return;
+    }
+
+    btn.disabled = true;
+    try {
+        const response = await fetch(`/jobs/${jobId}/duplicate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': window.App.csrfToken()
+            },
+            body: JSON.stringify({ lang })
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            alert(errorText ? `複製に失敗しました: ${errorText}` : '複製に失敗しました。');
+            btn.disabled = false;
+            return;
+        }
+        const result = await response.json();
+        window.location.href = `/jobs/${result.job_id}`;
+    } catch (error) {
+        console.error('Duplicate Error:', error);
+        alert('通信エラーが発生しました。');
+        btn.disabled = false;
+    }
+});
+
 // --- Regeneration (work detail page) ---
 
 // enqueueRegenerate enqueues a regeneration command.
@@ -197,7 +236,7 @@ document.addEventListener('click', (event) => {
 // the bubble hides the panel's art, so it is marked to be noticed while reading.
 const SOFT_LINE_LIMIT = 25;
 
-const DIALOGUE_KINDS = ['speech', 'shout', 'thought', 'narration', 'sfx'];
+const DIALOGUE_KINDS = ['speech', 'shout', 'thought', 'narration', 'sfx', 'lyric'];
 
 window.App.script = {
     // draft is the script fetched from the API. Edits write directly into this object.

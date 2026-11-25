@@ -79,6 +79,14 @@ func (DefaultPlanner) Plan(task *domain.Task) ([]Step, error) {
 			SinglePageStep{},
 			SaveStateStep{},
 		}, nil
+	case domain.TaskCommandDuplicateComic:
+		// The copy's job ID is newly minted, so an existing state means a re-run, as for
+		// compose_comic. DuplicateStateStep then leaves it alone.
+		return []Step{
+			LoadStateIfExistsStep{},
+			DuplicateStateStep{},
+			SaveStateStep{},
+		}, nil
 	default:
 		return nil, fmt.Errorf("no step plan for command %q", task.Command)
 	}

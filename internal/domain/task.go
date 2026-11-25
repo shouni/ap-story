@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -32,7 +33,29 @@ const (
 	TaskCommandRegeneratePanel TaskCommand = "regenerate_panel"
 	// TaskCommandRegeneratePage composes or recomposes the given page.
 	TaskCommandRegeneratePage TaskCommand = "regenerate_page"
+	// TaskCommandDuplicateComic copies an existing work (script and panel images, not pages)
+	// into a new job, optionally in another language.
+	//
+	// It exists for the second-language edition. Panels carry no text, so the same panels serve
+	// every language and only the pages have to be composed again: translate the copy's script
+	// with PUT /jobs/{jobID}/script, then run render_comic, which skips the panels.
+	TaskCommandDuplicateComic TaskCommand = "duplicate_comic"
 )
+
+// Languages a work's page text can be drawn in. The empty string means LangJapanese: works
+// made before the choice existed record nothing, and they are Japanese.
+const (
+	LangJapanese = "ja"
+	LangEnglish  = "en"
+)
+
+// SupportedLangs returns the languages a job may ask for, default first.
+func SupportedLangs() []string { return []string{LangJapanese, LangEnglish} }
+
+// ComicAspectRatios returns the ratios a comic's panels and pages may be generated at, default
+// first. 16:9 is left out although the kit can draw it: the page prompt stacks horizontal tiers,
+// which leaves each panel of a landscape page a thin strip.
+func ComicAspectRatios() []string { return []string{"3:4", "9:16", "1:1"} }
 
 // Task is a generation job handed to the worker through Cloud Tasks.
 // It is serialised to JSON and sent as the task payload.
@@ -68,10 +91,23 @@ type Task struct {
 	// and runs only page composition (no dedicated "pages only" command is needed).
 	StopAfterPanels bool `json:"stop_after_panels,omitempty"`
 
-	// --- generate_design_sheet ---
+	// Lang is the language the work's dialogue is written and lettered in (compose_comic,
+	// duplicate_comic). Empty means Japanese. It is recorded in the state, and every later job on
+	// the work reads it from there.
+	Lang string `json:"lang,omitempty"`
+	// SourceJobID is the work duplicate_comic copies from.
+	SourceJobID string `json:"source_job_id,omitempty"`
+
+	// --- generate_design_sheet, compose_comic ---
+	// CharacterIDs are the sheet's subjects for generate_design_sheet. For compose_comic they are
+	// the work's cast: the only characters the script may use. Empty there means the script
+	// mode's own cast, or everyone when the mode declares none.
 	CharacterIDs []string `json:"character_ids,omitempty"`
-	AspectRatio  string   `json:"aspect_ratio,omitempty"`
-	Layout       string   `json:"layout,omitempty"`
+	// AspectRatio is the sheet's ratio for generate_design_sheet. For compose_comic it is the
+	// ratio of the work's panels and pages, recorded in the state; empty means the deployment's
+	// default (IMAGE_ASPECT_RATIO).
+	AspectRatio string `json:"aspect_ratio,omitempty"`
+	Layout      string `json:"layout,omitempty"`
 	// ReferenceURLOverride / VisualCuesOverride are one-off overrides applied only when a single
 	// character is chosen (they correspond to go-comic-kit's DesignOverride).
 	ReferenceURLOverride string   `json:"reference_url_override,omitempty"`
@@ -144,6 +180,17 @@ func (t Task) ValidateSubmission() error {
 			return fmt.Errorf("page must be a positive integer for command %q", TaskCommandRegeneratePage)
 		}
 		return nil
+	case TaskCommandDuplicateComic:
+		if strings.TrimSpace(t.SourceJobID) == "" {
+			return fmt.Errorf("source_job_id is required for command %q", TaskCommandDuplicateComic)
+		}
+		if err := ValidateJobID(t.SourceJobID); err != nil {
+			return fmt.Errorf("invalid source_job_id: %w", err)
+		}
+		if t.SourceJobID == t.JobID {
+			return fmt.Errorf("source_job_id must differ from job_id: a work cannot be copied onto itself")
+		}
+		return validateLang(t.Lang)
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)
 	}
@@ -153,7 +200,22 @@ func (t Task) validateComposeComicSubmission() error {
 	if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.SourceText) == "" {
 		return fmt.Errorf("at least one input is required: source_url or source_text")
 	}
+	if err := validateLang(t.Lang); err != nil {
+		return err
+	}
+	if t.AspectRatio != "" && !slices.Contains(ComicAspectRatios(), t.AspectRatio) {
+		return fmt.Errorf("aspect_ratio must be one of %s", strings.Join(ComicAspectRatios(), " / "))
+	}
 	return nil
+}
+
+// validateLang rejects a language the page prompt has no lettering rules for. An unknown value
+// would otherwise be drawn as Japanese without a word.
+func validateLang(lang string) error {
+	if lang == "" || slices.Contains(SupportedLangs(), lang) {
+		return nil
+	}
+	return fmt.Errorf("lang must be one of %s", strings.Join(SupportedLangs(), " / "))
 }
 
 // referenceImageURLPattern is the accepted format of a reference image URL (an optional override).

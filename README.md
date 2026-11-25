@@ -86,9 +86,9 @@ None of the three has a default in the app; only the infrastructure's Terraform 
 | --- | --- |
 | `SERVICE_URL` / `PORT` | Public URL and listening port (Default: `http://localhost:8080` / `8080`). `SERVICE_URL` is also the OAuth redirect target, the M2M audience and the source of Slack notice links, so **set the web URL on the worker too**. |
 | `CHARACTERS_JSON_PATH` | go-character-kit's `characters.json` (GCS or local). Unset, go-character-kit's embedded default character definitions are used. |
-| `IMAGE_ASPECT_RATIO` | Aspect ratio shared by panels, pages and design sheets (`1:1` / `3:4` / `9:16` / `16:9`). Unset means `3:4`. |
+| `IMAGE_ASPECT_RATIO` | Aspect ratio shared by panels, pages and design sheets (`1:1` / `3:4` / `9:16` / `16:9`). Unset means `3:4`. A comic that names its own `aspect_ratio` uses that instead, and records it. |
 | `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | Resolution of generated images (`1K` / `2K`). Unset means `1K` for panels and `2K` for pages and sheets. |
-| `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | Caps on chapters, panels per chapter and panels per page. Unset means go-comic-kit's defaults. |
+| `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | Caps on chapters, panels per chapter and panels per page. Unset means go-comic-kit's defaults. A script mode that declares `max_chapters` / `max_panels` in its front matter uses its own for the first two. |
 | `MAX_CONCURRENCY` | Concurrency of batch generation (default `1` = sequential). |
 | `RATE_INTERVAL` | Minimum interval between AI calls (Default: `10s`; `0` means unlimited). **Throughput is capped by 1/`RATE_INTERVAL`, not by `MAX_CONCURRENCY`.** With the defaults `compose_comic` makes up to 84 AI calls, which is at least 14 minutes even at `10s`, so before raising it check that it still fits within the three tiers above. |
 | `REQUEST_TIMEOUT` | Cap for a single external AI call (Default: `5m`). One image takes tens of seconds, so anything below `2m` logs a warning at startup. |
@@ -130,9 +130,9 @@ and they are registered regardless of role.
 | `GET` | `/static/*` | The embedded CSS / JS and Bootstrap / Bootstrap Icons under `vendor/`. No authentication. `vendor/` is `public, max-age=31536000, immutable`; the app's own assets are `public, max-age=300, must-revalidate` |
 | `GET` | `/auth/login` `/auth/callback` `/auth/logout` | Google OAuth login, callback and logout |
 | `GET` | `/` | Home page (shows a few recent works) |
-| `GET` | `/compose` | Script generation form. Choose the script mode, art-style mode and text model. **The image model is chosen on the work's detail page** |
+| `GET` | `/compose` | Script generation form. Choose the script mode, art-style mode, text model, dialogue language, image ratio and cast. **The image model is chosen on the work's detail page** |
 | `GET` | `/compose/design-sheet` | Standalone design-sheet form. `?character_id=` preselects a character |
-| `GET` | `/comic-options` | The script modes and art-style modes (with descriptions of their use) and model lists (the head is the default) a generation job can specify. It is the allowlist at enqueue itself, the same content as the form's `<select>` |
+| `GET` | `/comic-options` | The script modes and art-style modes (with descriptions of their use) and model lists (the head is the default) a generation job can specify, with `langs` and `aspect_ratios`. A script mode also lists its format (`cast`, `max_chapters`, `max_panels`) when it declares one. It is the allowlist at enqueue itself, the same content as the form's `<select>` |
 | `POST` | `/jobs` | Enqueue a job. A form body is the screen, a JSON body a machine. `command` is `compose_comic` (when omitted) or `generate_design_sheet`. The server mints the job ID. Accepted with `202` and `Location: /jobs/{jobID}` |
 | `GET` | `/jobs` | Works (`compose_comic` jobs), newest first. `?page=` (20 per page). Browsers get the list page, `Accept: application/json` gets the list of states |
 | `GET` | `/jobs/{jobID}` | One job, at the same URL from enqueue to delete. Browsers get the detail page (panel and page generation buttons, the script tab, individual regeneration). JSON gets the progress and, when the state can be read, the contents of `comic_state.json` under `comic`. Design-sheet jobs get the progress only |
@@ -140,6 +140,7 @@ and they are registered regardless of role.
 | `GET` | `/jobs/{jobID}/script` | Returns only the editable part of the script (chapter headings and each panel's dialogue). No generation records or prompts |
 | `PUT` | `/jobs/{jobID}/script` | Save the script. Only the dialogue's text, speaker and kind can be replaced; **adding, removing or reordering panels is rejected.** The pages to recompose are returned in `affected_pages`. `409` while the job is `queued` / `running` |
 | `POST` | `/jobs/{jobID}/regenerate` | Enqueue a regeneration job (a `command` other than `compose_comic`, and its parameters). The URL's `job_id` is used and the body's value is ignored. `202` and `Location` |
+| `POST` | `/jobs/{jobID}/duplicate` | Copy a work into a new job for another language (JSON `{"lang": "en"}`). The script and the panel images are copied; the pages are not. `404` when the work does not exist, `409` while it is `queued` / `running`. `202` and `Location` of the copy |
 | `GET` | `/jobs/{jobID}/images/*` | Redirect (302) to a signed URL of a panel or page image |
 | `GET` | `/characters` | Character list. Browsers get thumbnails of the master reference images; JSON gets id, name and reference_url (image URLs stay `gs://`) |
 | `GET` | `/characters/{characterID}` | Character detail. Browsers get the master reference images per size / aspect ratio and the latest 12 design-sheet generations; JSON gets the whole generation history (newest first) |
@@ -156,7 +157,7 @@ JSON, send a browser's `Accept` and you get a page. Paths follow the URL naming 
 screen's JS in the `X-CSRF-Token` header. Machines authenticated with an OIDC Bearer token skip this check;
 instead, callers are restricted by `ALLOWED_M2M_SERVICE_ACCOUNTS`.
 
-Validation of the script mode, art-style mode and models (a value not listed by `GET /comic-options` is a 400)
+Validation of the script mode, art-style mode, models, language, ratio and cast (a value not listed by `GET /comic-options`, or a character that is not registered, is a 400)
 goes through the same function for the screen and the API.
 
 **Generating from the screen**
@@ -172,6 +173,9 @@ goes through the same function for the screen and the API.
    (its panels have to be remade).
 5. Touch up dialogue in the "台本" (script) tab. Saving returns the page numbers that need recomposing, so
    remake those pages with "ページを合成".
+6. For another language, press "en 版を作る" (make the en edition) on the detail page. It copies the script and the
+   panels into a new work. Translate the dialogue in the copy's "台本" tab, then press "ページを合成": the panels
+   carry no text, so they are not drawn again.
 
 ### 4. Task payload
 
@@ -186,13 +190,18 @@ run the go-comic-kit operation → save the state", and `render_comic` skips pan
 | `generate_design_sheet` | Generates a character design sheet | `character_ids` |
 | `regenerate_panel` | Generates / regenerates one panel | `job_id`, `panel_id` |
 | `regenerate_page` | Composes / recomposes one page | `job_id`, `page` |
+| `duplicate_comic` | Copies another work's script and panel images into this job, without its pages, and records `lang` on the copy. Nothing is generated | `job_id`, `source_job_id` |
 
 | Field | Description |
 | --- | --- |
-| `command` | One of the six above. `POST /jobs` accepts `compose_comic` (may be omitted) and `generate_design_sheet`; `POST /jobs/{jobID}/regenerate` accepts the rest. |
+| `command` | One of the seven above. `POST /jobs` accepts `compose_comic` (may be omitted) and `generate_design_sheet`; `POST /jobs/{jobID}/duplicate` builds `duplicate_comic`; `POST /jobs/{jobID}/regenerate` accepts the rest. |
 | `job_id` | The job's identifier. For `POST /jobs` the server mints it; for `regenerate` the URL's is used. It also decides where the artifacts go. |
 | `source_url` / `source_text` | The manuscript for `compose_comic`. Exactly one of them. |
 | `script_mode` / `style_mode` | The script mode (`.md` files in `assets/prompts/outline` and `chapter`; the file name is the mode name) and the art-style mode (`assets/prompts/styles.json`). Listed by `GET /comic-options`. |
+| `lang` | The language the dialogue is written and lettered in for `compose_comic` and `duplicate_comic`: `ja` (vertical, read right to left; the default) or `en` (horizontal, read left to right). Recorded on the work. |
+| `aspect_ratio` (comic) | The ratio of a `compose_comic` work's panels and pages: `3:4` / `9:16` / `1:1`. Empty means `IMAGE_ASPECT_RATIO`. Recorded on the work, so later jobs draw at the same ratio. |
+| `character_ids` (comic) | The cast of a `compose_comic` work: the only characters its script may use. Empty means the script mode's own `cast`, or every character when the mode declares none. |
+| `source_job_id` | The work `duplicate_comic` copies from. |
 | `text_model` | The model that writes the script. Empty means the head of `GEMINI_MODELS`. The JSON of `POST /jobs` also accepts `image_model`, which becomes the task's `model_override`. |
 | `model_override` | The model that draws panels, pages and design sheets. Empty means the head of `IMAGE_MODELS`. **It is recorded on the work at the first image generation and becomes the default from then on.** |
 | `stop_after_script` / `stop_after_panels` | Stop after the script / after the panels. A `compose_comic` from the form always carries the former. |

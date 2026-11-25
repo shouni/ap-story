@@ -28,6 +28,18 @@ type ModeInfo struct {
 	Avoids string `yaml:"avoids"`
 	// Category is the display group the options are bundled into (optional).
 	Category string `yaml:"category"`
+
+	// The three below are a script mode's format, declared in the outline template's front
+	// matter. They belong to the mode because the template's wording assumes them: a mode
+	// written for two characters and one page reads wrong with five characters and eight chapters.
+	// A style preset never sets them.
+
+	// Cast lists the character IDs the mode's works may use. Empty means every defined character.
+	Cast []string `yaml:"cast"`
+	// MaxChapters / MaxPanels cap the chapters of a work and the panels of a chapter.
+	// 0 means the deployment's limit (MAX_CHAPTERS / MAX_PANELS_PER_CHAPTER).
+	MaxChapters int `yaml:"max_chapters"`
+	MaxPanels   int `yaml:"max_panels"`
 }
 
 // Label returns the text shown for the option.
@@ -56,6 +68,9 @@ func parseModeInfo(name, front string) (ModeInfo, error) {
 	info := ModeInfo{Name: name}
 	if err := frontmatter.Decode(front, &info, yaml.Unmarshal); err != nil {
 		return ModeInfo{}, fmt.Errorf("failed to parse the front matter (mode: %s): %w", name, err)
+	}
+	if info.MaxChapters < 0 || info.MaxPanels < 0 {
+		return ModeInfo{}, fmt.Errorf("max_chapters and max_panels must not be negative (mode: %s)", name)
 	}
 	return info, nil
 }

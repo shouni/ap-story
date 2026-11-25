@@ -4,6 +4,8 @@ import (
 	"slices"
 
 	kitcomic "github.com/shouni/go-comic-kit/comic"
+
+	"github.com/shouni/ap-story/internal/domain"
 )
 
 // detailPanel is the display data of one panel on the detail page.
@@ -42,10 +44,17 @@ type detailDesignSheet struct {
 
 // historyDetailData is the data passed to the history_detail.html template.
 type historyDetailData struct {
-	JobID        string
-	Title        string
-	Description  string
-	UpdatedAt    string
+	JobID       string
+	Title       string
+	Description string
+	UpdatedAt   string
+	// Lang / AspectRatio / Cast are the work's recorded format. Lang is always filled (a work
+	// that recorded none is Japanese); the other two are empty when the work recorded none.
+	Lang        string
+	AspectRatio string
+	Cast        []string
+	// OtherLang is the language a copy of this work would be lettered in.
+	OtherLang    string
 	Chapters     []detailChapter
 	Pages        []detailPage
 	DesignSheets []detailDesignSheet
@@ -77,6 +86,13 @@ func (h *Handler) buildDetailData(jobID string, state *kitcomic.MangaState) hist
 		JobID:       jobID,
 		Title:       state.Title,
 		Description: state.Description,
+		Lang:        domain.LangJapanese,
+		OtherLang:   domain.LangEnglish,
+		AspectRatio: state.AspectRatio,
+		Cast:        state.Cast,
+	}
+	if state.Lang == domain.LangEnglish {
+		data.Lang, data.OtherLang = domain.LangEnglish, domain.LangJapanese
 	}
 	if !state.UpdatedAt.IsZero() {
 		data.UpdatedAt = state.UpdatedAt.Format("2006-01-02 15:04 MST")

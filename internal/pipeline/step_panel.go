@@ -26,7 +26,7 @@ func (s AllPanelsStep) Execute(ctx context.Context, pc *Context) error {
 	manga, err := pc.Ops.Panel.GenerateAllPanels(ctx, pc.Manga, ports.BatchOptions{
 		Seed:        pc.Task.Seed,
 		Model:       pc.imageModel(),
-		AspectRatio: pc.Layout.AspectRatio,
+		AspectRatio: pc.aspectRatio(),
 		ImageSize:   pc.Layout.PanelImageSize,
 		StyleMode:   pc.styleMode(),
 		OutputDir:   pc.OutputDir,
@@ -61,7 +61,7 @@ func (SinglePanelStep) Execute(ctx context.Context, pc *Context) error {
 		EditPrompt:     pc.Task.EditPrompt,
 		PromptOverride: pc.Task.PromptOverride,
 		Model:          pc.imageModel(),
-		AspectRatio:    pc.Layout.AspectRatio,
+		AspectRatio:    pc.aspectRatio(),
 		ImageSize:      pc.Layout.PanelImageSize,
 		StyleMode:      pc.styleMode(),
 		OutputDir:      pc.OutputDir,

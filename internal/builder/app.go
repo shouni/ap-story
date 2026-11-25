@@ -77,7 +77,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	var ops *ports.Operations
 	var pipelineRunner domain.Pipeline
 	if cfg.Server.Role.ServesWorker() {
-		builtOps, opsErr := buildOperations(ctx, cfg, store, httpClient, characters)
+		builtOps, formats, opsErr := buildOperations(ctx, cfg, store, httpClient, characters)
 		if opsErr != nil {
 			return nil, fmt.Errorf("failed to initialize go-comic-kit operations: %w", opsErr)
 		}
@@ -90,7 +90,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 			return nil, fmt.Errorf("failed to initialize notifier: %w", notifierErr)
 		}
 
-		runner, pipeErr := buildPipeline(cfg, store, ops, notifier, jobStatus)
+		runner, pipeErr := buildPipeline(cfg, store, ops, formats, notifier, jobStatus)
 		if pipeErr != nil {
 			return nil, fmt.Errorf("failed to initialize pipeline: %w", pipeErr)
 		}

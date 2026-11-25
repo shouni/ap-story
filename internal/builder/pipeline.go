@@ -13,7 +13,7 @@ import (
 
 // buildPipeline builds the worker pipeline (pipeline.Runner) that runs the Ops operation
 // selected by the Task's command.
-func buildPipeline(cfg *config.Config, store remoteio.Store, ops *ports.Operations, notifier domain.Notifier, jobStatus domain.JobStatusStore) (*pipeline.Runner, error) {
+func buildPipeline(cfg *config.Config, store remoteio.Store, ops *ports.Operations, formats pipeline.ScriptFormats, notifier domain.Notifier, jobStatus domain.JobStatusStore) (*pipeline.Runner, error) {
 	runner, err := pipeline.New(pipeline.Dependencies{
 		Ops:    ops,
 		Reader: store,
@@ -23,6 +23,8 @@ func buildPipeline(cfg *config.Config, store remoteio.Store, ops *ports.Operatio
 			PanelImageSize: cfg.AI.PanelImageSize,
 			PageImageSize:  cfg.AI.PageImageSize,
 		},
+		Formats:   formats,
+		Copier:    store,
 		Bucket:    cfg.Storage.GCSBucket,
 		Notifier:  notifier,
 		Timeout:   cfg.AI.PipelineTimeout,

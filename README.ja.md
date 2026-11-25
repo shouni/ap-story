@@ -86,9 +86,9 @@ PIPELINE_TIMEOUT  <  TASK_DISPATCH_DEADLINE  <=  Cloud Run の timeout
 | --- | --- |
 | `SERVICE_URL` / `PORT` | 公開 URL と待ち受けポート (Default: `http://localhost:8080` / `8080`)。`SERVICE_URL` は OAuth のリダイレクト先・M2M 認証の audience・Slack 通知リンクの生成元を兼ねるため、**worker にも web の URL** を設定します。 |
 | `CHARACTERS_JSON_PATH` | go-character-kit の `characters.json`（GCS またはローカル）。未設定なら go-character-kit 埋め込みの既定キャラクター定義を使います。 |
-| `IMAGE_ASPECT_RATIO` | コマ・ページ・デザインシート共通の比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。 |
+| `IMAGE_ASPECT_RATIO` | コマ・ページ・デザインシート共通の比率（`1:1` / `3:4` / `9:16` / `16:9`）。未設定なら `3:4`。漫画が自分の `aspect_ratio` を指定した場合はそちらを使い、作品に記録します。 |
 | `PANEL_IMAGE_SIZE` / `PAGE_IMAGE_SIZE` | 生成画像の解像度（`1K` / `2K`）。未設定ならコマ `1K`、ページ・シート `2K`。 |
-| `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | 章数・章あたりのコマ数・ページあたりのコマ数の上限。未設定なら go-comic-kit の既定。 |
+| `MAX_CHAPTERS` / `MAX_PANELS_PER_CHAPTER` / `MAX_PANELS_PER_PAGE` | 章数・章あたりのコマ数・ページあたりのコマ数の上限。未設定なら go-comic-kit の既定。front matter で `max_chapters` / `max_panels` を宣言した台本モードは、前の 2 つに自分の値を使います。 |
 | `MAX_CONCURRENCY` | 一括生成の並列数（既定 `1` = 逐次）。 |
 | `RATE_INTERVAL` | AI 呼び出しの発射間隔の下限 (Default: `10s`、`0` で無制限)。**スループット上限は `MAX_CONCURRENCY` ではなく 1/`RATE_INTERVAL` で決まります。** `compose_comic` は既定値で最大 84 回の AI 呼び出しになり、`10s` でも下限 14 分なので、上げるときは上の 3 段に収まるかを先に確認してください。 |
 | `REQUEST_TIMEOUT` | 外部 AI 呼び出し1回あたりの上限 (Default: `5m`)。画像生成1枚に数十秒かかるため、`2m` を下回ると起動時に警告が出ます。 |
@@ -130,9 +130,9 @@ SA と IAM の定義はインフラ側の Terraform にあります。
 | `GET` | `/static/*` | 埋め込みの CSS / JS と `vendor/` 配下の Bootstrap / Bootstrap Icons。認証不要。`vendor/` は `public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
 | `GET` | `/auth/login` `/auth/callback` `/auth/logout` | Google OAuth のログイン・コールバック・ログアウト |
 | `GET` | `/` | Home 画面（直近の作品を数件表示） |
-| `GET` | `/compose` | 台本生成フォーム。台本モード・画風モード・テキストモデルを選びます。**画像モデルは作品詳細で選びます** |
+| `GET` | `/compose` | 台本生成フォーム。台本モード・画風モード・テキストモデル・セリフの言語・画像の比率・登場キャラクターを選びます。**画像モデルは作品詳細で選びます** |
 | `GET` | `/compose/design-sheet` | デザインシート単体生成フォーム。`?character_id=` で事前選択できます |
-| `GET` | `/comic-options` | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
+| `GET` | `/comic-options` | 生成ジョブに指定できる台本モード・画風モード（用途の説明付き）とモデル一覧（先頭が既定）、`langs` と `aspect_ratios`。台本モードが形式を宣言していれば、その形式（`cast`・`max_chapters`・`max_panels`）も返します。投入時の許可リストそのもので、フォームの `<select>` と同じ内容 |
 | `POST` | `/jobs` | ジョブを投入。本文がフォームなら画面、JSON なら機械です。`command` は `compose_comic`（省略時）か `generate_design_sheet`。ジョブ ID はサーバーが採番します。受付は `202` と `Location: /jobs/{jobID}` |
 | `GET` | `/jobs` | 作品（`compose_comic` のジョブ）を新しい順に。`?page=`（1 ページ 20 件）。ブラウザには一覧画面、`Accept: application/json` には state の列挙 |
 | `GET` | `/jobs/{jobID}` | ジョブ 1 件。投入から削除まで同じ URL です。ブラウザには詳細画面（コマ・ページの生成ボタン、台本タブ、個別の再生成）。JSON には進行状況と、state が読めれば `comic` に `comic_state.json` の内容。デザインシートのジョブは進行状況だけです |
@@ -140,6 +140,7 @@ SA と IAM の定義はインフラ側の Terraform にあります。
 | `GET` | `/jobs/{jobID}/script` | 台本のうち編集できる部分（章の見出しと各コマのセリフ）だけを返します。生成記録やプロンプトは含みません |
 | `PUT` | `/jobs/{jobID}/script` | 台本の保存。差し替えられるのはセリフの文面・話者・種別だけで、**コマの追加・削除・並べ替えは拒否します。** 合成し直すべきページを `affected_pages` で返します。ジョブが `queued` / `running` の間は `409` |
 | `POST` | `/jobs/{jobID}/regenerate` | 再生成ジョブの投入（`compose_comic` 以外の `command` とパラメータ）。`job_id` は URL のものを使い、本文の値は無視します。`202` と `Location` |
+| `POST` | `/jobs/{jobID}/duplicate` | 作品を別の言語用の新しいジョブに複製します（JSON `{"lang": "en"}`）。台本とコマ画像を写し、ページは写しません。作品が無ければ `404`、`queued` / `running` の間は `409`。`202` と複製先の `Location` |
 | `GET` | `/jobs/{jobID}/images/*` | コマ・ページ画像への署名付き URL リダイレクト（302） |
 | `GET` | `/characters` | キャラクター一覧。ブラウザにはマスター参照画像のサムネイル付き、JSON には id・name・reference_url（画像 URL は `gs://` のまま） |
 | `GET` | `/characters/{characterID}` | キャラクター詳細。ブラウザにはサイズ / アスペクト比ごとのマスター参照画像と、デザインシート生成履歴の最新 12 件。JSON には生成履歴の全件（新しい順） |
@@ -156,7 +157,7 @@ JSON が、ブラウザの `Accept` なら画面が返ります。パスの切�
 画面の JS は `X-CSRF-Token` ヘッダーで送ります。OIDC Bearer で認証した機械はこの検証に入らず、
 代わりに `ALLOWED_M2M_SERVICE_ACCOUNTS` で呼び出し元を絞ります。
 
-台本モード・画風モード・モデルの検証（`GET /comic-options` の一覧に無い値は 400）は、
+台本モード・画風モード・モデル・言語・比率・登場キャラクターの検証（`GET /comic-options` の一覧に無い値や、登録されていないキャラクターは 400）は、
 画面も API も同じ関数を通ります。
 
 **画面での生成の進め方**
@@ -172,6 +173,9 @@ JSON が、ブラウザの `Accept` なら画面が返ります。パスの切�
    （コマは作り直しになります）。
 5. セリフの手直しは「台本」タブで行います。保存すると合成し直すべきページ番号が返るので、
    そのページを「ページを合成」で作り直します。
+6. 別の言語版は、詳細画面の「en 版を作る」から作ります。台本とコマを新しい作品に複製するので、
+   複製先の「台本」タブでセリフを訳してから「ページを合成」を押します。コマには文字が無いので、
+   描き直しません。
 
 ### 4. タスクのペイロード
 
@@ -186,13 +190,18 @@ go-comic-kit の操作を実行 → state を保存」の形で、`render_comic`
 | `generate_design_sheet` | キャラクターデザインシートを生成 | `character_ids` |
 | `regenerate_panel` | コマ 1 つを生成 / 再生成 | `job_id`, `panel_id` |
 | `regenerate_page` | ページ 1 つを合成 / 再合成 | `job_id`, `page` |
+| `duplicate_comic` | 別の作品の台本とコマ画像をこのジョブへ複製します（ページは写しません）。複製先に `lang` を記録します。生成は行いません | `job_id`, `source_job_id` |
 
 | フィールド | 説明 |
 | --- | --- |
-| `command` | 上の 6 つのいずれか。`POST /jobs` は `compose_comic`（省略可）と `generate_design_sheet`、`POST /jobs/{jobID}/regenerate` はそれ以外を受け付けます。 |
+| `command` | 上の 7 つのいずれか。`POST /jobs` は `compose_comic`（省略可）と `generate_design_sheet`、`POST /jobs/{jobID}/duplicate` は `duplicate_comic` を組み立て、`POST /jobs/{jobID}/regenerate` はそれ以外を受け付けます。 |
 | `job_id` | ジョブの識別子。`POST /jobs` ではサーバーが採番し、`regenerate` では URL のものを使います。成果物の置き場もこれで決まります。 |
 | `source_url` / `source_text` | `compose_comic` の原稿。どちらか 1 つ。 |
 | `script_mode` / `style_mode` | 台本モード（`assets/prompts/outline`・`chapter` の `.md`、ファイル名がモード名）と画風モード（`assets/prompts/styles.json`）。一覧は `GET /comic-options`。 |
+| `lang` | `compose_comic` と `duplicate_comic` で、セリフを書いて文字を入れる言語。`ja`（縦書き・右から左。既定）か `en`（横書き・左から右）。作品に記録されます。 |
+| `aspect_ratio`（漫画） | `compose_comic` の作品のコマとページの比率。`3:4` / `9:16` / `1:1`。空なら `IMAGE_ASPECT_RATIO`。作品に記録され、あとのジョブも同じ比率で描きます。 |
+| `character_ids`（漫画） | `compose_comic` の作品の登場キャラクター。台本に出してよいのはこのキャラクターだけです。空なら台本モードの `cast`、モードが宣言していなければ全員。 |
+| `source_job_id` | `duplicate_comic` が複製する元の作品。 |
 | `text_model` | 台本を書くモデル。空なら `GEMINI_MODELS` の先頭。`POST /jobs` の JSON では `image_model` も受け付け、タスクの `model_override` になります。 |
 | `model_override` | コマ・ページ・デザインシートを描くモデル。空なら `IMAGE_MODELS` の先頭。**最初の画像生成で作品に記録され、以降は既定になります。** |
 | `stop_after_script` / `stop_after_panels` | 台本まで / コマまでで止める。フォームからの `compose_comic` は常に前者が付きます。 |
