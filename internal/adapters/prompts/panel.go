@@ -2,8 +2,10 @@ package prompts
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-comic-kit/comic"
 
 	"github.com/shouni/go-comic-kit/ports"
@@ -26,6 +28,14 @@ Draw a single manga panel following the scene direction, with these rules:
 	// as its negative, and only those of the chosen style are added. Written here, they would clash
 	// head-on with a style that allows monochrome.
 	panelNegativePrompt = "speech bubble, dialogue balloon, text, alphabet, letters, words, signatures, watermark, username, malformed hands, fused fingers, extra fingers, missing fingers, extra limbs, deformed anatomy, low quality, distorted, bad anatomy"
+
+	// cuePriority puts the work's art style above any rendering words in a character's cues.
+	//
+	// The cues come from characters.json, which other services share, and some carry how the
+	// character is painted ("soft smooth gradients", a colour palette) as well as who she is.
+	// Without this line a flat graphic style and such a cue reach the model as two equal
+	// instructions, and which one wins changes from panel to panel.
+	cuePriority = "The subject descriptions define who each subject is: face, hair, eyes, outfit and accessories. Where one describes shading, line work, lighting or an overall color palette, follow the Style below instead."
 
 	// panelEditInstruction is the shared prefix that instructs keeping the composition in edit mode.
 	panelEditInstruction = "Edit the attached manga panel image. Keep the composition, character poses, background, and art style unchanged. Apply ONLY this change: "
@@ -77,11 +87,22 @@ func (p PanelPrompt) BuildPanel(data *ports.PanelPromptData) (string, string, st
 		sb.WriteString(subjectLine(i+1, char, findPanelCharacter(&data.Panel, id)))
 	}
 
+	for _, sheet := range data.Sheets {
+		if line := sheetLine(sheet, data); line != "" {
+			sb.WriteString("\n")
+			sb.WriteString(line)
+		}
+	}
+
 	if extras := backgroundExtras(&data.Panel); extras != "" {
 		sb.WriteString("\nBackground extras (no reference, generic): ")
 		sb.WriteString(extras)
 	}
 	if styleSuffix != "" {
+		if subjectsHaveCues(data) {
+			sb.WriteString("\n")
+			sb.WriteString(cuePriority)
+		}
 		sb.WriteString("\nStyle: ")
 		sb.WriteString(styleSuffix)
 	}
@@ -119,6 +140,40 @@ func subjectLine(index int, char *comic.Character, pc *comic.PanelCharacter) str
 		fmt.Fprintf(&sb, " position: %s.", pc.Position)
 	}
 	return sb.String()
+}
+
+// subjectsHaveCues reports whether any attached subject carries visual cues.
+func subjectsHaveCues(data *ports.PanelPromptData) bool {
+	for _, id := range data.SubjectIDs {
+		if char := data.Characters.GetCharacter(id); char != nil && len(char.VisualCues) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// sheetLine tells the model what one supplementary design sheet is for.
+//
+// A sheet is several drawings of one character on one image. Attached with no explanation, the
+// model may take it for another subject or reproduce its layout in the panel, so each line names
+// the subject it belongs to, the one thing to read from it, and that the panel still shows a
+// single figure of that subject.
+func sheetLine(sheet ports.PanelSheetRef, data *ports.PanelPromptData) string {
+	subject := slices.Index(data.SubjectIDs, sheet.CharacterID) + 1
+	if subject == 0 {
+		return ""
+	}
+	var what, use string
+	switch sheet.Kind {
+	case characterkit.SheetExpressions:
+		what, use = "expression sheet (the same face in several moods)", "the face, matched to the stated emotion"
+	case characterkit.SheetOutfit:
+		what, use = "outfit sheet (the costume, front and back)", "the details of the costume"
+	default:
+		return ""
+	}
+	return fmt.Sprintf("[Reference image %d: Subject %d's %s] Not another subject. Use it only for %s. Draw Subject %d once; never reproduce the sheet's layout.",
+		sheet.File, subject, what, use, subject)
 }
 
 // findPanelCharacter looks up a character in the panel by ID.

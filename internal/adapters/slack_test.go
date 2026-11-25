@@ -134,6 +134,10 @@ func TestSlackSuccessTitleVariesByCommand(t *testing.T) {
 	if title := slackSuccessTitle(domain.TaskCommandRegeneratePanel); !strings.Contains(title, "再生成") {
 		t.Errorf("title = %q, want regenerate title", title)
 	}
+	// A copy has no pages yet, so its notice must not read as a finished comic.
+	if title := slackSuccessTitle(domain.TaskCommandDuplicateComic); !strings.Contains(title, "複製") || strings.Contains(title, "漫画生成") {
+		t.Errorf("title = %q, want duplicate title", title)
+	}
 }
 
 func TestSlackContentIncludesSourceURL(t *testing.T) {

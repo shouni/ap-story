@@ -62,6 +62,16 @@ func (p *ScriptPrompts) ModeInfos() []ModeInfo {
 	return sortedInfos(p.outline, p.infos)
 }
 
+// ModeInfo returns the description and format of the given script mode. The empty string is
+// the default mode. An unknown mode gives the zero value: it has no format of its own, and the
+// kit rejects the mode itself when the prompt is built.
+func (p *ScriptPrompts) ModeInfo(mode string) ModeInfo {
+	if mode == "" {
+		mode = ModeDefault
+	}
+	return p.infos[mode]
+}
+
 // BuildOutline builds the outline-generation prompt.
 func (p *ScriptPrompts) BuildOutline(mode string, data *ports.OutlinePromptData) (string, error) {
 	return execute(p.outline, mode, data)

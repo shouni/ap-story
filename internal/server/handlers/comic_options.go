@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/shouni/ap-story/internal/adapters/prompts"
+	"github.com/shouni/ap-story/internal/domain"
 
 	"github.com/shouni/go-serve-kit/respond"
 )
@@ -21,6 +22,11 @@ type comicOptionsResponse struct {
 	// The head of TextModels / ImageModels is the default model.
 	TextModels  []string `json:"text_models"`
 	ImageModels []string `json:"image_models"`
+	// Langs / AspectRatios are the values compose_comic accepts for lang and aspect_ratio.
+	// The head of each is what an omitted value means (for the ratio, unless the deployment
+	// sets IMAGE_ASPECT_RATIO).
+	Langs        []string `json:"langs"`
+	AspectRatios []string `json:"aspect_ratios"`
 }
 
 // comicModeOption describes one script mode or style mode.
@@ -31,6 +37,12 @@ type comicModeOption struct {
 	UseWhen   string `json:"use_when,omitempty"`
 	Avoids    string `json:"avoids,omitempty"`
 	Category  string `json:"category,omitempty"`
+	// Cast / MaxChapters / MaxPanels are a script mode's format: who its works may use and how
+	// long they run. Absent means no limit of its own. A caller reads them to know that a mode
+	// makes a one-page work before submitting to it.
+	Cast        []string `json:"cast,omitempty"`
+	MaxChapters int      `json:"max_chapters,omitempty"`
+	MaxPanels   int      `json:"max_panels,omitempty"`
 }
 
 // ComicOptions handles GET /comic-options and returns the modes and models
@@ -42,10 +54,12 @@ func (h *Handler) ComicOptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond.JSON(w, r, http.StatusOK, comicOptionsResponse{
-		ScriptModes: comicModeOptions(h.scriptModes),
-		StyleModes:  comicModeOptions(h.styleModes),
-		TextModels:  h.geminiModels,
-		ImageModels: h.imageModels,
+		ScriptModes:  comicModeOptions(h.scriptModes),
+		StyleModes:   comicModeOptions(h.styleModes),
+		TextModels:   h.geminiModels,
+		ImageModels:  h.imageModels,
+		Langs:        domain.SupportedLangs(),
+		AspectRatios: domain.ComicAspectRatios(),
 	})
 }
 
@@ -53,11 +67,14 @@ func comicModeOptions(modes []prompts.ModeInfo) []comicModeOption {
 	options := make([]comicModeOption, 0, len(modes))
 	for _, mode := range modes {
 		options = append(options, comicModeOption{
-			Name:      mode.Name,
-			Direction: mode.Direction,
-			UseWhen:   mode.UseWhen,
-			Avoids:    mode.Avoids,
-			Category:  mode.Category,
+			Name:        mode.Name,
+			Direction:   mode.Direction,
+			UseWhen:     mode.UseWhen,
+			Avoids:      mode.Avoids,
+			Category:    mode.Category,
+			Cast:        mode.Cast,
+			MaxChapters: mode.MaxChapters,
+			MaxPanels:   mode.MaxPanels,
 		})
 	}
 	return options

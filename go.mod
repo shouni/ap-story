@@ -8,7 +8,7 @@ require (
 	github.com/shouni/gcp-kit v1.21.6
 	github.com/shouni/genai-kit v1.8.4
 	github.com/shouni/go-character-kit v1.4.0
-	github.com/shouni/go-comic-kit v1.11.1
+	github.com/shouni/go-comic-kit v1.12.0
 	github.com/shouni/go-http-kit v1.13.6
 	github.com/shouni/go-job-kit v1.5.9
 	github.com/shouni/go-notify v1.6.6

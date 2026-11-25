@@ -106,6 +106,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 				r.Get("/{jobID}/script", h.Web.JobScript)
 				r.Put("/{jobID}/script", h.Web.JobScriptUpdate)
 				r.Post("/{jobID}/regenerate", h.Web.JobRegenerate)
+				r.Post("/{jobID}/duplicate", h.Web.JobDuplicate)
 				r.Get("/{jobID}/images/*", h.Web.JobImage)
 			})
 

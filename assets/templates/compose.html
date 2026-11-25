@@ -63,6 +63,43 @@
             {{end}}
         </div>
 
+        <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6">
+                <label for="lang" class="form-label fw-bold">セリフの言語</label>
+                <select class="form-select" id="lang" name="lang">
+                    {{range .Data.Langs}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+                <div class="form-text">台本を書く言語と、ページに文字を入れる向きです。別の言語版は、作品詳細から複製して作れます。</div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="aspect_ratio" class="form-label fw-bold">画像の比率</label>
+                <select class="form-select" id="aspect_ratio" name="aspect_ratio">
+                    {{range .Data.AspectRatios}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+                <div class="form-text">コマとページの比率です。作品に記録され、あとから変えられません。</div>
+            </div>
+        </div>
+
+        {{if .Data.Characters}}
+        <div class="mb-3">
+            <div class="form-label fw-bold">登場キャラクター</div>
+            <div>
+                {{range .Data.Characters}}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" name="character_ids"
+                           id="cast_{{.Value}}" value="{{.Value}}"{{if .Selected}} checked{{end}}>
+                    <label class="form-check-label" for="cast_{{.Value}}">{{.Label}}</label>
+                </div>
+                {{end}}
+            </div>
+            <div class="form-text">台本に出してよいキャラクターです。選ばなければ、台本モードが決めている顔ぶれ（無ければ全員）になります。</div>
+        </div>
+        {{end}}
+
         <div class="alert alert-light border small mb-3" role="note">
             <i class="bi bi-info-circle me-1"></i>
             ここで作るのは<strong>章立てとネームまで</strong>です。画像は作品詳細から、

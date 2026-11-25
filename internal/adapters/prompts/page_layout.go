@@ -87,6 +87,19 @@ func planPageLayout(panels []comic.Panel) []panelPlacement {
 	return out
 }
 
+// mirrorColumns swaps left and right in place, for a page read left to right. The plan itself
+// (which panels share a tier, and their sizes) does not depend on the reading direction.
+func mirrorColumns(layout []panelPlacement) {
+	for i := range layout {
+		switch layout[i].Column {
+		case columnRight:
+			layout[i].Column = columnLeft
+		case columnLeft:
+			layout[i].Column = columnRight
+		}
+	}
+}
+
 // groupTiers regroups the placements by tier (for the placement-map output).
 func groupTiers(layout []panelPlacement) []tierView {
 	if len(layout) == 0 {

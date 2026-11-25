@@ -25,12 +25,22 @@ func (OutlineStep) Execute(ctx context.Context, pc *Context) error {
 		return nil
 	}
 
+	// The ratio is recorded even when the Task names none, so that a later change of the
+	// deployment's default cannot draw the rest of this work at another ratio.
+	aspectRatio := pc.Task.AspectRatio
+	if aspectRatio == "" {
+		aspectRatio = pc.Layout.AspectRatio
+	}
 	manga, err := pc.Ops.Outline.GenerateOutline(ctx, ports.OutlineRequest{
-		SourceURL:  pc.Task.SourceURL,
-		SourceText: pc.Task.SourceText,
-		Mode:       pc.Task.ScriptMode,
-		StyleMode:  pc.Task.StyleMode,
-		Model:      pc.Task.TextModel,
+		SourceURL:    pc.Task.SourceURL,
+		SourceText:   pc.Task.SourceText,
+		Mode:         pc.Task.ScriptMode,
+		StyleMode:    pc.Task.StyleMode,
+		Model:        pc.Task.TextModel,
+		MaxChapters:  pc.scriptFormat(pc.Task.ScriptMode).MaxChapters,
+		CharacterIDs: pc.cast(),
+		Lang:         pc.Task.Lang,
+		AspectRatio:  aspectRatio,
 	})
 	if err != nil {
 		return fmt.Errorf("outline: %w", err)
@@ -73,7 +83,7 @@ func (AllChapterScriptsStep) Execute(ctx context.Context, pc *Context) error {
 	}
 
 	// Have the same model write the outline and every chapter (a different writer per chapter makes the style uneven).
-	opts := ports.ChapterScriptOptions{Model: pc.textModel()}
+	opts := ports.ChapterScriptOptions{Model: pc.textModel(), MaxPanels: pc.maxPanels()}
 	for _, chapterID := range chapterIDs {
 		manga, err := pc.Ops.ChapterScript.GenerateChapterScript(ctx, pc.Manga, chapterID, opts)
 		if err != nil {
@@ -94,7 +104,7 @@ func (SingleChapterScriptStep) Name() string { return "chapter_script" }
 // Execute generates or regenerates the name for only the chapter in Task.ChapterID.
 func (SingleChapterScriptStep) Execute(ctx context.Context, pc *Context) error {
 	// Inherit the model recorded in the state so that the chapter being remade is not written by a different model.
-	opts := ports.ChapterScriptOptions{Model: pc.textModel()}
+	opts := ports.ChapterScriptOptions{Model: pc.textModel(), MaxPanels: pc.maxPanels()}
 	manga, err := pc.Ops.ChapterScript.GenerateChapterScript(ctx, pc.Manga, pc.Task.ChapterID, opts)
 	if err != nil {
 		return fmt.Errorf("chapter_script: chapter %q: %w", pc.Task.ChapterID, err)

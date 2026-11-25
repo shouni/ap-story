@@ -41,6 +41,12 @@ func (h *Handler) JobRegenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if task.Command == domain.TaskCommandDuplicateComic {
+		// A copy is a new job with its own ID; sent here it would overwrite the work it names.
+		respond.ErrorJSON(w, r, http.StatusBadRequest, "duplicate_comic is not a regenerate command; use POST /jobs/{jobID}/duplicate instead")
+		return
+	}
+
 	if err := task.ValidateSubmission(); err != nil {
 		respond.ErrorJSON(w, r, http.StatusBadRequest, err.Error())
 		return

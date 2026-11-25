@@ -118,15 +118,21 @@ func (h *Handler) isKnownSpeaker(id string) bool {
 // lets the request through. Stopping edits because the status cannot be followed would leave old
 // works with no record unfixable forever.
 func (h *Handler) rejectWhileJobIsRunning(r *http.Request, jobID string) error {
-	if h.jobStatus == nil {
-		return nil
-	}
-	status, err := h.jobStatus.Get(r.Context(), jobID)
-	if err != nil {
-		return nil
-	}
-	if status.State == domain.JobStateQueued || status.State == domain.JobStateRunning {
+	if h.jobInFlight(r, jobID) {
 		return errors.New("生成ジョブの実行中は台本を編集できません（完了してから保存し直してください）")
 	}
 	return nil
+}
+
+// jobInFlight reports whether the job is queued or running. "Cannot tell" is false, for the
+// reason given on rejectWhileJobIsRunning.
+func (h *Handler) jobInFlight(r *http.Request, jobID string) bool {
+	if h.jobStatus == nil {
+		return false
+	}
+	status, err := h.jobStatus.Get(r.Context(), jobID)
+	if err != nil {
+		return false
+	}
+	return status.State == domain.JobStateQueued || status.State == domain.JobStateRunning
 }

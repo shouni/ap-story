@@ -25,29 +25,36 @@ import (
 type fakeOutline struct {
 	called    int
 	lastModel string
+	lastReq   ports.OutlineRequest
 }
 
 func (f *fakeOutline) GenerateOutline(_ context.Context, req ports.OutlineRequest) (*comic.MangaState, error) {
 	f.called++
 	f.lastModel = req.Model
-	// Like the real one, copy the given mode into the state and return it (later stages read it from here).
+	f.lastReq = req
+	// Like the real one, copy the given choices into the state and return it (later stages read them from here).
 	return &comic.MangaState{
-		Version:    comic.StateSchemaVersion,
-		Title:      "title from " + req.SourceText,
-		ScriptMode: req.Mode,
-		StyleMode:  req.StyleMode,
-		Chapters:   []comic.Chapter{{ID: "ch01", Title: "第一章"}, {ID: "ch02", Title: "第二章"}},
+		Version:     comic.StateSchemaVersion,
+		Title:       "title from " + req.SourceText,
+		ScriptMode:  req.Mode,
+		StyleMode:   req.StyleMode,
+		Cast:        req.CharacterIDs,
+		Lang:        req.Lang,
+		AspectRatio: req.AspectRatio,
+		Chapters:    []comic.Chapter{{ID: "ch01", Title: "第一章"}, {ID: "ch02", Title: "第二章"}},
 	}, nil
 }
 
 type fakeChapterScript struct {
 	calledChapters []string
 	lastModel      string
+	lastOpts       ports.ChapterScriptOptions
 }
 
 func (f *fakeChapterScript) GenerateChapterScript(_ context.Context, state *comic.MangaState, chapterID string, opts ports.ChapterScriptOptions) (*comic.MangaState, error) {
 	f.calledChapters = append(f.calledChapters, chapterID)
 	f.lastModel = opts.Model
+	f.lastOpts = opts
 	state.Panels = append(state.Panels, comic.Panel{ID: chapterID + "-p01", ChapterID: chapterID, Page: len(f.calledChapters)})
 	return state, nil
 }
@@ -166,6 +173,17 @@ func (m *memStore) Open(_ context.Context, path string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("open %s: %w", path, fs.ErrNotExist)
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
+}
+
+// Copy duplicates one stored object, as remoteio.Store.Copy does (a missing source is fs.ErrNotExist).
+func (m *memStore) Copy(_ context.Context, src, dst string, _ ...remoteio.WriteOption) error {
+	data, ok := m.files[src]
+	if !ok {
+		return fmt.Errorf("copy %s: %w", src, fs.ErrNotExist)
+	}
+	m.files[dst] = bytes.Clone(data)
+	m.writes[dst]++
+	return nil
 }
 
 func (m *memStore) Write(ctx context.Context, path string, r io.Reader, _ ...remoteio.WriteOption) error {

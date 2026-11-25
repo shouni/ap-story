@@ -24,6 +24,12 @@ type Dependencies struct {
 	// Layout is the image aspect ratio and resolution. The kit does not hold them as configuration and
 	// receives them per call, so their default comes from the app. The zero value means the kit's defaults (3:4 / 1K / 2K).
 	Layout ImageLayout
+	// Formats resolves a script mode's format (cast, chapter and panel limits). Unset, no mode
+	// has one (optional).
+	Formats ScriptFormats
+	// Copier copies stored objects, used by duplicate_comic to copy panel images. Unset, that
+	// command fails (optional; remoteio.Store satisfies it).
+	Copier Copier
 	// Bucket is the name of the GCS bucket holding job artifacts (without gs://).
 	Bucket string
 	// Planner decides the execution plan per command.
@@ -178,6 +184,9 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (string, error) {
 		Reader:             r.deps.Reader,
 		Writer:             r.deps.Writer,
 		Layout:             r.deps.Layout,
+		Formats:            r.deps.Formats,
+		Copier:             r.deps.Copier,
+		Bucket:             r.deps.Bucket,
 	}
 
 	steps, err := r.deps.Planner.Plan(task)

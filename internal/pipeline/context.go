@@ -39,6 +39,20 @@ type ImageLayout struct {
 	PageImageSize  string
 }
 
+// ScriptFormat is the format a script mode declares for its works: who may appear and how
+// long the work may run. The zero value means no format of its own (everyone, the deployment's
+// limits).
+type ScriptFormat struct {
+	Cast        []string
+	MaxChapters int
+	MaxPanels   int
+}
+
+// ScriptFormats resolves a script mode name into its format. The empty name is the default mode.
+type ScriptFormats interface {
+	ScriptFormat(mode string) ScriptFormat
+}
+
 // Services are external dependencies fixed for the duration of a run. Steps only refer to them
 // and never rewrite them.
 type Services struct {
@@ -47,6 +61,49 @@ type Services struct {
 	Writer remoteio.Writer
 	// Layout is the aspect ratio and resolution of generated images.
 	Layout ImageLayout
+	// Formats resolves a script mode's format. Nil means no mode declares one.
+	Formats ScriptFormats
+	// Copier copies stored objects, for duplicate_comic. Nil makes that command fail.
+	Copier Copier
+	// Bucket is the name of the GCS bucket holding job artifacts (without gs://), for the one
+	// step that reads another job's directory (duplicate_comic).
+	Bucket string
+}
+
+// scriptFormat returns the format of the given script mode.
+func (pc *Context) scriptFormat(mode string) ScriptFormat {
+	if pc.Formats == nil {
+		return ScriptFormat{}
+	}
+	return pc.Formats.ScriptFormat(mode)
+}
+
+// cast returns who the new work may use: the Task's choice, otherwise the script mode's cast.
+// It is read only when the outline is made; from then on the state's record applies.
+func (pc *Context) cast() []string {
+	if len(pc.Task.CharacterIDs) > 0 {
+		return pc.Task.CharacterIDs
+	}
+	return pc.scriptFormat(pc.Task.ScriptMode).Cast
+}
+
+// maxPanels returns the panel limit of a chapter of this work, from the script mode the state
+// records. Reading the state keeps a chapter remade later at the same length as the others.
+func (pc *Context) maxPanels() int {
+	if pc.Manga == nil {
+		return 0
+	}
+	return pc.scriptFormat(pc.Manga.ScriptMode).MaxPanels
+}
+
+// aspectRatio returns the ratio this work's images are generated at: the state's record,
+// otherwise the deployment's default. A work made before the ratio was recorded has none, and
+// keeps being drawn at the default it was started with.
+func (pc *Context) aspectRatio() string {
+	if pc.Manga != nil && pc.Manga.AspectRatio != "" {
+		return pc.Manga.AspectRatio
+	}
+	return pc.Layout.AspectRatio
 }
 
 // textModel returns the text model used for script generation in this run.

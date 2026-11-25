@@ -19,6 +19,10 @@ func slackSuccessTitle(command domain.TaskCommand) string {
 		return "🎨 デザインシート生成が完了しました"
 	case domain.TaskCommandRegenerateChapterScript, domain.TaskCommandRegeneratePanel, domain.TaskCommandRegeneratePage:
 		return "🔁 再生成ジョブが完了しました"
+	case domain.TaskCommandDuplicateComic:
+		// Nothing was generated: the notice says so, because "漫画生成" reads as finished pages
+		// while the copy has none yet.
+		return "📄 作品の複製が完了しました（台本を訳してからページを合成してください）"
 	default:
 		return "🎬 漫画生成ジョブが完了しました"
 	}
